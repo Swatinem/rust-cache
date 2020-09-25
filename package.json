@@ -1,0 +1,36 @@
+{
+  "private": true,
+  "name": "rust-cache",
+  "version": "1.0.0",
+  "description": "A GitHub Action that implements smart caching for rust/cargo projects",
+  "keywords": [
+    "actions",
+    "rust",
+    "cache"
+  ],
+  "author": "Arpad Borsos <arpad.borsos@googlemail.com>",
+  "license": "LGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Swatinem/rust-cache.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Swatinem/rust-cache/issues"
+  },
+  "funding": "https://github.com/sponsors/Swatinem",
+  "homepage": "https://github.com/Swatinem/rust-cache#readme",
+  "dependencies": {
+    "@actions/cache": "^1.0.2",
+    "@actions/core": "^1.2.6",
+    "@actions/exec": "^1.0.4",
+    "@actions/glob": "^0.1.0",
+    "@actions/io": "^1.0.2"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.24.1",
+    "typescript": "^4.0.3"
+  },
+  "scripts": {
+    "prepare": "ncc build -o dist/restore src/restore.ts && ncc build -o dist/save src/save.ts"
+  }
+}

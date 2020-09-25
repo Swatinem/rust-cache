@@ -1,0 +1,15 @@
+name: "Rust Cache"
+description: "A GitHub Action that implements smart caching for rust/cargo projects"
+author: "Arpad Borsos <arpad.borsos@googlemail.com>"
+inputs:
+  key:
+    description: "An explicit key for restoring and saving the target cache"
+    required: false
+runs:
+  using: "node12"
+  main: "dist/restore/index.js"
+  post: "dist/save/index.js"
+  post-if: "success()"
+branding:
+  icon: "archive"
+  color: "gray-dark"
