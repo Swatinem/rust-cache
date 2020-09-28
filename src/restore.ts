@@ -13,7 +13,7 @@ async function run() {
     const caches = await getCaches();
     for (const [type, { name, path, key, restoreKeys }] of Object.entries(caches)) {
       const start = Date.now();
-      core.startGroup(`Restoring ${name}"…`);
+      core.startGroup(`Restoring ${name}…`);
       core.info(`Restoring to path "${path}".`);
       core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
       try {
