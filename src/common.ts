@@ -15,6 +15,7 @@ export const paths = {
 };
 
 export interface CacheConfig {
+  name: string;
   path: string;
   key: string;
   restoreKeys?: Array<string>;
@@ -45,10 +46,25 @@ export async function getCaches(): Promise<Caches> {
     targetKey = `${targetKey}-`;
   }
   return {
-    index: { path: paths.index, key: "registry-index-XXX", restoreKeys: ["registry-index"] },
-    cache: { path: paths.cache, key: `registry-cache-${lockHash}`, restoreKeys: ["registry-cache"] },
-    git: { path: paths.git, key: "git-db" },
+    index: {
+      name: "Registry Index",
+      path: paths.index,
+      key: "registry-index-XXX",
+      restoreKeys: ["registry-index"],
+    },
+    cache: {
+      name: "Registry Cache",
+      path: paths.cache,
+      key: `registry-cache-${lockHash}`,
+      restoreKeys: ["registry-cache"],
+    },
+    git: {
+      name: "Git Dependencies",
+      path: paths.git,
+      key: "git-db",
+    },
     target: {
+      name: "Target",
       path: paths.target,
       key: `target-${targetKey}${rustKey}-${lockHash}`,
       restoreKeys: [`target-${targetKey}${rustKey}`],

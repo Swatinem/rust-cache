@@ -28,16 +28,16 @@ async function run() {
       delete (caches as any).cache;
     }
 
-    for (const [name, { path, key }] of Object.entries(caches)) {
-      if (core.getState(name) === key) {
-        core.info(`Cache for "${path}" up-to-date.`);
+    for (const [type, { name, path, key }] of Object.entries(caches)) {
+      if (core.getState(type) === key) {
+        core.info(`${name} up-to-date.`);
         continue;
       }
       try {
-        core.startGroup(`Saving "${path}" to cache key "${key}"…`);
-        if (await cache.saveCache([path], key)) {
-          core.info(`Saved "${path}" to cache key "${key}".`);
-        }
+        core.startGroup(`Saving ${name}…`);
+        core.info(`Saving path "${path}".`);
+        core.info(`Using key "${key}".`);
+        await cache.saveCache([path], key);
       } catch (e) {
         core.info(`[warning] ${e.message}`);
       } finally {

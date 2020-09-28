@@ -11,13 +11,15 @@ async function run() {
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const caches = await getCaches();
-    for (const [name, { path, key, restoreKeys }] of Object.entries(caches)) {
+    for (const [type, { name, path, key, restoreKeys }] of Object.entries(caches)) {
       try {
-        core.startGroup(`Restoring "${path}" from "${key}"…`);
+        core.startGroup(`Restoring ${name}"…`);
+        core.info(`Restoring to path "${path}".`);
+        core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
         const restoreKey = await cache.restoreCache([path], key, restoreKeys);
         if (restoreKey) {
-          core.info(`Restored "${path}" from cache key "${restoreKey}".`);
-          core.saveState(name, restoreKey);
+          core.info(`Restored from cache key "${restoreKey}".`);
+          core.saveState(type, restoreKey);
         } else {
           core.info("No cache found.");
         }
