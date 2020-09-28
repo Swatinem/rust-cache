@@ -19,7 +19,7 @@ async function run() {
     if (registryName) {
       // save the index based on its revision
       const indexRef = await getIndexRef(registryName);
-      caches.index.key = `registry-index-${indexRef}`;
+      caches.index.key += indexRef;
       await io.rmRF(path.join(paths.index, registryName, ".cache"));
 
       await pruneRegistryCache(registryName, packages);

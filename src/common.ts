@@ -45,18 +45,22 @@ export async function getCaches(): Promise<Caches> {
   if (targetKey) {
     targetKey = `${targetKey}-`;
   }
+
+  const registryIndex = `v0-registry-index`;
+  const registryCache = `v0-registry-cache`;
+  const target = `v0-target-${targetKey}${rustKey}`;
   return {
     index: {
       name: "Registry Index",
       path: paths.index,
-      key: "registry-index-XXX",
-      restoreKeys: ["registry-index"],
+      key: `${registryIndex}-`,
+      restoreKeys: [registryIndex],
     },
     cache: {
       name: "Registry Cache",
       path: paths.cache,
-      key: `registry-cache-${lockHash}`,
-      restoreKeys: ["registry-cache"],
+      key: `${registryCache}-${lockHash}`,
+      restoreKeys: [registryCache],
     },
     git: {
       name: "Git Dependencies",
@@ -66,8 +70,8 @@ export async function getCaches(): Promise<Caches> {
     target: {
       name: "Target",
       path: paths.target,
-      key: `target-${targetKey}${rustKey}-${lockHash}`,
-      restoreKeys: [`target-${targetKey}${rustKey}`],
+      key: `${target}-${lockHash}`,
+      restoreKeys: [target],
     },
   };
 }
