@@ -54634,14 +54634,32 @@ async function getCaches() {
     if (targetKey) {
         targetKey = `${targetKey}-`;
     }
+    const registryIndex = `v0-registry-index`;
+    const registryCache = `v0-registry-cache`;
+    const target = `v0-target-${targetKey}${rustKey}`;
     return {
-        index: { path: paths.index, key: "registry-index-XXX", restoreKeys: ["registry-index"] },
-        cache: { path: paths.cache, key: `registry-cache-${lockHash}`, restoreKeys: ["registry-cache"] },
-        git: { path: paths.git, key: "git-db" },
+        index: {
+            name: "Registry Index",
+            path: paths.index,
+            key: `${registryIndex}-`,
+            restoreKeys: [registryIndex],
+        },
+        cache: {
+            name: "Registry Cache",
+            path: paths.cache,
+            key: `${registryCache}-${lockHash}`,
+            restoreKeys: [registryCache],
+        },
+        // git: {
+        //   name: "Git Dependencies",
+        //   path: paths.git,
+        //   key: "git-db",
+        // },
         target: {
+            name: "Target",
             path: paths.target,
-            key: `target-${targetKey}${rustKey}-${lockHash}`,
-            restoreKeys: [`target-${targetKey}${rustKey}`],
+            key: `${target}-${lockHash}`,
+            restoreKeys: [target],
         },
     };
 }
@@ -54714,13 +54732,16 @@ async function run() {
     try {
         core.exportVariable("CARGO_INCREMENTAL", 0);
         const caches = await getCaches();
-        for (const [name, { path, key, restoreKeys }] of Object.entries(caches)) {
+        for (const [type, { name, path, key, restoreKeys }] of Object.entries(caches)) {
+            const start = Date.now();
+            core.startGroup(`Restoring ${name}"…`);
+            core.info(`Restoring to path "${path}".`);
+            core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
             try {
-                core.startGroup(`Restoring "${path}" from "${key}"…`);
                 const restoreKey = await cache.restoreCache([path], key, restoreKeys);
                 if (restoreKey) {
-                    core.info(`Restored "${path}" from cache key "${restoreKey}".`);
-                    core.saveState(name, restoreKey);
+                    core.info(`Restored from cache key "${restoreKey}".`);
+                    core.saveState(type, restoreKey);
                 }
                 else {
                     core.info("No cache found.");
@@ -54729,9 +54750,11 @@ async function run() {
             catch (e) {
                 core.info(`[warning] ${e.message}`);
             }
-            finally {
-                core.endGroup();
+            const duration = Math.round((Date.now() - start) / 1000);
+            if (duration) {
+                core.info(`Took ${duration}s.`);
             }
+            core.endGroup();
         }
     }
     catch (e) {

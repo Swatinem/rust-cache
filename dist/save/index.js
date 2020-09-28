@@ -54581,24 +54581,24 @@ var exec = __webpack_require__(1514);
 // EXTERNAL MODULE: ./node_modules/@actions/glob/lib/glob.js
 var glob = __webpack_require__(8090);
 
-// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
-var io = __webpack_require__(7436);
-
 // EXTERNAL MODULE: external "crypto"
 var external_crypto_ = __webpack_require__(6417);
 var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto_);
+
+// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
+var io = __webpack_require__(7436);
 
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __webpack_require__(5747);
 var external_fs_default = /*#__PURE__*/__webpack_require__.n(external_fs_);
 
-// EXTERNAL MODULE: external "path"
-var external_path_ = __webpack_require__(5622);
-var external_path_default = /*#__PURE__*/__webpack_require__.n(external_path_);
-
 // EXTERNAL MODULE: external "os"
 var external_os_ = __webpack_require__(2087);
 var external_os_default = /*#__PURE__*/__webpack_require__.n(external_os_);
+
+// EXTERNAL MODULE: external "path"
+var external_path_ = __webpack_require__(5622);
+var external_path_default = /*#__PURE__*/__webpack_require__.n(external_path_);
 
 // CONCATENATED MODULE: ./src/common.ts
 var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
@@ -54637,14 +54637,32 @@ async function getCaches() {
     if (targetKey) {
         targetKey = `${targetKey}-`;
     }
+    const registryIndex = `v0-registry-index`;
+    const registryCache = `v0-registry-cache`;
+    const target = `v0-target-${targetKey}${rustKey}`;
     return {
-        index: { path: paths.index, key: "registry-index-XXX", restoreKeys: ["registry-index"] },
-        cache: { path: paths.cache, key: `registry-cache-${lockHash}`, restoreKeys: ["registry-cache"] },
-        git: { path: paths.git, key: "git-db" },
+        index: {
+            name: "Registry Index",
+            path: paths.index,
+            key: `${registryIndex}-`,
+            restoreKeys: [registryIndex],
+        },
+        cache: {
+            name: "Registry Cache",
+            path: paths.cache,
+            key: `${registryCache}-${lockHash}`,
+            restoreKeys: [registryCache],
+        },
+        // git: {
+        //   name: "Git Dependencies",
+        //   path: paths.git,
+        //   key: "git-db",
+        // },
         target: {
+            name: "Target",
             path: paths.target,
-            key: `target-${targetKey}${rustKey}-${lockHash}`,
-            restoreKeys: [`target-${targetKey}${rustKey}`],
+            key: `${target}-${lockHash}`,
+            restoreKeys: [target],
         },
     };
 }
@@ -54720,19 +54738,22 @@ var save_asyncValues = (undefined && undefined.__asyncValues) || function (o) {
 
 
 
+
 async function run() {
     if (!isValidEvent()) {
-        //return;
+        return;
     }
     try {
         const caches = await getCaches();
         const registryName = await getRegistryName();
         const packages = await getPackages();
+        // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
+        await macOsWorkaround();
         await pruneTarget(packages);
         if (registryName) {
             // save the index based on its revision
             const indexRef = await getIndexRef(registryName);
-            caches.index.key = `registry-index-${indexRef}`;
+            caches.index.key += indexRef;
             await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
             await pruneRegistryCache(registryName, packages);
         }
@@ -54740,23 +54761,26 @@ async function run() {
             delete caches.index;
             delete caches.cache;
         }
-        for (const [name, { path, key }] of Object.entries(caches)) {
-            if (core.getState(name) === key) {
-                core.info(`Cache for "${path}" up-to-date.`);
+        for (const [type, { name, path, key }] of Object.entries(caches)) {
+            if (core.getState(type) === key) {
+                core.info(`${name} up-to-date.`);
                 continue;
             }
+            const start = Date.now();
+            core.startGroup(`Saving ${name}…`);
+            core.info(`Saving path "${path}".`);
+            core.info(`Using key "${key}".`);
             try {
-                core.startGroup(`Saving "${path}" to cache key "${key}"…`);
-                if (await cache.saveCache([path], key)) {
-                    core.info(`Saved "${path}" to cache key "${key}".`);
-                }
+                await cache.saveCache([path], key);
             }
             catch (e) {
                 core.info(`[warning] ${e.message}`);
             }
-            finally {
-                core.endGroup();
+            const duration = Math.round((Date.now() - start) / 1000);
+            if (duration) {
+                core.info(`Took ${duration}s.`);
             }
+            core.endGroup();
         }
     }
     catch (e) {
@@ -54769,7 +54793,7 @@ async function getIndexRef(registryName) {
     return (await getCmdOutput("git", ["rev-parse", "--short", "origin/master"], { cwd })).trim();
 }
 async function getPackages() {
-    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--format-version", "1"]));
+    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
     return meta.packages.map(({ name, version }) => ({ name, version }));
 }
 async function pruneRegistryCache(registryName, packages) {
@@ -54859,6 +54883,14 @@ async function rmExcept(dirName, keepPrefix) {
         }
         finally { if (e_3) throw e_3.error; }
     }
+}
+async function macOsWorkaround() {
+    try {
+        // Workaround for https://github.com/actions/cache/issues/403
+        // Also see https://github.com/rust-lang/cargo/issues/8603
+        await exec.exec("sudo", ["/usr/sbin/purge"]);
+    }
+    catch (_a) { }
 }
 
 
