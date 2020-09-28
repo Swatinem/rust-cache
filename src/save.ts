@@ -1,5 +1,6 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
+import * as exec from "@actions/exec";
 import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
@@ -7,7 +8,7 @@ import { getCaches, getCmdOutput, getRegistryName, isValidEvent, paths } from ".
 
 async function run() {
   if (!isValidEvent()) {
-    //return;
+    return;
   }
 
   try {
@@ -15,7 +16,11 @@ async function run() {
     const registryName = await getRegistryName();
     const packages = await getPackages();
 
+    // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
+    await macOsWorkaround();
+
     await pruneTarget(packages);
+
     if (registryName) {
       // save the index based on its revision
       const indexRef = await getIndexRef(registryName);
@@ -130,4 +135,12 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>) {
       }
     }
   }
+}
+
+async function macOsWorkaround() {
+  try {
+    // Workaround for https://github.com/actions/cache/issues/403
+    // Also see https://github.com/rust-lang/cargo/issues/8603
+    await exec.exec("sudo", ["/usr/sbin/purge"]);
+  } catch {}
 }
