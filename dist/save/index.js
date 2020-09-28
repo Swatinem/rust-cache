@@ -54888,7 +54888,7 @@ async function macOsWorkaround() {
     try {
         // Workaround for https://github.com/actions/cache/issues/403
         // Also see https://github.com/rust-lang/cargo/issues/8603
-        await exec.exec("sudo", ["/usr/sbin/purge"]);
+        await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
     }
     catch (_a) { }
 }
