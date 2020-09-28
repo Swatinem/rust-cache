@@ -38,16 +38,20 @@ async function run() {
         core.info(`${name} up-to-date.`);
         continue;
       }
+      const start = Date.now();
+      core.startGroup(`Saving ${name}…`);
+      core.info(`Saving path "${path}".`);
+      core.info(`Using key "${key}".`);
       try {
-        core.startGroup(`Saving ${name}…`);
-        core.info(`Saving path "${path}".`);
-        core.info(`Using key "${key}".`);
         await cache.saveCache([path], key);
       } catch (e) {
         core.info(`[warning] ${e.message}`);
-      } finally {
-        core.endGroup();
       }
+      const duration = Math.round((Date.now() - start) / 1000);
+      if (duration) {
+        core.info(`Took ${duration}s.`);
+      }
+      core.endGroup();
     }
   } catch (e) {
     core.info(`[warning] ${e.message}`);
