@@ -14,14 +14,14 @@ export const paths = {
   target: "target",
 };
 
-export interface CacheConfig {
+interface CacheConfig {
   name: string;
   path: string;
   key: string;
   restoreKeys?: Array<string>;
 }
 
-export interface Caches {
+interface Caches {
   index: CacheConfig;
   cache: CacheConfig;
   // git: CacheConfig;
@@ -76,7 +76,7 @@ export async function getCaches(): Promise<Caches> {
   };
 }
 
-export async function getRustKey(): Promise<string> {
+async function getRustKey(): Promise<string> {
   const rustc = await getRustVersion();
   return `${rustc.release}-${rustc.host}-${rustc["commit-hash"]}`;
 }
@@ -87,7 +87,7 @@ interface RustVersion {
   "commit-hash": string;
 }
 
-export async function getRustVersion(): Promise<RustVersion> {
+async function getRustVersion(): Promise<RustVersion> {
   const stdout = await getCmdOutput("rustc", ["-vV"]);
   let splits = stdout
     .split(/[\n\r]+/)
@@ -129,7 +129,7 @@ export async function getRegistryName() {
   return path.basename(path.dirname(first));
 }
 
-export async function getLockfileHash() {
+async function getLockfileHash() {
   const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock", { followSymbolicLinks: false });
   const files = await globber.glob();
   files.sort((a, b) => a.localeCompare(b));
