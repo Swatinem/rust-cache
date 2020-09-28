@@ -30,19 +30,15 @@ assumption is that we will likely recompile the own crate(s) anyway.
 
 It also separates the cache into 4 groups, each treated differently:
 
-- Index: `~/.cargo/registry/index/<registry>`:
+- Registry Index: `~/.cargo/registry/index/<registry>`:
 
   This is always restored from its latest snapshot, and persisted based on the
   most recent revision.
 
-- Registry / Cache: `~/.cargo/registry/cache/<registry>`:
+- Registry Cache: `~/.cargo/registry/cache/<registry>`:
 
   Automatically keyed by the lockfile/toml hash, and is being pruned to only
   persist the dependencies that are being used.
-
-- Registry / Git: `~/.cargo/registry/git/<registry>`:
-
-  Automatically keyed by the lockfile/toml hash. Pruning is still TODO.
 
 - target: `./target`
 
