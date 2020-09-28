@@ -64,7 +64,7 @@ interface PackageDefinition {
 type Packages = Array<PackageDefinition>;
 
 async function getPackages(): Promise<Packages> {
-  const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--format-version", "1"]));
+  const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
   return meta.packages.map(({ name, version }: any) => ({ name, version }));
 }
 
