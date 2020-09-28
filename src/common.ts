@@ -24,7 +24,7 @@ export interface CacheConfig {
 export interface Caches {
   index: CacheConfig;
   cache: CacheConfig;
-  git: CacheConfig;
+  // git: CacheConfig;
   target: CacheConfig;
 }
 
@@ -62,11 +62,11 @@ export async function getCaches(): Promise<Caches> {
       key: `${registryCache}-${lockHash}`,
       restoreKeys: [registryCache],
     },
-    git: {
-      name: "Git Dependencies",
-      path: paths.git,
-      key: "git-db",
-    },
+    // git: {
+    //   name: "Git Dependencies",
+    //   path: paths.git,
+    //   key: "git-db",
+    // },
     target: {
       name: "Target",
       path: paths.target,
