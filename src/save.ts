@@ -68,13 +68,30 @@ async function getIndexRef(registryName: string) {
 interface PackageDefinition {
   name: string;
   version: string;
+  targets: Array<string>;
 }
 
 type Packages = Array<PackageDefinition>;
 
+interface Meta {
+  packages: Array<{
+    name: string;
+    version: string;
+    manifest_path: string;
+    targets: Array<{ kind: Array<string>; name: string }>;
+  }>;
+}
+
 async function getPackages(): Promise<Packages> {
-  const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
-  return meta.packages.map(({ name, version }: any) => ({ name, version }));
+  const cwd = process.cwd();
+  const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+
+  return meta.packages
+    .filter((p) => !p.manifest_path.startsWith(cwd))
+    .map((p) => {
+      const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+      return { name: p.name, version: p.version, targets };
+    });
 }
 
 async function pruneRegistryCache(registryName: string, packages: Packages) {
@@ -111,8 +128,12 @@ async function pruneTarget(packages: Packages) {
 
   const keepDeps = new Set(
     packages.flatMap((p) => {
-      const name = p.name.replace(/-/g, "_");
-      return [name, `lib${name}`];
+      const names = [];
+      for (const n of [p.name, ...p.targets]) {
+        const name = n.replace(/-/g, "_");
+        names.push(name, `lib${name}`);
+      }
+      return names;
     }),
   );
   await rmExcept("./target/debug/deps", keepDeps);

@@ -54793,8 +54793,14 @@ async function getIndexRef(registryName) {
     return (await getCmdOutput("git", ["rev-parse", "--short", "origin/master"], { cwd })).trim();
 }
 async function getPackages() {
+    const cwd = process.cwd();
     const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
-    return meta.packages.map(({ name, version }) => ({ name, version }));
+    return meta.packages
+        .filter((p) => !p.manifest_path.startsWith(cwd))
+        .map((p) => {
+        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        return { name: p.name, version: p.version, targets };
+    });
 }
 async function pruneRegistryCache(registryName, packages) {
     var e_1, _a;
@@ -54846,8 +54852,12 @@ async function pruneTarget(packages) {
     await rmExcept("./target/debug/build", keepPkg);
     await rmExcept("./target/debug/.fingerprint", keepPkg);
     const keepDeps = new Set(packages.flatMap((p) => {
-        const name = p.name.replace(/-/g, "_");
-        return [name, `lib${name}`];
+        const names = [];
+        for (const n of [p.name, ...p.targets]) {
+            const name = n.replace(/-/g, "_");
+            names.push(name, `lib${name}`);
+        }
+        return names;
     }));
     await rmExcept("./target/debug/deps", keepDeps);
 }

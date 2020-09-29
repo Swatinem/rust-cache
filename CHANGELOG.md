@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Don’t prune targets that have a different name from the crate, but do prune targets from the workspace.
+
 ## 1.0.1
 
 - Improved logging output.
