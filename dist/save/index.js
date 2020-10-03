@@ -54619,7 +54619,7 @@ const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
     cache: external_path_default().join(home, ".cargo/registry/cache"),
-    git: external_path_default().join(home, ".cargo/git/db"),
+    // git: path.join(home, ".cargo/git/db"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -54636,6 +54636,10 @@ async function getCaches() {
     let targetKey = core.getInput("key");
     if (targetKey) {
         targetKey = `${targetKey}-`;
+    }
+    const job = process.env.GITHUB_JOB;
+    if (job) {
+        targetKey = `${job}-${targetKey}`;
     }
     const registryIndex = `v0-registry-index`;
     const registryCache = `v0-registry-cache`;

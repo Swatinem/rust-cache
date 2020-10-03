@@ -10,7 +10,7 @@ const home = os.homedir();
 export const paths = {
   index: path.join(home, ".cargo/registry/index"),
   cache: path.join(home, ".cargo/registry/cache"),
-  git: path.join(home, ".cargo/git/db"),
+  // git: path.join(home, ".cargo/git/db"),
   target: "target",
 };
 
@@ -44,6 +44,10 @@ export async function getCaches(): Promise<Caches> {
   let targetKey = core.getInput("key");
   if (targetKey) {
     targetKey = `${targetKey}-`;
+  }
+  const job = process.env.GITHUB_JOB;
+  if (job) {
+    targetKey = `${job}-${targetKey}`;
   }
 
   const registryIndex = `v0-registry-index`;

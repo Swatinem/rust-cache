@@ -2,17 +2,10 @@
 
 A GitHub Action that implements smart caching for rust/cargo projects
 
-## Inputs
-
-- `key` - An optional key for the `target` cache. This is useful in case you
-  have different jobs for test / check / clippy, etc
-
 ## Example usage
 
 ```yaml
 - uses: Swatinem/rust-cache@v1
-  with:
-    key: test
 ```
 
 ## Specifics
@@ -26,9 +19,9 @@ target
 ```
 
 It disables incremental compilation and only caches dependencies. The
-assumption is that we will likely recompile the own crate(s) anyway.
+assumption is that we will likely recompile our own crate(s) anyway.
 
-It also separates the cache into 4 groups, each treated differently:
+It also separates the cache into 3 groups, each treated differently:
 
 - Registry Index: `~/.cargo/registry/index/<registry>`:
 
@@ -42,6 +35,6 @@ It also separates the cache into 4 groups, each treated differently:
 
 - target: `./target`
 
-  Automatically keyed by the lockfile/toml hash, and is being pruned to only
-  persist the dependencies that are being used. This is especially throwing
-  away any intermediate artifacts.
+  Automatically keyed by the lockfile, toml hash and job, and is being pruned
+  to only persist the dependencies that are being used. This is especially
+  throwing away any intermediate artifacts.
