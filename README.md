@@ -1,6 +1,7 @@
 # Rust Cache Action
 
-A GitHub Action that implements smart caching for rust/cargo projects
+A GitHub Action that implements smart caching for rust/cargo projects with
+sensible defaults.
 
 ## Example usage
 
@@ -8,33 +9,29 @@ A GitHub Action that implements smart caching for rust/cargo projects
 - uses: Swatinem/rust-cache@v1
 ```
 
-## Specifics
+### Registry Cache
 
-This action tries to be better than just caching the following directories:
+- `~/.cargo/registry/index`
+- `~/.cargo/registry/cache`
 
-```
-~/.cargo/registry
-~/.cargo/git
-target
-```
+This cache is automatically keyed by hashing the `Cargo.lock` / `Cargo.toml`
+files. Before persisting, the cache is cleaned of intermediate artifacts and
+unneeded dependencies.
 
-It disables incremental compilation and only caches dependencies. The
-assumption is that we will likely recompile our own crate(s) anyway.
+**TODO**: The `~/.cargo/git/db` database is not yet persisted, support will be
+added at a later point.
 
-It also separates the cache into 3 groups, each treated differently:
+### Target Cache
 
-- Registry Index: `~/.cargo/registry/index/<registry>`:
+- `./target`
 
-  This is always restored from its latest snapshot, and persisted based on the
-  most recent revision.
+This cache is automatically keyed by:
 
-- Registry Cache: `~/.cargo/registry/cache/<registry>`:
+- the github `job`,
+- the rustc release / host / hash, and
+- a hash of the `Cargo.lock` / `Cargo.toml` files.
 
-  Automatically keyed by the lockfile/toml hash, and is being pruned to only
-  persist the dependencies that are being used.
-
-- target: `./target`
-
-  Automatically keyed by the lockfile, toml hash and job, and is being pruned
-  to only persist the dependencies that are being used. This is especially
-  throwing away any intermediate artifacts.
+Before persisting, the cache is cleaned of anything that is not a needed
+dependency. In particular, no caching of workspace crates will be done. For
+this reason, this action will automatically set `CARGO_INCREMENTAL=0` to
+disable incremental compilation.

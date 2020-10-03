@@ -13,37 +13,40 @@ async function run() {
 
   try {
     const caches = await getCaches();
+    let upToDate = true;
+    for (const [type, { key }] of Object.entries(caches)) {
+      if (core.getState(`CACHEKEY-${type}`) !== key) {
+        upToDate = false;
+        break;
+      }
+    }
+    if (upToDate) {
+      core.info(`All caches up-to-date`);
+      return;
+    }
+
     const registryName = await getRegistryName();
     const packages = await getPackages();
 
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
 
+    await io.rmRF(path.join(paths.index, registryName, ".cache"));
+    await pruneRegistryCache(registryName, packages);
+
     await pruneTarget(packages);
 
-    if (registryName) {
-      // save the index based on its revision
-      const indexRef = await getIndexRef(registryName);
-      caches.index.key += indexRef;
-      await io.rmRF(path.join(paths.index, registryName, ".cache"));
-
-      await pruneRegistryCache(registryName, packages);
-    } else {
-      delete (caches as any).index;
-      delete (caches as any).cache;
-    }
-
-    for (const [type, { name, path, key }] of Object.entries(caches)) {
-      if (core.getState(type) === key) {
+    for (const [type, { name, path: paths, key }] of Object.entries(caches)) {
+      if (core.getState(`CACHEKEY-${type}`) === key) {
         core.info(`${name} up-to-date.`);
         continue;
       }
       const start = Date.now();
       core.startGroup(`Saving ${name}…`);
-      core.info(`Saving path "${path}".`);
+      core.info(`Saving paths:\n    ${paths.join("\n    ")}.`);
       core.info(`Using key "${key}".`);
       try {
-        await cache.saveCache([path], key);
+        await cache.saveCache(paths, key);
       } catch (e) {
         core.info(`[warning] ${e.message}`);
       }
@@ -59,11 +62,6 @@ async function run() {
 }
 
 run();
-
-async function getIndexRef(registryName: string) {
-  const cwd = path.join(paths.index, registryName);
-  return (await getCmdOutput("git", ["rev-parse", "--short", "origin/master"], { cwd })).trim();
-}
 
 interface PackageDefinition {
   name: string;

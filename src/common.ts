@@ -10,21 +10,19 @@ const home = os.homedir();
 export const paths = {
   index: path.join(home, ".cargo/registry/index"),
   cache: path.join(home, ".cargo/registry/cache"),
-  // git: path.join(home, ".cargo/git/db"),
+  git: path.join(home, ".cargo/git/db"),
   target: "target",
 };
 
 interface CacheConfig {
   name: string;
-  path: string;
+  paths: Array<string>;
   key: string;
   restoreKeys?: Array<string>;
 }
 
 interface Caches {
-  index: CacheConfig;
-  cache: CacheConfig;
-  // git: CacheConfig;
+  registry: CacheConfig;
   target: CacheConfig;
 }
 
@@ -50,30 +48,22 @@ export async function getCaches(): Promise<Caches> {
     targetKey = `${job}-${targetKey}`;
   }
 
-  const registryIndex = `v0-registry-index`;
-  const registryCache = `v0-registry-cache`;
+  const registry = `v0-registry`;
   const target = `v0-target-${targetKey}${rustKey}`;
   return {
-    index: {
-      name: "Registry Index",
-      path: paths.index,
-      key: `${registryIndex}-`,
-      restoreKeys: [registryIndex],
+    registry: {
+      name: "Registry",
+      paths: [
+        paths.index,
+        paths.cache,
+        // TODO: paths.git,
+      ],
+      key: `${registry}-${lockHash}`,
+      restoreKeys: [registry],
     },
-    cache: {
-      name: "Registry Cache",
-      path: paths.cache,
-      key: `${registryCache}-${lockHash}`,
-      restoreKeys: [registryCache],
-    },
-    // git: {
-    //   name: "Git Dependencies",
-    //   path: paths.git,
-    //   key: "git-db",
-    // },
     target: {
       name: "Target",
-      path: paths.target,
+      paths: [paths.target],
       key: `${target}-${lockHash}`,
       restoreKeys: [target],
     },
@@ -82,7 +72,7 @@ export async function getCaches(): Promise<Caches> {
 
 async function getRustKey(): Promise<string> {
   const rustc = await getRustVersion();
-  return `${rustc.release}-${rustc.host}-${rustc["commit-hash"]}`;
+  return `${rustc.release}-${rustc.host}-${rustc["commit-hash"].slice(0, 12)}`;
 }
 
 interface RustVersion {
@@ -119,21 +109,18 @@ export async function getCmdOutput(
   return stdout;
 }
 
-export async function getRegistryName() {
+export async function getRegistryName(): Promise<string> {
   const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
   const files = await globber.glob();
   if (files.length > 1) {
-    core.debug(`got multiple registries: "${files.join('", "')}"`);
+    core.warning(`got multiple registries: "${files.join('", "')}"`);
   }
 
-  const first = files.shift();
-  if (!first) {
-    return;
-  }
+  const first = files.shift()!;
   return path.basename(path.dirname(first));
 }
 
-async function getLockfileHash() {
+async function getLockfileHash(): Promise<string> {
   const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock", { followSymbolicLinks: false });
   const files = await globber.glob();
   files.sort((a, b) => a.localeCompare(b));
@@ -144,5 +131,5 @@ async function getLockfileHash() {
       hasher.update(chunk);
     }
   }
-  return hasher.digest("hex");
+  return hasher.digest("hex").slice(0, 20);
 }

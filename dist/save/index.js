@@ -54619,7 +54619,7 @@ const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
     cache: external_path_default().join(home, ".cargo/registry/cache"),
-    // git: path.join(home, ".cargo/git/db"),
+    git: external_path_default().join(home, ".cargo/git/db"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -54641,30 +54641,21 @@ async function getCaches() {
     if (job) {
         targetKey = `${job}-${targetKey}`;
     }
-    const registryIndex = `v0-registry-index`;
-    const registryCache = `v0-registry-cache`;
+    const registry = `v0-registry`;
     const target = `v0-target-${targetKey}${rustKey}`;
     return {
-        index: {
-            name: "Registry Index",
-            path: paths.index,
-            key: `${registryIndex}-`,
-            restoreKeys: [registryIndex],
+        registry: {
+            name: "Registry",
+            paths: [
+                paths.index,
+                paths.cache,
+            ],
+            key: `${registry}-`,
+            restoreKeys: [registry],
         },
-        cache: {
-            name: "Registry Cache",
-            path: paths.cache,
-            key: `${registryCache}-${lockHash}`,
-            restoreKeys: [registryCache],
-        },
-        // git: {
-        //   name: "Git Dependencies",
-        //   path: paths.git,
-        //   key: "git-db",
-        // },
         target: {
             name: "Target",
-            path: paths.target,
+            paths: [paths.target],
             key: `${target}-${lockHash}`,
             restoreKeys: [target],
         },
@@ -54672,7 +54663,7 @@ async function getCaches() {
 }
 async function getRustKey() {
     const rustc = await getRustVersion();
-    return `${rustc.release}-${rustc.host}-${rustc["commit-hash"]}`;
+    return `${rustc.release}-${rustc.host}-${rustc["commit-hash"].slice(0, 12)}`;
 }
 async function getRustVersion() {
     const stdout = await getCmdOutput("rustc", ["-vV"]);
@@ -54696,12 +54687,9 @@ async function getRegistryName() {
     const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
     const files = await globber.glob();
     if (files.length > 1) {
-        core.debug(`got multiple registries: "${files.join('", "')}"`);
+        core.warning(`got multiple registries: "${files.join('", "')}"`);
     }
     const first = files.shift();
-    if (!first) {
-        return;
-    }
     return external_path_default().basename(external_path_default().dirname(first));
 }
 async function getLockfileHash() {
@@ -54725,7 +54713,7 @@ async function getLockfileHash() {
             finally { if (e_1) throw e_1.error; }
         }
     }
-    return hasher.digest("hex");
+    return hasher.digest("hex").slice(0, 20);
 }
 
 // CONCATENATED MODULE: ./src/save.ts
@@ -54749,33 +54737,35 @@ async function run() {
     }
     try {
         const caches = await getCaches();
+        let upToDate = true;
+        for (const [type, { key }] of Object.entries(caches)) {
+            if (core.getState(`CACHEKEY-${type}`) !== key) {
+                upToDate = false;
+                break;
+            }
+        }
+        if (upToDate) {
+            core.info(`All caches up-to-date`);
+            return;
+        }
         const registryName = await getRegistryName();
         const packages = await getPackages();
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
+        await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
+        await pruneRegistryCache(registryName, packages);
         await pruneTarget(packages);
-        if (registryName) {
-            // save the index based on its revision
-            const indexRef = await getIndexRef(registryName);
-            caches.index.key += indexRef;
-            await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
-            await pruneRegistryCache(registryName, packages);
-        }
-        else {
-            delete caches.index;
-            delete caches.cache;
-        }
-        for (const [type, { name, path, key }] of Object.entries(caches)) {
-            if (core.getState(type) === key) {
+        for (const [type, { name, path: paths, key }] of Object.entries(caches)) {
+            if (core.getState(`CACHEKEY-${type}`) === key) {
                 core.info(`${name} up-to-date.`);
                 continue;
             }
             const start = Date.now();
             core.startGroup(`Saving ${name}…`);
-            core.info(`Saving path "${path}".`);
+            core.info(`Saving paths:\n    ${paths.join("\n    ")}.`);
             core.info(`Using key "${key}".`);
             try {
-                await cache.saveCache([path], key);
+                await cache.saveCache(paths, key);
             }
             catch (e) {
                 core.info(`[warning] ${e.message}`);
@@ -54792,10 +54782,6 @@ async function run() {
     }
 }
 run();
-async function getIndexRef(registryName) {
-    const cwd = external_path_default().join(paths.index, registryName);
-    return (await getCmdOutput("git", ["rev-parse", "--short", "origin/master"], { cwd })).trim();
-}
 async function getPackages() {
     const cwd = process.cwd();
     const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
