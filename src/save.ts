@@ -1,10 +1,11 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import * as glob from "@actions/glob";
 import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
-import { getCaches, getCmdOutput, getRegistryName, isValidEvent, paths } from "./common";
+import { getCacheConfig, getCmdOutput, isValidEvent, paths, stateKey } from "./common";
 
 async function run() {
   if (!isValidEvent()) {
@@ -12,49 +13,35 @@ async function run() {
   }
 
   try {
-    const caches = await getCaches();
-    let upToDate = true;
-    for (const [type, { key }] of Object.entries(caches)) {
-      if (core.getState(`CACHEKEY-${type}`) !== key) {
-        upToDate = false;
-        break;
-      }
-    }
-    if (upToDate) {
-      core.info(`All caches up-to-date`);
+    const start = Date.now();
+    const { paths: savePaths, key } = await getCacheConfig();
+
+    if (core.getState(stateKey) === key) {
+      core.info(`Cache up-to-date.`);
       return;
     }
-
-    const registryName = await getRegistryName();
-    const packages = await getPackages();
 
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
 
-    await io.rmRF(path.join(paths.index, registryName, ".cache"));
-    await pruneRegistryCache(registryName, packages);
+    const registryName = await getRegistryName();
+    const packages = await getPackages();
 
-    await pruneTarget(packages);
+    await cleanRegistry(registryName, packages);
 
-    for (const [type, { name, path: paths, key }] of Object.entries(caches)) {
-      if (core.getState(`CACHEKEY-${type}`) === key) {
-        core.info(`${name} up-to-date.`);
-        continue;
-      }
-      const start = Date.now();
-      core.startGroup(`Saving ${name}…`);
-      core.info(`Saving paths:\n    ${paths.join("\n    ")}.`);
-      core.info(`Using key "${key}".`);
-      try {
-        await cache.saveCache(paths, key);
-      } catch (e) {
-        core.info(`[warning] ${e.message}`);
-      }
-      const duration = Math.round((Date.now() - start) / 1000);
-      if (duration) {
-        core.info(`Took ${duration}s.`);
-      }
-      core.endGroup();
+    await cleanTarget(packages);
+
+    core.info(`Saving paths:\n    ${savePaths.join("\n    ")}.`);
+    core.info(`Using key "${key}".`);
+    try {
+      await cache.saveCache(savePaths, key);
+    } catch (e) {
+      core.info(`[warning] ${e.message}`);
+    }
+
+    const duration = Math.round((Date.now() - start) / 1000);
+    if (duration) {
+      core.info(`Took ${duration}s.`);
     }
   } catch (e) {
     core.info(`[warning] ${e.message}`);
@@ -80,6 +67,17 @@ interface Meta {
   }>;
 }
 
+async function getRegistryName(): Promise<string> {
+  const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
+  const files = await globber.glob();
+  if (files.length > 1) {
+    core.warning(`got multiple registries: "${files.join('", "')}"`);
+  }
+
+  const first = files.shift()!;
+  return path.basename(path.dirname(first));
+}
+
 async function getPackages(): Promise<Packages> {
   const cwd = process.cwd();
   const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
@@ -92,7 +90,9 @@ async function getPackages(): Promise<Packages> {
     });
 }
 
-async function pruneRegistryCache(registryName: string, packages: Packages) {
+async function cleanRegistry(registryName: string, packages: Packages) {
+  await io.rmRF(path.join(paths.index, registryName, ".cache"));
+
   const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
 
   const dir = await fs.promises.opendir(path.join(paths.cache, registryName));
@@ -105,12 +105,12 @@ async function pruneRegistryCache(registryName: string, packages: Packages) {
   }
 }
 
-async function pruneTarget(packages: Packages) {
+async function cleanTarget(packages: Packages) {
   await fs.promises.unlink("./target/.rustc_info.json");
   await io.rmRF("./target/debug/examples");
   await io.rmRF("./target/debug/incremental");
-  let dir: fs.Dir;
 
+  let dir: fs.Dir;
   // remove all *files* from debug
   dir = await fs.promises.opendir("./target/debug");
   for await (const dirent of dir) {
@@ -137,7 +137,7 @@ async function pruneTarget(packages: Packages) {
   await rmExcept("./target/debug/deps", keepDeps);
 }
 
-const twoWeeks = 14 * 24 * 3600 * 1000;
+const oneWeek = 7 * 24 * 3600 * 1000;
 
 async function rmExcept(dirName: string, keepPrefix: Set<string>) {
   const dir = await fs.promises.opendir(dirName);
@@ -149,7 +149,7 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>) {
     }
     const fileName = path.join(dir.path, dirent.name);
     const { mtime } = await fs.promises.stat(fileName);
-    if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > twoWeeks) {
+    if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
       core.debug(`deleting "${fileName}"`);
       if (dirent.isFile()) {
         await fs.promises.unlink(fileName);

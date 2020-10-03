@@ -1,9 +1,9 @@
 name: "Rust Cache"
-description: "A GitHub Action that implements smart caching for rust/cargo projects"
+description: "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults."
 author: "Arpad Borsos <arpad.borsos@googlemail.com>"
 inputs:
   key:
-    description: "An explicit key for restoring and saving the target cache"
+    description: "An additional key for the cache"
     required: false
 runs:
   using: "node12"

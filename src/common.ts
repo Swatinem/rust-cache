@@ -6,6 +6,9 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+export const stateKey = "RUST_CACHE_KEY";
+const stateHash = "RUST_CACHE_HASH";
+
 const home = os.homedir();
 export const paths = {
   index: path.join(home, ".cargo/registry/index"),
@@ -15,15 +18,9 @@ export const paths = {
 };
 
 interface CacheConfig {
-  name: string;
   paths: Array<string>;
   key: string;
-  restoreKeys?: Array<string>;
-}
-
-interface Caches {
-  registry: CacheConfig;
-  target: CacheConfig;
+  restoreKeys: Array<string>;
 }
 
 const RefKey = "GITHUB_REF";
@@ -32,41 +29,36 @@ export function isValidEvent(): boolean {
   return RefKey in process.env && Boolean(process.env[RefKey]);
 }
 
-export async function getCaches(): Promise<Caches> {
-  const rustKey = await getRustKey();
-  let lockHash = core.getState("lockHash");
+export async function getCacheConfig(): Promise<CacheConfig> {
+  let lockHash = core.getState(stateHash);
   if (!lockHash) {
     lockHash = await getLockfileHash();
-    core.saveState("lockHash", lockHash);
-  }
-  let targetKey = core.getInput("key");
-  if (targetKey) {
-    targetKey = `${targetKey}-`;
-  }
-  const job = process.env.GITHUB_JOB;
-  if (job) {
-    targetKey = `${job}-${targetKey}`;
+    core.saveState(stateHash, lockHash);
   }
 
-  const registry = `v0-registry`;
-  const target = `v0-target-${targetKey}${rustKey}`;
+  let key = `v0-rust-`;
+
+  let inputKey = core.getInput("key");
+  if (inputKey) {
+    key += `${inputKey}-`;
+  }
+
+  const job = process.env.GITHUB_JOB;
+  if (job) {
+    key += `${job}-`;
+  }
+
+  key += await getRustKey();
+
   return {
-    registry: {
-      name: "Registry",
-      paths: [
-        paths.index,
-        paths.cache,
-        // TODO: paths.git,
-      ],
-      key: `${registry}-${lockHash}`,
-      restoreKeys: [registry],
-    },
-    target: {
-      name: "Target",
-      paths: [paths.target],
-      key: `${target}-${lockHash}`,
-      restoreKeys: [target],
-    },
+    paths: [
+      paths.index,
+      paths.cache,
+      // TODO: paths.git,
+      paths.target,
+    ],
+    key: `${key}-${lockHash}`,
+    restoreKeys: [key],
   };
 }
 
@@ -107,17 +99,6 @@ export async function getCmdOutput(
     ...options,
   });
   return stdout;
-}
-
-export async function getRegistryName(): Promise<string> {
-  const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
-  const files = await globber.glob();
-  if (files.length > 1) {
-    core.warning(`got multiple registries: "${files.join('", "')}"`);
-  }
-
-  const first = files.shift()!;
-  return path.basename(path.dirname(first));
 }
 
 async function getLockfileHash(): Promise<string> {

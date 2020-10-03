@@ -54585,12 +54585,12 @@ var glob = __webpack_require__(8090);
 var external_crypto_ = __webpack_require__(6417);
 var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto_);
 
-// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
-var io = __webpack_require__(7436);
-
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __webpack_require__(5747);
 var external_fs_default = /*#__PURE__*/__webpack_require__.n(external_fs_);
+
+// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
+var io = __webpack_require__(7436);
 
 // EXTERNAL MODULE: external "os"
 var external_os_ = __webpack_require__(2087);
@@ -54615,6 +54615,8 @@ var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
 
 
 
+const stateKey = "RUST_CACHE_KEY";
+const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
@@ -54626,39 +54628,31 @@ const RefKey = "GITHUB_REF";
 function isValidEvent() {
     return RefKey in process.env && Boolean(process.env[RefKey]);
 }
-async function getCaches() {
-    const rustKey = await getRustKey();
-    let lockHash = core.getState("lockHash");
+async function getCacheConfig() {
+    let lockHash = core.getState(stateHash);
     if (!lockHash) {
         lockHash = await getLockfileHash();
-        core.saveState("lockHash", lockHash);
+        core.saveState(stateHash, lockHash);
     }
-    let targetKey = core.getInput("key");
-    if (targetKey) {
-        targetKey = `${targetKey}-`;
+    let key = `v0-rust-`;
+    let inputKey = core.getInput("key");
+    if (inputKey) {
+        key += `${inputKey}-`;
     }
     const job = process.env.GITHUB_JOB;
     if (job) {
-        targetKey = `${job}-${targetKey}`;
+        key += `${job}-`;
     }
-    const registry = `v0-registry`;
-    const target = `v0-target-${targetKey}${rustKey}`;
+    key += await getRustKey();
     return {
-        registry: {
-            name: "Registry",
-            paths: [
-                paths.index,
-                paths.cache,
-            ],
-            key: `${registry}-`,
-            restoreKeys: [registry],
-        },
-        target: {
-            name: "Target",
-            paths: [paths.target],
-            key: `${target}-${lockHash}`,
-            restoreKeys: [target],
-        },
+        paths: [
+            paths.index,
+            paths.cache,
+            // TODO: paths.git,
+            paths.target,
+        ],
+        key: `${key}-${lockHash}`,
+        restoreKeys: [key],
     };
 }
 async function getRustKey() {
@@ -54682,15 +54676,6 @@ async function getCmdOutput(cmd, args = [], options = {}) {
             },
         } }, options));
     return stdout;
-}
-async function getRegistryName() {
-    const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
-    const files = await globber.glob();
-    if (files.length > 1) {
-        core.warning(`got multiple registries: "${files.join('", "')}"`);
-    }
-    const first = files.shift();
-    return external_path_default().basename(external_path_default().dirname(first));
 }
 async function getLockfileHash() {
     var e_1, _a;
@@ -54731,50 +54716,35 @@ var save_asyncValues = (undefined && undefined.__asyncValues) || function (o) {
 
 
 
+
 async function run() {
     if (!isValidEvent()) {
         return;
     }
     try {
-        const caches = await getCaches();
-        let upToDate = true;
-        for (const [type, { key }] of Object.entries(caches)) {
-            if (core.getState(`CACHEKEY-${type}`) !== key) {
-                upToDate = false;
-                break;
-            }
-        }
-        if (upToDate) {
-            core.info(`All caches up-to-date`);
+        const start = Date.now();
+        const { paths: savePaths, key } = await getCacheConfig();
+        if (core.getState(stateKey) === key) {
+            core.info(`Cache up-to-date.`);
             return;
         }
-        const registryName = await getRegistryName();
-        const packages = await getPackages();
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
-        await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
-        await pruneRegistryCache(registryName, packages);
-        await pruneTarget(packages);
-        for (const [type, { name, path: paths, key }] of Object.entries(caches)) {
-            if (core.getState(`CACHEKEY-${type}`) === key) {
-                core.info(`${name} up-to-date.`);
-                continue;
-            }
-            const start = Date.now();
-            core.startGroup(`Saving ${name}…`);
-            core.info(`Saving paths:\n    ${paths.join("\n    ")}.`);
-            core.info(`Using key "${key}".`);
-            try {
-                await cache.saveCache(paths, key);
-            }
-            catch (e) {
-                core.info(`[warning] ${e.message}`);
-            }
-            const duration = Math.round((Date.now() - start) / 1000);
-            if (duration) {
-                core.info(`Took ${duration}s.`);
-            }
-            core.endGroup();
+        const registryName = await getRegistryName();
+        const packages = await getPackages();
+        await cleanRegistry(registryName, packages);
+        await cleanTarget(packages);
+        core.info(`Saving paths:\n    ${savePaths.join("\n    ")}.`);
+        core.info(`Using key "${key}".`);
+        try {
+            await cache.saveCache(savePaths, key);
+        }
+        catch (e) {
+            core.info(`[warning] ${e.message}`);
+        }
+        const duration = Math.round((Date.now() - start) / 1000);
+        if (duration) {
+            core.info(`Took ${duration}s.`);
         }
     }
     catch (e) {
@@ -54782,6 +54752,15 @@ async function run() {
     }
 }
 run();
+async function getRegistryName() {
+    const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
+    const files = await globber.glob();
+    if (files.length > 1) {
+        core.warning(`got multiple registries: "${files.join('", "')}"`);
+    }
+    const first = files.shift();
+    return external_path_default().basename(external_path_default().dirname(first));
+}
 async function getPackages() {
     const cwd = process.cwd();
     const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
@@ -54792,8 +54771,9 @@ async function getPackages() {
         return { name: p.name, version: p.version, targets };
     });
 }
-async function pruneRegistryCache(registryName, packages) {
+async function cleanRegistry(registryName, packages) {
     var e_1, _a;
+    await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     const dir = await external_fs_default().promises.opendir(external_path_default().join(paths.cache, registryName));
     try {
@@ -54814,7 +54794,7 @@ async function pruneRegistryCache(registryName, packages) {
         finally { if (e_1) throw e_1.error; }
     }
 }
-async function pruneTarget(packages) {
+async function cleanTarget(packages) {
     var e_2, _a;
     await external_fs_default().promises.unlink("./target/.rustc_info.json");
     await io.rmRF("./target/debug/examples");
@@ -54851,7 +54831,7 @@ async function pruneTarget(packages) {
     }));
     await rmExcept("./target/debug/deps", keepDeps);
 }
-const twoWeeks = 14 * 24 * 3600 * 1000;
+const oneWeek = 7 * 24 * 3600 * 1000;
 async function rmExcept(dirName, keepPrefix) {
     var e_3, _a;
     const dir = await external_fs_default().promises.opendir(dirName);
@@ -54865,7 +54845,7 @@ async function rmExcept(dirName, keepPrefix) {
             }
             const fileName = external_path_default().join(dir.path, dirent.name);
             const { mtime } = await external_fs_default().promises.stat(fileName);
-            if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > twoWeeks) {
+            if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
                 core.debug(`deleting "${fileName}"`);
                 if (dirent.isFile()) {
                     await external_fs_default().promises.unlink(fileName);

@@ -9,20 +9,12 @@ sensible defaults.
 - uses: Swatinem/rust-cache@v1
 ```
 
-### Registry Cache
+### Cache Details
+
+The cache currently caches the following directories:
 
 - `~/.cargo/registry/index`
 - `~/.cargo/registry/cache`
-
-This cache is automatically keyed by hashing the `Cargo.lock` / `Cargo.toml`
-files. Before persisting, the cache is cleaned of intermediate artifacts and
-unneeded dependencies.
-
-**TODO**: The `~/.cargo/git/db` database is not yet persisted, support will be
-added at a later point.
-
-### Target Cache
-
 - `./target`
 
 This cache is automatically keyed by:
@@ -31,7 +23,13 @@ This cache is automatically keyed by:
 - the rustc release / host / hash, and
 - a hash of the `Cargo.lock` / `Cargo.toml` files.
 
-Before persisting, the cache is cleaned of anything that is not a needed
-dependency. In particular, no caching of workspace crates will be done. For
+An additional input `key` can be provided if the builtin keys are not sufficient.
+
+Before persisting, the cache is cleaned of intermediate artifacts and
+anything that is not a workspace dependency.
+In particular, no caching of workspace crates will be done. For
 this reason, this action will automatically set `CARGO_INCREMENTAL=0` to
 disable incremental compilation.
+
+**TODO**: The `~/.cargo/git/db` database is not yet persisted, support will be
+added at a later point.

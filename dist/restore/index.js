@@ -54612,6 +54612,8 @@ var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
 
 
 
+const stateKey = "RUST_CACHE_KEY";
+const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
@@ -54623,39 +54625,31 @@ const RefKey = "GITHUB_REF";
 function isValidEvent() {
     return RefKey in process.env && Boolean(process.env[RefKey]);
 }
-async function getCaches() {
-    const rustKey = await getRustKey();
-    let lockHash = core.getState("lockHash");
+async function getCacheConfig() {
+    let lockHash = core.getState(stateHash);
     if (!lockHash) {
         lockHash = await getLockfileHash();
-        core.saveState("lockHash", lockHash);
+        core.saveState(stateHash, lockHash);
     }
-    let targetKey = core.getInput("key");
-    if (targetKey) {
-        targetKey = `${targetKey}-`;
+    let key = `v0-rust-`;
+    let inputKey = core.getInput("key");
+    if (inputKey) {
+        key += `${inputKey}-`;
     }
     const job = process.env.GITHUB_JOB;
     if (job) {
-        targetKey = `${job}-${targetKey}`;
+        key += `${job}-`;
     }
-    const registry = `v0-registry`;
-    const target = `v0-target-${targetKey}${rustKey}`;
+    key += await getRustKey();
     return {
-        registry: {
-            name: "Registry",
-            paths: [
-                paths.index,
-                paths.cache,
-            ],
-            key: `${registry}-`,
-            restoreKeys: [registry],
-        },
-        target: {
-            name: "Target",
-            paths: [paths.target],
-            key: `${target}-${lockHash}`,
-            restoreKeys: [target],
-        },
+        paths: [
+            paths.index,
+            paths.cache,
+            // TODO: paths.git,
+            paths.target,
+        ],
+        key: `${key}-${lockHash}`,
+        restoreKeys: [key],
     };
 }
 async function getRustKey() {
@@ -54679,15 +54673,6 @@ async function getCmdOutput(cmd, args = [], options = {}) {
             },
         } }, options));
     return stdout;
-}
-async function getRegistryName() {
-    const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
-    const files = await globber.glob();
-    if (files.length > 1) {
-        core.warning(`got multiple registries: "${files.join('", "')}"`);
-    }
-    const first = files.shift();
-    return external_path_default().basename(external_path_default().dirname(first));
 }
 async function getLockfileHash() {
     var e_1, _a;
@@ -54723,30 +54708,26 @@ async function run() {
     }
     try {
         core.exportVariable("CARGO_INCREMENTAL", 0);
-        const caches = await getCaches();
-        for (const [type, { name, paths, key, restoreKeys }] of Object.entries(caches)) {
-            const start = Date.now();
-            core.startGroup(`Restoring ${name}…`);
-            core.info(`Restoring paths:\n    ${paths.join("\n    ")}.`);
-            core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
-            try {
-                const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
-                if (restoreKey) {
-                    core.info(`Restored from cache key "${restoreKey}".`);
-                    core.saveState(`CACHEKEY-${type}`, restoreKey);
-                }
-                else {
-                    core.info("No cache found.");
-                }
+        const start = Date.now();
+        const { paths, key, restoreKeys } = await getCacheConfig();
+        core.info(`Restoring paths:\n    ${paths.join("\n    ")}.`);
+        core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
+        try {
+            const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
+            if (restoreKey) {
+                core.info(`Restored from cache key "${restoreKey}".`);
+                core.saveState(stateKey, restoreKey);
             }
-            catch (e) {
-                core.info(`[warning] ${e.message}`);
+            else {
+                core.info("No cache found.");
             }
-            const duration = Math.round((Date.now() - start) / 1000);
-            if (duration) {
-                core.info(`Took ${duration}s.`);
-            }
-            core.endGroup();
+        }
+        catch (e) {
+            core.info(`[warning] ${e.message}`);
+        }
+        const duration = Math.round((Date.now() - start) / 1000);
+        if (duration) {
+            core.info(`Took ${duration}s.`);
         }
     }
     catch (e) {
