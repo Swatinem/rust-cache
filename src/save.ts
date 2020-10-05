@@ -29,6 +29,8 @@ async function run() {
 
     await cleanRegistry(registryName, packages);
 
+    await cleanGit(packages);
+
     await cleanTarget(packages);
 
     core.info(`Saving paths:\n    ${savePaths.join("\n    ")}.`);
@@ -53,6 +55,7 @@ run();
 interface PackageDefinition {
   name: string;
   version: string;
+  path: string;
   targets: Array<string>;
 }
 
@@ -86,7 +89,7 @@ async function getPackages(): Promise<Packages> {
     .filter((p) => !p.manifest_path.startsWith(cwd))
     .map((p) => {
       const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-      return { name: p.name, version: p.version, targets };
+      return { name: p.name, version: p.version, targets, path: path.dirname(p.manifest_path) };
     });
 }
 
@@ -98,9 +101,56 @@ async function cleanRegistry(registryName: string, packages: Packages) {
   const dir = await fs.promises.opendir(path.join(paths.cache, registryName));
   for await (const dirent of dir) {
     if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-      const fileName = path.join(dir.path, dirent.name);
-      await fs.promises.unlink(fileName);
-      core.debug(`deleting "${fileName}"`);
+      await rm(dir.path, dirent);
+    }
+  }
+}
+
+async function cleanGit(packages: Packages) {
+  const coPath = path.join(paths.git, "checkouts");
+  const dbPath = path.join(paths.git, "db");
+  const repos = new Map<string, Set<string>>();
+  for (const p of packages) {
+    if (!p.path.startsWith(coPath)) {
+      continue;
+    }
+    const [repo, ref] = p.path.slice(coPath.length + 1).split(path.sep);
+    const refs = repos.get(repo);
+    if (refs) {
+      refs.add(ref);
+    } else {
+      repos.set(repo, new Set([ref]));
+    }
+  }
+
+  // we have to keep both the clone, and the checkout, removing either will
+  // trigger a rebuild
+
+  let dir: fs.Dir;
+  // clean the db
+  dir = await fs.promises.opendir(dbPath);
+  for await (const dirent of dir) {
+    if (!repos.has(dirent.name)) {
+      await rm(dir.path, dirent);
+    }
+  }
+
+  // clean the checkouts
+  dir = await fs.promises.opendir(coPath);
+  for await (const dirent of dir) {
+    const refs = repos.get(dirent.name);
+    if (!refs) {
+      await rm(dir.path, dirent);
+      continue;
+    }
+    if (!dirent.isDirectory()) {
+      continue;
+    }
+    const refsDir = await fs.promises.opendir(path.join(dir.path, dirent.name));
+    for await (const dirent of refsDir) {
+      if (!refs.has(dirent.name)) {
+        await rm(refsDir.path, dirent);
+      }
     }
   }
 }
@@ -115,8 +165,7 @@ async function cleanTarget(packages: Packages) {
   dir = await fs.promises.opendir("./target/debug");
   for await (const dirent of dir) {
     if (dirent.isFile()) {
-      const fileName = path.join(dir.path, dirent.name);
-      await fs.promises.unlink(fileName);
+      await rm(dir.path, dirent);
     }
   }
 
@@ -150,13 +199,18 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>) {
     const fileName = path.join(dir.path, dirent.name);
     const { mtime } = await fs.promises.stat(fileName);
     if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
-      core.debug(`deleting "${fileName}"`);
-      if (dirent.isFile()) {
-        await fs.promises.unlink(fileName);
-      } else if (dirent.isDirectory()) {
-        await io.rmRF(fileName);
-      }
+      await rm(dir.path, dirent);
     }
+  }
+}
+
+async function rm(parent: string, dirent: fs.Dirent) {
+  const fileName = path.join(parent, dirent.name);
+  core.debug(`deleting "${fileName}"`);
+  if (dirent.isFile()) {
+    await fs.promises.unlink(fileName);
+  } else if (dirent.isDirectory()) {
+    await io.rmRF(fileName);
   }
 }
 

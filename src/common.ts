@@ -13,7 +13,7 @@ const home = os.homedir();
 export const paths = {
   index: path.join(home, ".cargo/registry/index"),
   cache: path.join(home, ".cargo/registry/cache"),
-  git: path.join(home, ".cargo/git/db"),
+  git: path.join(home, ".cargo/git"),
   target: "target",
 };
 
@@ -51,12 +51,7 @@ export async function getCacheConfig(): Promise<CacheConfig> {
   key += await getRustKey();
 
   return {
-    paths: [
-      paths.index,
-      paths.cache,
-      // TODO: paths.git,
-      paths.target,
-    ],
+    paths: [paths.index, paths.cache, paths.git, paths.target],
     key: `${key}-${lockHash}`,
     restoreKeys: [key],
   };

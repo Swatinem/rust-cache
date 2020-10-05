@@ -54621,7 +54621,7 @@ const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
     cache: external_path_default().join(home, ".cargo/registry/cache"),
-    git: external_path_default().join(home, ".cargo/git/db"),
+    git: external_path_default().join(home, ".cargo/git"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -54645,12 +54645,7 @@ async function getCacheConfig() {
     }
     key += await getRustKey();
     return {
-        paths: [
-            paths.index,
-            paths.cache,
-            // TODO: paths.git,
-            paths.target,
-        ],
+        paths: [paths.index, paths.cache, paths.git, paths.target],
         key: `${key}-${lockHash}`,
         restoreKeys: [key],
     };
@@ -54733,6 +54728,7 @@ async function run() {
         const registryName = await getRegistryName();
         const packages = await getPackages();
         await cleanRegistry(registryName, packages);
+        await cleanGit(packages);
         await cleanTarget(packages);
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}.`);
         core.info(`Using key "${key}".`);
@@ -54768,7 +54764,7 @@ async function getPackages() {
         .filter((p) => !p.manifest_path.startsWith(cwd))
         .map((p) => {
         const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-        return { name: p.name, version: p.version, targets };
+        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
     });
 }
 async function cleanRegistry(registryName, packages) {
@@ -54780,9 +54776,7 @@ async function cleanRegistry(registryName, packages) {
         for (var dir_1 = save_asyncValues(dir), dir_1_1; dir_1_1 = await dir_1.next(), !dir_1_1.done;) {
             const dirent = dir_1_1.value;
             if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-                const fileName = external_path_default().join(dir.path, dirent.name);
-                await external_fs_default().promises.unlink(fileName);
-                core.debug(`deleting "${fileName}"`);
+                await rm(dir.path, dirent);
             }
         }
     }
@@ -54794,20 +54788,34 @@ async function cleanRegistry(registryName, packages) {
         finally { if (e_1) throw e_1.error; }
     }
 }
-async function cleanTarget(packages) {
-    var e_2, _a;
-    await external_fs_default().promises.unlink("./target/.rustc_info.json");
-    await io.rmRF("./target/debug/examples");
-    await io.rmRF("./target/debug/incremental");
+async function cleanGit(packages) {
+    var e_2, _a, e_3, _b, e_4, _c;
+    const coPath = external_path_default().join(paths.git, "checkouts");
+    const dbPath = external_path_default().join(paths.git, "db");
+    const repos = new Map();
+    for (const p of packages) {
+        if (!p.path.startsWith(coPath)) {
+            continue;
+        }
+        const [repo, ref] = p.path.slice(coPath.length + 1).split((external_path_default()).sep);
+        const refs = repos.get(repo);
+        if (refs) {
+            refs.add(ref);
+        }
+        else {
+            repos.set(repo, new Set([ref]));
+        }
+    }
+    // we have to keep both the clone, and the checkout, removing either will
+    // trigger a rebuild
     let dir;
-    // remove all *files* from debug
-    dir = await external_fs_default().promises.opendir("./target/debug");
+    // clean the db
+    dir = await external_fs_default().promises.opendir(dbPath);
     try {
         for (var dir_2 = save_asyncValues(dir), dir_2_1; dir_2_1 = await dir_2.next(), !dir_2_1.done;) {
             const dirent = dir_2_1.value;
-            if (dirent.isFile()) {
-                const fileName = external_path_default().join(dir.path, dirent.name);
-                await external_fs_default().promises.unlink(fileName);
+            if (!repos.has(dirent.name)) {
+                await rm(dir.path, dirent);
             }
         }
     }
@@ -54817,6 +54825,68 @@ async function cleanTarget(packages) {
             if (dir_2_1 && !dir_2_1.done && (_a = dir_2.return)) await _a.call(dir_2);
         }
         finally { if (e_2) throw e_2.error; }
+    }
+    // clean the checkouts
+    dir = await external_fs_default().promises.opendir(coPath);
+    try {
+        for (var dir_3 = save_asyncValues(dir), dir_3_1; dir_3_1 = await dir_3.next(), !dir_3_1.done;) {
+            const dirent = dir_3_1.value;
+            const refs = repos.get(dirent.name);
+            if (!refs) {
+                await rm(dir.path, dirent);
+                continue;
+            }
+            if (!dirent.isDirectory()) {
+                continue;
+            }
+            const refsDir = await external_fs_default().promises.opendir(external_path_default().join(dir.path, dirent.name));
+            try {
+                for (var refsDir_1 = (e_4 = void 0, save_asyncValues(refsDir)), refsDir_1_1; refsDir_1_1 = await refsDir_1.next(), !refsDir_1_1.done;) {
+                    const dirent = refsDir_1_1.value;
+                    if (!refs.has(dirent.name)) {
+                        await rm(refsDir.path, dirent);
+                    }
+                }
+            }
+            catch (e_4_1) { e_4 = { error: e_4_1 }; }
+            finally {
+                try {
+                    if (refsDir_1_1 && !refsDir_1_1.done && (_c = refsDir_1.return)) await _c.call(refsDir_1);
+                }
+                finally { if (e_4) throw e_4.error; }
+            }
+        }
+    }
+    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+    finally {
+        try {
+            if (dir_3_1 && !dir_3_1.done && (_b = dir_3.return)) await _b.call(dir_3);
+        }
+        finally { if (e_3) throw e_3.error; }
+    }
+}
+async function cleanTarget(packages) {
+    var e_5, _a;
+    await external_fs_default().promises.unlink("./target/.rustc_info.json");
+    await io.rmRF("./target/debug/examples");
+    await io.rmRF("./target/debug/incremental");
+    let dir;
+    // remove all *files* from debug
+    dir = await external_fs_default().promises.opendir("./target/debug");
+    try {
+        for (var dir_4 = save_asyncValues(dir), dir_4_1; dir_4_1 = await dir_4.next(), !dir_4_1.done;) {
+            const dirent = dir_4_1.value;
+            if (dirent.isFile()) {
+                await rm(dir.path, dirent);
+            }
+        }
+    }
+    catch (e_5_1) { e_5 = { error: e_5_1 }; }
+    finally {
+        try {
+            if (dir_4_1 && !dir_4_1.done && (_a = dir_4.return)) await _a.call(dir_4);
+        }
+        finally { if (e_5) throw e_5.error; }
     }
     const keepPkg = new Set(packages.map((p) => p.name));
     await rmExcept("./target/debug/build", keepPkg);
@@ -54833,11 +54903,11 @@ async function cleanTarget(packages) {
 }
 const oneWeek = 7 * 24 * 3600 * 1000;
 async function rmExcept(dirName, keepPrefix) {
-    var e_3, _a;
+    var e_6, _a;
     const dir = await external_fs_default().promises.opendir(dirName);
     try {
-        for (var dir_3 = save_asyncValues(dir), dir_3_1; dir_3_1 = await dir_3.next(), !dir_3_1.done;) {
-            const dirent = dir_3_1.value;
+        for (var dir_5 = save_asyncValues(dir), dir_5_1; dir_5_1 = await dir_5.next(), !dir_5_1.done;) {
+            const dirent = dir_5_1.value;
             let name = dirent.name;
             const idx = name.lastIndexOf("-");
             if (idx !== -1) {
@@ -54846,22 +54916,26 @@ async function rmExcept(dirName, keepPrefix) {
             const fileName = external_path_default().join(dir.path, dirent.name);
             const { mtime } = await external_fs_default().promises.stat(fileName);
             if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
-                core.debug(`deleting "${fileName}"`);
-                if (dirent.isFile()) {
-                    await external_fs_default().promises.unlink(fileName);
-                }
-                else if (dirent.isDirectory()) {
-                    await io.rmRF(fileName);
-                }
+                await rm(dir.path, dirent);
             }
         }
     }
-    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+    catch (e_6_1) { e_6 = { error: e_6_1 }; }
     finally {
         try {
-            if (dir_3_1 && !dir_3_1.done && (_a = dir_3.return)) await _a.call(dir_3);
+            if (dir_5_1 && !dir_5_1.done && (_a = dir_5.return)) await _a.call(dir_5);
         }
-        finally { if (e_3) throw e_3.error; }
+        finally { if (e_6) throw e_6.error; }
+    }
+}
+async function rm(parent, dirent) {
+    const fileName = external_path_default().join(parent, dirent.name);
+    core.debug(`deleting "${fileName}"`);
+    if (dirent.isFile()) {
+        await external_fs_default().promises.unlink(fileName);
+    }
+    else if (dirent.isDirectory()) {
+        await io.rmRF(fileName);
     }
 }
 async function macOsWorkaround() {

@@ -54618,7 +54618,7 @@ const home = external_os_default().homedir();
 const paths = {
     index: external_path_default().join(home, ".cargo/registry/index"),
     cache: external_path_default().join(home, ".cargo/registry/cache"),
-    git: external_path_default().join(home, ".cargo/git/db"),
+    git: external_path_default().join(home, ".cargo/git"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -54642,12 +54642,7 @@ async function getCacheConfig() {
     }
     key += await getRustKey();
     return {
-        paths: [
-            paths.index,
-            paths.cache,
-            // TODO: paths.git,
-            paths.target,
-        ],
+        paths: [paths.index, paths.cache, paths.git, paths.target],
         key: `${key}-${lockHash}`,
         restoreKeys: [key],
     };
