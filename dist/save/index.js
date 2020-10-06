@@ -54730,7 +54730,7 @@ async function run() {
         await cleanRegistry(registryName, packages);
         await cleanGit(packages);
         await cleanTarget(packages);
-        core.info(`Saving paths:\n    ${savePaths.join("\n    ")}.`);
+        core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
         core.info(`Using key "${key}".`);
         try {
             await cache.saveCache(savePaths, key);

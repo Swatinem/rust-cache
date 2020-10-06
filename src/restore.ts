@@ -13,7 +13,7 @@ async function run() {
     const start = Date.now();
     const { paths, key, restoreKeys } = await getCacheConfig();
 
-    core.info(`Restoring paths:\n    ${paths.join("\n    ")}.`);
+    core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
     core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
     try {
       const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
