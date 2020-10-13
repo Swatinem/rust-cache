@@ -20,15 +20,15 @@ async function run() {
       if (restoreKey) {
         core.info(`Restored from cache key "${restoreKey}".`);
         core.saveState(stateKey, restoreKey);
+
+        if (restoreKey !== key) {
+          // pre-clean the target directory on cache mismatch
+          const packages = await getPackages();
+
+          await cleanTarget(packages);
+        }
       } else {
         core.info("No cache found.");
-      }
-
-      if (restoreKey !== key) {
-        // pre-clean the target directory on cache mismatch
-        const packages = await getPackages();
-
-        await cleanTarget(packages);
       }
     } catch (e) {
       core.info(`[warning] ${e.message}`);
