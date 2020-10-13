@@ -1,6 +1,6 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
-import { getCacheConfig, isValidEvent, stateKey } from "./common";
+import { cleanTarget, getCacheConfig, getPackages, isValidEvent, stateKey } from "./common";
 
 async function run() {
   if (!isValidEvent()) {
@@ -22,6 +22,13 @@ async function run() {
         core.saveState(stateKey, restoreKey);
       } else {
         core.info("No cache found.");
+      }
+
+      if (restoreKey !== key) {
+        // pre-clean the target directory on cache mismatch
+        const packages = await getPackages();
+
+        await cleanTarget(packages);
       }
     } catch (e) {
       core.info(`[warning] ${e.message}`);

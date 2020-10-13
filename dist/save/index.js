@@ -54581,6 +54581,9 @@ var exec = __webpack_require__(1514);
 // EXTERNAL MODULE: ./node_modules/@actions/glob/lib/glob.js
 var glob = __webpack_require__(8090);
 
+// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
+var io = __webpack_require__(7436);
+
 // EXTERNAL MODULE: external "crypto"
 var external_crypto_ = __webpack_require__(6417);
 var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto_);
@@ -54588,9 +54591,6 @@ var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __webpack_require__(5747);
 var external_fs_default = /*#__PURE__*/__webpack_require__.n(external_fs_);
-
-// EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
-var io = __webpack_require__(7436);
 
 // EXTERNAL MODULE: external "os"
 var external_os_ = __webpack_require__(2087);
@@ -54608,6 +54608,7 @@ var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
     function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
     function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
 };
+
 
 
 
@@ -54695,6 +54696,90 @@ async function getLockfileHash() {
     }
     return hasher.digest("hex").slice(0, 20);
 }
+async function getPackages() {
+    const cwd = process.cwd();
+    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+    return meta.packages
+        .filter((p) => !p.manifest_path.startsWith(cwd))
+        .map((p) => {
+        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
+    });
+}
+async function cleanTarget(packages) {
+    var e_2, _a;
+    await external_fs_default().promises.unlink("./target/.rustc_info.json");
+    await io.rmRF("./target/debug/examples");
+    await io.rmRF("./target/debug/incremental");
+    let dir;
+    // remove all *files* from debug
+    dir = await external_fs_default().promises.opendir("./target/debug");
+    try {
+        for (var dir_1 = __asyncValues(dir), dir_1_1; dir_1_1 = await dir_1.next(), !dir_1_1.done;) {
+            const dirent = dir_1_1.value;
+            if (dirent.isFile()) {
+                await rm(dir.path, dirent);
+            }
+        }
+    }
+    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+    finally {
+        try {
+            if (dir_1_1 && !dir_1_1.done && (_a = dir_1.return)) await _a.call(dir_1);
+        }
+        finally { if (e_2) throw e_2.error; }
+    }
+    const keepPkg = new Set(packages.map((p) => p.name));
+    await rmExcept("./target/debug/build", keepPkg);
+    await rmExcept("./target/debug/.fingerprint", keepPkg);
+    const keepDeps = new Set(packages.flatMap((p) => {
+        const names = [];
+        for (const n of [p.name, ...p.targets]) {
+            const name = n.replace(/-/g, "_");
+            names.push(name, `lib${name}`);
+        }
+        return names;
+    }));
+    await rmExcept("./target/debug/deps", keepDeps);
+}
+const oneWeek = 7 * 24 * 3600 * 1000;
+async function rmExcept(dirName, keepPrefix) {
+    var e_3, _a;
+    const dir = await external_fs_default().promises.opendir(dirName);
+    try {
+        for (var dir_2 = __asyncValues(dir), dir_2_1; dir_2_1 = await dir_2.next(), !dir_2_1.done;) {
+            const dirent = dir_2_1.value;
+            let name = dirent.name;
+            const idx = name.lastIndexOf("-");
+            if (idx !== -1) {
+                name = name.slice(0, idx);
+            }
+            const fileName = external_path_default().join(dir.path, dirent.name);
+            const { mtime } = await external_fs_default().promises.stat(fileName);
+            // we don’t really know
+            if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
+                await rm(dir.path, dirent);
+            }
+        }
+    }
+    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+    finally {
+        try {
+            if (dir_2_1 && !dir_2_1.done && (_a = dir_2.return)) await _a.call(dir_2);
+        }
+        finally { if (e_3) throw e_3.error; }
+    }
+}
+async function rm(parent, dirent) {
+    const fileName = external_path_default().join(parent, dirent.name);
+    core.debug(`deleting "${fileName}"`);
+    if (dirent.isFile()) {
+        await external_fs_default().promises.unlink(fileName);
+    }
+    else if (dirent.isDirectory()) {
+        await io.rmRF(fileName);
+    }
+}
 
 // CONCATENATED MODULE: ./src/save.ts
 var save_asyncValues = (undefined && undefined.__asyncValues) || function (o) {
@@ -54727,9 +54812,18 @@ async function run() {
         await macOsWorkaround();
         const registryName = await getRegistryName();
         const packages = await getPackages();
-        await cleanRegistry(registryName, packages);
-        await cleanGit(packages);
-        await cleanTarget(packages);
+        try {
+            await cleanRegistry(registryName, packages);
+        }
+        catch (_a) { }
+        try {
+            await cleanGit(packages);
+        }
+        catch (_b) { }
+        try {
+            await cleanTarget(packages);
+        }
+        catch (_c) { }
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
         core.info(`Using key "${key}".`);
         try {
@@ -54756,16 +54850,6 @@ async function getRegistryName() {
     }
     const first = files.shift();
     return external_path_default().basename(external_path_default().dirname(first));
-}
-async function getPackages() {
-    const cwd = process.cwd();
-    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
-    return meta.packages
-        .filter((p) => !p.manifest_path.startsWith(cwd))
-        .map((p) => {
-        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
-    });
 }
 async function cleanRegistry(registryName, packages) {
     var e_1, _a;
@@ -54863,79 +54947,6 @@ async function cleanGit(packages) {
             if (dir_3_1 && !dir_3_1.done && (_b = dir_3.return)) await _b.call(dir_3);
         }
         finally { if (e_3) throw e_3.error; }
-    }
-}
-async function cleanTarget(packages) {
-    var e_5, _a;
-    await external_fs_default().promises.unlink("./target/.rustc_info.json");
-    await io.rmRF("./target/debug/examples");
-    await io.rmRF("./target/debug/incremental");
-    let dir;
-    // remove all *files* from debug
-    dir = await external_fs_default().promises.opendir("./target/debug");
-    try {
-        for (var dir_4 = save_asyncValues(dir), dir_4_1; dir_4_1 = await dir_4.next(), !dir_4_1.done;) {
-            const dirent = dir_4_1.value;
-            if (dirent.isFile()) {
-                await rm(dir.path, dirent);
-            }
-        }
-    }
-    catch (e_5_1) { e_5 = { error: e_5_1 }; }
-    finally {
-        try {
-            if (dir_4_1 && !dir_4_1.done && (_a = dir_4.return)) await _a.call(dir_4);
-        }
-        finally { if (e_5) throw e_5.error; }
-    }
-    const keepPkg = new Set(packages.map((p) => p.name));
-    await rmExcept("./target/debug/build", keepPkg);
-    await rmExcept("./target/debug/.fingerprint", keepPkg);
-    const keepDeps = new Set(packages.flatMap((p) => {
-        const names = [];
-        for (const n of [p.name, ...p.targets]) {
-            const name = n.replace(/-/g, "_");
-            names.push(name, `lib${name}`);
-        }
-        return names;
-    }));
-    await rmExcept("./target/debug/deps", keepDeps);
-}
-const oneWeek = 7 * 24 * 3600 * 1000;
-async function rmExcept(dirName, keepPrefix) {
-    var e_6, _a;
-    const dir = await external_fs_default().promises.opendir(dirName);
-    try {
-        for (var dir_5 = save_asyncValues(dir), dir_5_1; dir_5_1 = await dir_5.next(), !dir_5_1.done;) {
-            const dirent = dir_5_1.value;
-            let name = dirent.name;
-            const idx = name.lastIndexOf("-");
-            if (idx !== -1) {
-                name = name.slice(0, idx);
-            }
-            const fileName = external_path_default().join(dir.path, dirent.name);
-            const { mtime } = await external_fs_default().promises.stat(fileName);
-            if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
-                await rm(dir.path, dirent);
-            }
-        }
-    }
-    catch (e_6_1) { e_6 = { error: e_6_1 }; }
-    finally {
-        try {
-            if (dir_5_1 && !dir_5_1.done && (_a = dir_5.return)) await _a.call(dir_5);
-        }
-        finally { if (e_6) throw e_6.error; }
-    }
-}
-async function rm(parent, dirent) {
-    const fileName = external_path_default().join(parent, dirent.name);
-    core.debug(`deleting "${fileName}"`);
-    if (dirent.isFile()) {
-        await external_fs_default().promises.unlink(fileName);
-    }
-    else if (dirent.isDirectory()) {
-        await io.rmRF(fileName);
     }
 }
 async function macOsWorkaround() {
