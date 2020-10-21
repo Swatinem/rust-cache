@@ -54465,6 +54465,9 @@ var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
 
 
 
+process.on("uncaughtException", (e) => {
+    core.info(`[warning] ${e.message}`);
+});
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();

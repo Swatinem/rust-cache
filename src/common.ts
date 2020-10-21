@@ -7,6 +7,10 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+process.on("uncaughtException", (e) => {
+  core.info(`[warning] ${e.message}`);
+});
+
 export const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 
