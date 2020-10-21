@@ -20,7 +20,7 @@
   "funding": "https://github.com/sponsors/Swatinem",
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
   "dependencies": {
-    "@actions/cache": "^1.0.2",
+    "@actions/cache": "^1.0.3",
     "@actions/core": "^1.2.6",
     "@actions/exec": "^1.0.4",
     "@actions/glob": "^0.1.0",
