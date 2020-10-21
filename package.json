@@ -17,7 +17,9 @@
   "bugs": {
     "url": "https://github.com/Swatinem/rust-cache/issues"
   },
-  "funding": "https://github.com/sponsors/Swatinem",
+  "funding": {
+    "url": "https://github.com/sponsors/Swatinem"
+  },
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
   "dependencies": {
     "@actions/cache": "^1.0.3",
