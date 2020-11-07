@@ -304,9 +304,12 @@ function uploadChunk(httpClient, resourceUrl, openStream, start, end) {
             'Content-Type': 'application/octet-stream',
             'Content-Range': getContentRange(start, end)
         };
-        yield requestUtils_1.retryHttpClientResponse(`uploadChunk (start: ${start}, end: ${end})`, () => __awaiter(this, void 0, void 0, function* () {
+        const uploadChunkResponse = yield requestUtils_1.retryHttpClientResponse(`uploadChunk (start: ${start}, end: ${end})`, () => __awaiter(this, void 0, void 0, function* () {
             return httpClient.sendStream('PATCH', resourceUrl, openStream(), additionalHeaders);
         }));
+        if (!requestUtils_1.isSuccessStatusCode(uploadChunkResponse.message.statusCode)) {
+            throw new Error(`Cache service responded with ${uploadChunkResponse.message.statusCode} during upload chunk.`);
+        }
     });
 }
 function uploadFile(httpClient, cacheId, archivePath, options) {
@@ -569,6 +572,10 @@ var CompressionMethod;
     CompressionMethod["ZstdWithoutLong"] = "zstd-without-long";
     CompressionMethod["Zstd"] = "zstd";
 })(CompressionMethod = exports.CompressionMethod || (exports.CompressionMethod = {}));
+// The default number of retry attempts.
+exports.DefaultRetryAttempts = 2;
+// The default delay in milliseconds between retry attempts.
+exports.DefaultRetryDelay = 5000;
 // Socket timeout in milliseconds during download.  If no traffic is received
 // over the socket during this period, the socket is destroyed and the download
 // is aborted.
@@ -838,6 +845,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__webpack_require__(2186));
 const http_client_1 = __webpack_require__(9925);
+const constants_1 = __webpack_require__(8840);
 function isSuccessStatusCode(statusCode) {
     if (!statusCode) {
         return false;
@@ -864,47 +872,74 @@ function isRetryableStatusCode(statusCode) {
     return retryableStatusCodes.includes(statusCode);
 }
 exports.isRetryableStatusCode = isRetryableStatusCode;
-function retry(name, method, getStatusCode, maxAttempts = 2) {
+function sleep(milliseconds) {
     return __awaiter(this, void 0, void 0, function* () {
-        let response = undefined;
-        let statusCode = undefined;
-        let isRetryable = false;
+        return new Promise(resolve => setTimeout(resolve, milliseconds));
+    });
+}
+function retry(name, method, getStatusCode, maxAttempts = constants_1.DefaultRetryAttempts, delay = constants_1.DefaultRetryDelay, onError = undefined) {
+    return __awaiter(this, void 0, void 0, function* () {
         let errorMessage = '';
         let attempt = 1;
         while (attempt <= maxAttempts) {
+            let response = undefined;
+            let statusCode = undefined;
+            let isRetryable = false;
             try {
                 response = yield method();
+            }
+            catch (error) {
+                if (onError) {
+                    response = onError(error);
+                }
+                isRetryable = true;
+                errorMessage = error.message;
+            }
+            if (response) {
                 statusCode = getStatusCode(response);
                 if (!isServerErrorStatusCode(statusCode)) {
                     return response;
                 }
+            }
+            if (statusCode) {
                 isRetryable = isRetryableStatusCode(statusCode);
                 errorMessage = `Cache service responded with ${statusCode}`;
-            }
-            catch (error) {
-                isRetryable = true;
-                errorMessage = error.message;
             }
             core.debug(`${name} - Attempt ${attempt} of ${maxAttempts} failed with error: ${errorMessage}`);
             if (!isRetryable) {
                 core.debug(`${name} - Error is not retryable`);
                 break;
             }
+            yield sleep(delay);
             attempt++;
         }
         throw Error(`${name} failed: ${errorMessage}`);
     });
 }
 exports.retry = retry;
-function retryTypedResponse(name, method, maxAttempts = 2) {
+function retryTypedResponse(name, method, maxAttempts = constants_1.DefaultRetryAttempts, delay = constants_1.DefaultRetryDelay) {
     return __awaiter(this, void 0, void 0, function* () {
-        return yield retry(name, method, (response) => response.statusCode, maxAttempts);
+        return yield retry(name, method, (response) => response.statusCode, maxAttempts, delay, 
+        // If the error object contains the statusCode property, extract it and return
+        // an ITypedResponse<T> so it can be processed by the retry logic.
+        (error) => {
+            if (error instanceof http_client_1.HttpClientError) {
+                return {
+                    statusCode: error.statusCode,
+                    result: null,
+                    headers: {}
+                };
+            }
+            else {
+                return undefined;
+            }
+        });
     });
 }
 exports.retryTypedResponse = retryTypedResponse;
-function retryHttpClientResponse(name, method, maxAttempts = 2) {
+function retryHttpClientResponse(name, method, maxAttempts = constants_1.DefaultRetryAttempts, delay = constants_1.DefaultRetryDelay) {
     return __awaiter(this, void 0, void 0, function* () {
-        return yield retry(name, method, (response) => response.message.statusCode, maxAttempts);
+        return yield retry(name, method, (response) => response.message.statusCode, maxAttempts, delay);
     });
 }
 exports.retryHttpClientResponse = retryHttpClientResponse;
@@ -3166,7 +3201,6 @@ exports.PersonalAccessTokenCredentialHandler = PersonalAccessTokenCredentialHand
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const url = __webpack_require__(8835);
 const http = __webpack_require__(8605);
 const https = __webpack_require__(7211);
 const pm = __webpack_require__(6443);
@@ -3215,7 +3249,7 @@ var MediaTypes;
  * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
  */
 function getProxyUrl(serverUrl) {
-    let proxyUrl = pm.getProxyUrl(url.parse(serverUrl));
+    let proxyUrl = pm.getProxyUrl(new URL(serverUrl));
     return proxyUrl ? proxyUrl.href : '';
 }
 exports.getProxyUrl = getProxyUrl;
@@ -3234,6 +3268,15 @@ const HttpResponseRetryCodes = [
 const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
 const ExponentialBackoffCeiling = 10;
 const ExponentialBackoffTimeSlice = 5;
+class HttpClientError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.name = 'HttpClientError';
+        this.statusCode = statusCode;
+        Object.setPrototypeOf(this, HttpClientError.prototype);
+    }
+}
+exports.HttpClientError = HttpClientError;
 class HttpClientResponse {
     constructor(message) {
         this.message = message;
@@ -3252,7 +3295,7 @@ class HttpClientResponse {
 }
 exports.HttpClientResponse = HttpClientResponse;
 function isHttps(requestUrl) {
-    let parsedUrl = url.parse(requestUrl);
+    let parsedUrl = new URL(requestUrl);
     return parsedUrl.protocol === 'https:';
 }
 exports.isHttps = isHttps;
@@ -3357,7 +3400,7 @@ class HttpClient {
         if (this._disposed) {
             throw new Error('Client has already been disposed.');
         }
-        let parsedUrl = url.parse(requestUrl);
+        let parsedUrl = new URL(requestUrl);
         let info = this._prepareRequest(verb, parsedUrl, headers);
         // Only perform retries on reads since writes may not be idempotent.
         let maxTries = this._allowRetries && RetryableHttpVerbs.indexOf(verb) != -1
@@ -3396,7 +3439,7 @@ class HttpClient {
                     // if there's no location to redirect to, we won't
                     break;
                 }
-                let parsedRedirectUrl = url.parse(redirectUrl);
+                let parsedRedirectUrl = new URL(redirectUrl);
                 if (parsedUrl.protocol == 'https:' &&
                     parsedUrl.protocol != parsedRedirectUrl.protocol &&
                     !this._allowRedirectDowngrade) {
@@ -3512,7 +3555,7 @@ class HttpClient {
      * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
      */
     getAgent(serverUrl) {
-        let parsedUrl = url.parse(serverUrl);
+        let parsedUrl = new URL(serverUrl);
         return this._getAgent(parsedUrl);
     }
     _prepareRequest(method, requestUrl, headers) {
@@ -3585,7 +3628,7 @@ class HttpClient {
                 maxSockets: maxSockets,
                 keepAlive: this._keepAlive,
                 proxy: {
-                    proxyAuth: proxyUrl.auth,
+                    proxyAuth: `${proxyUrl.username}:${proxyUrl.password}`,
                     host: proxyUrl.hostname,
                     port: proxyUrl.port
                 }
@@ -3680,12 +3723,8 @@ class HttpClient {
                 else {
                     msg = 'Failed request: (' + statusCode + ')';
                 }
-                let err = new Error(msg);
-                // attach statusCode and body obj (if available) to the error object
-                err['statusCode'] = statusCode;
-                if (response.result) {
-                    err['result'] = response.result;
-                }
+                let err = new HttpClientError(msg, statusCode);
+                err.result = response.result;
                 reject(err);
             }
             else {
@@ -3700,12 +3739,11 @@ exports.HttpClient = HttpClient;
 /***/ }),
 
 /***/ 6443:
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const url = __webpack_require__(8835);
 function getProxyUrl(reqUrl) {
     let usingSsl = reqUrl.protocol === 'https:';
     let proxyUrl;
@@ -3720,7 +3758,7 @@ function getProxyUrl(reqUrl) {
         proxyVar = process.env['http_proxy'] || process.env['HTTP_PROXY'];
     }
     if (proxyVar) {
-        proxyUrl = url.parse(proxyVar);
+        proxyUrl = new URL(proxyVar);
     }
     return proxyUrl;
 }
@@ -4635,8 +4673,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 
 function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
-var uuid = __webpack_require__(3206);
 var tslib = __webpack_require__(4331);
+var uuid = __webpack_require__(3206);
 var tough = __webpack_require__(8165);
 var http = __webpack_require__(8605);
 var https = __webpack_require__(7211);
@@ -4827,7 +4865,7 @@ var Constants = {
      * @const
      * @type {string}
      */
-    coreHttpVersion: "1.1.8",
+    coreHttpVersion: "1.1.9",
     /**
      * Specifies HTTP.
      *
@@ -4856,6 +4894,20 @@ var Constants = {
      * @type {string}
      */
     HTTPS_PROXY: "HTTPS_PROXY",
+    /**
+     * Specifies NO Proxy.
+     *
+     * @const
+     * @type {string}
+     */
+    NO_PROXY: "NO_PROXY",
+    /**
+     * Specifies ALL Proxy.
+     *
+     * @const
+     * @type {string}
+     */
+    ALL_PROXY: "ALL_PROXY",
     HttpConstants: {
         /**
          * Http Verbs
@@ -5046,12 +5098,15 @@ function promiseToServiceCallback(promise) {
         });
     };
 }
-function prepareXMLRootList(obj, elementName) {
-    var _a;
+function prepareXMLRootList(obj, elementName, xmlNamespaceKey, xmlNamespace) {
+    var _a, _b, _c;
     if (!Array.isArray(obj)) {
         obj = [obj];
     }
-    return _a = {}, _a[elementName] = obj, _a;
+    if (!xmlNamespaceKey || !xmlNamespace) {
+        return _a = {}, _a[elementName] = obj, _a;
+    }
+    return _b = {}, _b[elementName] = obj, _b.$ = (_c = {}, _c[xmlNamespaceKey] = xmlNamespace, _c), _b;
 }
 /**
  * Applies the properties on the prototype of sourceCtors to the prototype of targetCtor
@@ -5092,6 +5147,15 @@ function replaceAll(value, searchValue, replaceValue) {
  */
 function isPrimitiveType(value) {
     return (typeof value !== "object" && typeof value !== "function") || value === null;
+}
+function getEnvironmentValue(name) {
+    if (process.env[name]) {
+        return process.env[name];
+    }
+    else if (process.env[name.toLowerCase()]) {
+        return process.env[name.toLowerCase()];
+    }
+    return undefined;
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -5214,13 +5278,13 @@ var Serializer = /** @class */ (function () {
                 payload = serializeBase64UrlType(objectName, object);
             }
             else if (mapperType.match(/^Sequence$/i) !== null) {
-                payload = serializeSequenceType(this, mapper, object, objectName);
+                payload = serializeSequenceType(this, mapper, object, objectName, Boolean(this.isXML));
             }
             else if (mapperType.match(/^Dictionary$/i) !== null) {
-                payload = serializeDictionaryType(this, mapper, object, objectName);
+                payload = serializeDictionaryType(this, mapper, object, objectName, Boolean(this.isXML));
             }
             else if (mapperType.match(/^Composite$/i) !== null) {
-                payload = serializeCompositeType(this, mapper, object, objectName);
+                payload = serializeCompositeType(this, mapper, object, objectName, Boolean(this.isXML));
             }
         }
         return payload;
@@ -5494,7 +5558,8 @@ function serializeDateTypes(typeName, value, objectName) {
     }
     return value;
 }
-function serializeSequenceType(serializer, mapper, object, objectName) {
+function serializeSequenceType(serializer, mapper, object, objectName, isXml) {
+    var _a, _b;
     if (!Array.isArray(object)) {
         throw new Error(objectName + " must be of type Array.");
     }
@@ -5505,11 +5570,26 @@ function serializeSequenceType(serializer, mapper, object, objectName) {
     }
     var tempArray = [];
     for (var i = 0; i < object.length; i++) {
-        tempArray[i] = serializer.serialize(elementType, object[i], objectName);
+        var serializedValue = serializer.serialize(elementType, object[i], objectName);
+        if (isXml && elementType.xmlNamespace) {
+            var xmlnsKey = elementType.xmlNamespacePrefix
+                ? "xmlns:" + elementType.xmlNamespacePrefix
+                : "xmlns";
+            if (elementType.type.name === "Composite") {
+                tempArray[i] = tslib.__assign(tslib.__assign({}, serializedValue), { $: (_a = {}, _a[xmlnsKey] = elementType.xmlNamespace, _a) });
+            }
+            else {
+                tempArray[i] = { _: serializedValue, $: (_b = {}, _b[xmlnsKey] = elementType.xmlNamespace, _b) };
+            }
+        }
+        else {
+            tempArray[i] = serializedValue;
+        }
     }
     return tempArray;
 }
-function serializeDictionaryType(serializer, mapper, object, objectName) {
+function serializeDictionaryType(serializer, mapper, object, objectName, isXml) {
+    var _a;
     if (typeof object !== "object") {
         throw new Error(objectName + " must be of type object.");
     }
@@ -5519,11 +5599,45 @@ function serializeDictionaryType(serializer, mapper, object, objectName) {
             ("mapper and it must of type \"object\" in " + objectName + "."));
     }
     var tempDictionary = {};
-    for (var _i = 0, _a = Object.keys(object); _i < _a.length; _i++) {
-        var key = _a[_i];
-        tempDictionary[key] = serializer.serialize(valueType, object[key], objectName + "." + key);
+    for (var _i = 0, _b = Object.keys(object); _i < _b.length; _i++) {
+        var key = _b[_i];
+        var serializedValue = serializer.serialize(valueType, object[key], objectName);
+        // If the element needs an XML namespace we need to add it within the $ property
+        tempDictionary[key] = getXmlObjectValue(valueType, serializedValue, isXml);
+    }
+    // Add the namespace to the root element if needed
+    if (isXml && mapper.xmlNamespace) {
+        var xmlnsKey = mapper.xmlNamespacePrefix ? "xmlns:" + mapper.xmlNamespacePrefix : "xmlns";
+        return tslib.__assign(tslib.__assign({}, tempDictionary), { $: (_a = {}, _a[xmlnsKey] = mapper.xmlNamespace, _a) });
     }
     return tempDictionary;
+}
+/**
+ * Resolves the additionalProperties property from a referenced mapper
+ * @param serializer the serializer containing the entire set of mappers
+ * @param mapper the composite mapper to resolve
+ * @param objectName name of the object being serialized
+ */
+function resolveAdditionalProperties(serializer, mapper, objectName) {
+    var additionalProperties = mapper.type.additionalProperties;
+    if (!additionalProperties && mapper.type.className) {
+        var modelMapper = resolveReferencedMapper(serializer, mapper, objectName);
+        return modelMapper === null || modelMapper === void 0 ? void 0 : modelMapper.type.additionalProperties;
+    }
+    return additionalProperties;
+}
+/**
+ * Finds the mapper referenced by className
+ * @param serializer the serializer containing the entire set of mappers
+ * @param mapper the composite mapper to resolve
+ * @param objectName name of the object being serialized
+ */
+function resolveReferencedMapper(serializer, mapper, objectName) {
+    var className = mapper.type.className;
+    if (!className) {
+        throw new Error("Class name for model \"" + objectName + "\" is not provided in the mapper \"" + JSON.stringify(mapper, undefined, 2) + "\".");
+    }
+    return serializer.modelMappers[className];
 }
 /**
  * Resolves a composite mapper's modelProperties.
@@ -5533,32 +5647,28 @@ function serializeDictionaryType(serializer, mapper, object, objectName) {
 function resolveModelProperties(serializer, mapper, objectName) {
     var modelProps = mapper.type.modelProperties;
     if (!modelProps) {
-        var className = mapper.type.className;
-        if (!className) {
-            throw new Error("Class name for model \"" + objectName + "\" is not provided in the mapper \"" + JSON.stringify(mapper, undefined, 2) + "\".");
-        }
-        var modelMapper = serializer.modelMappers[className];
+        var modelMapper = resolveReferencedMapper(serializer, mapper, objectName);
         if (!modelMapper) {
-            throw new Error("mapper() cannot be null or undefined for model \"" + className + "\".");
+            throw new Error("mapper() cannot be null or undefined for model \"" + mapper.type.className + "\".");
         }
-        modelProps = modelMapper.type.modelProperties;
+        modelProps = modelMapper === null || modelMapper === void 0 ? void 0 : modelMapper.type.modelProperties;
         if (!modelProps) {
             throw new Error("modelProperties cannot be null or undefined in the " +
-                ("mapper \"" + JSON.stringify(modelMapper) + "\" of type \"" + className + "\" for object \"" + objectName + "\"."));
+                ("mapper \"" + JSON.stringify(modelMapper) + "\" of type \"" + mapper.type.className + "\" for object \"" + objectName + "\"."));
         }
     }
     return modelProps;
 }
-function serializeCompositeType(serializer, mapper, object, objectName) {
-    var _a;
+function serializeCompositeType(serializer, mapper, object, objectName, isXml) {
+    var _a, _b;
     if (getPolymorphicDiscriminatorRecursively(serializer, mapper)) {
         mapper = getPolymorphicMapper(serializer, mapper, object, "clientName");
     }
     if (object != undefined) {
         var payload = {};
         var modelProps = resolveModelProperties(serializer, mapper, objectName);
-        for (var _i = 0, _b = Object.keys(modelProps); _i < _b.length; _i++) {
-            var key = _b[_i];
+        for (var _i = 0, _c = Object.keys(modelProps); _i < _c.length; _i++) {
+            var key = _c[_i];
             var propertyMapper = modelProps[key];
             if (propertyMapper.readOnly) {
                 continue;
@@ -5576,8 +5686,8 @@ function serializeCompositeType(serializer, mapper, object, objectName) {
             else {
                 var paths = splitSerializeName(propertyMapper.serializedName);
                 propName = paths.pop();
-                for (var _c = 0, paths_1 = paths; _c < paths_1.length; _c++) {
-                    var pathName = paths_1[_c];
+                for (var _d = 0, paths_1 = paths; _d < paths_1.length; _d++) {
+                    var pathName = paths_1[_d];
                     var childObject = parentObject[pathName];
                     if (childObject == undefined &&
                         (object[key] != undefined || propertyMapper.defaultValue !== undefined)) {
@@ -5587,6 +5697,12 @@ function serializeCompositeType(serializer, mapper, object, objectName) {
                 }
             }
             if (parentObject != undefined) {
+                if (isXml && mapper.xmlNamespace) {
+                    var xmlnsKey = mapper.xmlNamespacePrefix
+                        ? "xmlns:" + mapper.xmlNamespacePrefix
+                        : "xmlns";
+                    parentObject.$ = tslib.__assign(tslib.__assign({}, parentObject.$), (_a = {}, _a[xmlnsKey] = mapper.xmlNamespace, _a));
+                }
                 var propertyObjectName = propertyMapper.serializedName !== ""
                     ? objectName + "." + propertyMapper.serializedName
                     : objectName;
@@ -5599,23 +5715,24 @@ function serializeCompositeType(serializer, mapper, object, objectName) {
                 }
                 var serializedValue = serializer.serialize(propertyMapper, toSerialize, propertyObjectName);
                 if (serializedValue !== undefined && propName != undefined) {
-                    if (propertyMapper.xmlIsAttribute) {
+                    var value = getXmlObjectValue(propertyMapper, serializedValue, isXml);
+                    if (isXml && propertyMapper.xmlIsAttribute) {
                         // $ is the key attributes are kept under in xml2js.
                         // This keeps things simple while preventing name collision
                         // with names in user documents.
                         parentObject.$ = parentObject.$ || {};
                         parentObject.$[propName] = serializedValue;
                     }
-                    else if (propertyMapper.xmlIsWrapped) {
-                        parentObject[propName] = (_a = {}, _a[propertyMapper.xmlElementName] = serializedValue, _a);
+                    else if (isXml && propertyMapper.xmlIsWrapped) {
+                        parentObject[propName] = (_b = {}, _b[propertyMapper.xmlElementName] = value, _b);
                     }
                     else {
-                        parentObject[propName] = serializedValue;
+                        parentObject[propName] = value;
                     }
                 }
             }
         }
-        var additionalPropertiesMapper = mapper.type.additionalProperties;
+        var additionalPropertiesMapper = resolveAdditionalProperties(serializer, mapper, objectName);
         if (additionalPropertiesMapper) {
             var propNames = Object.keys(modelProps);
             var _loop_1 = function (clientPropName) {
@@ -5632,18 +5749,33 @@ function serializeCompositeType(serializer, mapper, object, objectName) {
     }
     return object;
 }
+function getXmlObjectValue(propertyMapper, serializedValue, isXml) {
+    var _a;
+    if (!isXml || !propertyMapper.xmlNamespace) {
+        return serializedValue;
+    }
+    var xmlnsKey = propertyMapper.xmlNamespacePrefix
+        ? "xmlns:" + propertyMapper.xmlNamespacePrefix
+        : "xmlns";
+    var xmlNamespace = (_a = {}, _a[xmlnsKey] = propertyMapper.xmlNamespace, _a);
+    if (["Composite"].includes(propertyMapper.type.name)) {
+        return tslib.__assign({ $: xmlNamespace }, serializedValue);
+    }
+    return { _: serializedValue, $: xmlNamespace };
+}
 function isSpecialXmlProperty(propertyName) {
     return ["$", "_"].includes(propertyName);
 }
 function deserializeCompositeType(serializer, mapper, responseBody, objectName) {
+    var _a;
     if (getPolymorphicDiscriminatorRecursively(serializer, mapper)) {
         mapper = getPolymorphicMapper(serializer, mapper, responseBody, "serializedName");
     }
     var modelProps = resolveModelProperties(serializer, mapper, objectName);
     var instance = {};
     var handledPropertyNames = [];
-    for (var _i = 0, _a = Object.keys(modelProps); _i < _a.length; _i++) {
-        var key = _a[_i];
+    for (var _i = 0, _b = Object.keys(modelProps); _i < _b.length; _i++) {
+        var key = _b[_i];
         var propertyMapper = modelProps[key];
         var paths = splitSerializeName(modelProps[key].serializedName);
         handledPropertyNames.push(paths[0]);
@@ -5655,8 +5787,8 @@ function deserializeCompositeType(serializer, mapper, responseBody, objectName) 
         var headerCollectionPrefix = propertyMapper.headerCollectionPrefix;
         if (headerCollectionPrefix) {
             var dictionary = {};
-            for (var _b = 0, _c = Object.keys(responseBody); _b < _c.length; _b++) {
-                var headerKey = _c[_b];
+            for (var _c = 0, _d = Object.keys(responseBody); _c < _d.length; _c++) {
+                var headerKey = _d[_c];
                 if (headerKey.startsWith(headerCollectionPrefix)) {
                     dictionary[headerKey.substring(headerCollectionPrefix.length)] = serializer.deserialize(propertyMapper.type.value, responseBody[headerKey], propertyObjectName);
                 }
@@ -5670,16 +5802,29 @@ function deserializeCompositeType(serializer, mapper, responseBody, objectName) 
             }
             else {
                 var propertyName = xmlElementName || xmlName || serializedName;
-                var unwrappedProperty = responseBody[propertyName];
                 if (propertyMapper.xmlIsWrapped) {
-                    unwrappedProperty = responseBody[xmlName];
-                    unwrappedProperty = unwrappedProperty && unwrappedProperty[xmlElementName];
-                    var isEmptyWrappedList = unwrappedProperty === undefined;
-                    if (isEmptyWrappedList) {
-                        unwrappedProperty = [];
-                    }
+                    /* a list of <xmlElementName> wrapped by <xmlName>
+                      For the xml example below
+                        <Cors>
+                          <CorsRule>...</CorsRule>
+                          <CorsRule>...</CorsRule>
+                        </Cors>
+                      the responseBody has
+                        {
+                          Cors: {
+                            CorsRule: [{...}, {...}]
+                          }
+                        }
+                      xmlName is "Cors" and xmlElementName is"CorsRule".
+                    */
+                    var wrapped = responseBody[xmlName];
+                    var elementList = (_a = wrapped === null || wrapped === void 0 ? void 0 : wrapped[xmlElementName]) !== null && _a !== void 0 ? _a : [];
+                    instance[key] = serializer.deserialize(propertyMapper, elementList, propertyObjectName);
                 }
-                instance[key] = serializer.deserialize(propertyMapper, unwrappedProperty, propertyObjectName);
+                else {
+                    var property = responseBody[propertyName];
+                    instance[key] = serializer.deserialize(propertyMapper, property, propertyObjectName);
+                }
             }
         }
         else {
@@ -5687,8 +5832,8 @@ function deserializeCompositeType(serializer, mapper, responseBody, objectName) 
             var propertyInstance = void 0;
             var res = responseBody;
             // traversing the object step by step.
-            for (var _d = 0, paths_2 = paths; _d < paths_2.length; _d++) {
-                var item = paths_2[_d];
+            for (var _e = 0, paths_2 = paths; _e < paths_2.length; _e++) {
+                var item = paths_2[_e];
                 if (!res)
                     break;
                 res = res[item];
@@ -5739,8 +5884,8 @@ function deserializeCompositeType(serializer, mapper, responseBody, objectName) 
         }
     }
     else if (responseBody) {
-        for (var _e = 0, _f = Object.keys(responseBody); _e < _f.length; _e++) {
-            var key = _f[_e];
+        for (var _f = 0, _g = Object.keys(responseBody); _f < _g.length; _f++) {
+            var key = _g[_f];
             if (instance[key] === undefined &&
                 !handledPropertyNames.includes(key) &&
                 !isSpecialXmlProperty(key)) {
@@ -8524,23 +8669,57 @@ function retry$1(policy, request, operationResponse, err, retryData) {
 })(exports.QueryCollectionFormat || (exports.QueryCollectionFormat = {}));
 
 // Copyright (c) Microsoft Corporation.
+var noProxyList = [];
+var isNoProxyInitalized = false;
+var byPassedList = new Map();
 function loadEnvironmentProxyValue() {
     if (!process) {
         return undefined;
     }
-    if (process.env[Constants.HTTPS_PROXY]) {
-        return process.env[Constants.HTTPS_PROXY];
+    var httpsProxy = getEnvironmentValue(Constants.HTTPS_PROXY);
+    var allProxy = getEnvironmentValue(Constants.ALL_PROXY);
+    var httpProxy = getEnvironmentValue(Constants.HTTP_PROXY);
+    return httpsProxy || allProxy || httpProxy;
+}
+// Check whether the given `uri` matches the noProxyList. If it matches, any request sent to that same `uri` won't set the proxy settings.
+function isBypassed(uri) {
+    if (byPassedList.has(uri)) {
+        return byPassedList.get(uri);
     }
-    else if (process.env[Constants.HTTPS_PROXY.toLowerCase()]) {
-        return process.env[Constants.HTTPS_PROXY.toLowerCase()];
+    loadNoProxy();
+    var isBypassed = false;
+    var host = URLBuilder.parse(uri).getHost();
+    for (var _i = 0, noProxyList_1 = noProxyList; _i < noProxyList_1.length; _i++) {
+        var proxyString = noProxyList_1[_i];
+        if (proxyString[0] === ".") {
+            if (uri.endsWith(proxyString)) {
+                isBypassed = true;
+            }
+            else {
+                if (host === proxyString.slice(1) && host.length === proxyString.length - 1) {
+                    isBypassed = true;
+                }
+            }
+        }
+        else {
+            if (host === proxyString) {
+                isBypassed = true;
+            }
+        }
     }
-    else if (process.env[Constants.HTTP_PROXY]) {
-        return process.env[Constants.HTTP_PROXY];
+    byPassedList.set(uri, isBypassed);
+    return isBypassed;
+}
+function loadNoProxy() {
+    if (isNoProxyInitalized) {
+        return;
     }
-    else if (process.env[Constants.HTTP_PROXY.toLowerCase()]) {
-        return process.env[Constants.HTTP_PROXY.toLowerCase()];
+    var noProxy = getEnvironmentValue(Constants.NO_PROXY);
+    if (noProxy) {
+        var list = noProxy.split(",");
+        noProxyList = list.map(function (item) { return item.trim(); }).filter(function (item) { return item.length; });
     }
-    return undefined;
+    isNoProxyInitalized = true;
 }
 function getDefaultProxySettings(proxyUrl) {
     if (!proxyUrl) {
@@ -8596,7 +8775,7 @@ var ProxyPolicy = /** @class */ (function (_super) {
         return _this;
     }
     ProxyPolicy.prototype.sendRequest = function (request) {
-        if (!request.proxySettings) {
+        if (!request.proxySettings && !isBypassed(request.url)) {
             request.proxySettings = this.proxySettings;
         }
         return this._nextPolicy.sendRequest(request);
@@ -8869,6 +9048,51 @@ var DisableResponseDecompressionPolicy = /** @class */ (function (_super) {
         });
     };
     return DisableResponseDecompressionPolicy;
+}(BaseRequestPolicy));
+
+// Copyright (c) Microsoft Corporation.
+function ndJsonPolicy() {
+    return {
+        create: function (nextPolicy, options) {
+            return new NdJsonPolicy(nextPolicy, options);
+        }
+    };
+}
+/**
+ * NdJsonPolicy that formats a JSON array as newline-delimited JSON
+ */
+var NdJsonPolicy = /** @class */ (function (_super) {
+    tslib.__extends(NdJsonPolicy, _super);
+    /**
+     * Creates an instance of KeepAlivePolicy.
+     *
+     * @param nextPolicy
+     * @param options
+     */
+    function NdJsonPolicy(nextPolicy, options) {
+        return _super.call(this, nextPolicy, options) || this;
+    }
+    /**
+     * Sends a request.
+     *
+     * @param request
+     */
+    NdJsonPolicy.prototype.sendRequest = function (request) {
+        return tslib.__awaiter(this, void 0, void 0, function () {
+            var body;
+            return tslib.__generator(this, function (_a) {
+                // There currently isn't a good way to bypass the serializer
+                if (typeof request.body === "string" && request.body.startsWith("[")) {
+                    body = JSON.parse(request.body);
+                    if (Array.isArray(body)) {
+                        request.body = body.map(function (item) { return JSON.stringify(item) + "\n"; }).join("");
+                    }
+                }
+                return [2 /*return*/, this._nextPolicy.sendRequest(request)];
+            });
+        });
+    };
+    return NdJsonPolicy;
 }(BaseRequestPolicy));
 
 // Copyright (c) Microsoft Corporation.
@@ -9168,7 +9392,7 @@ function serializeRequestBody(serviceClient, httpRequest, operationArguments, op
     if (operationSpec.requestBody && operationSpec.requestBody.mapper) {
         httpRequest.body = getOperationArgumentValueFromParameter(serviceClient, operationArguments, operationSpec.requestBody, operationSpec.serializer);
         var bodyMapper = operationSpec.requestBody.mapper;
-        var required = bodyMapper.required, xmlName = bodyMapper.xmlName, xmlElementName = bodyMapper.xmlElementName, serializedName = bodyMapper.serializedName;
+        var required = bodyMapper.required, xmlName = bodyMapper.xmlName, xmlElementName = bodyMapper.xmlElementName, serializedName = bodyMapper.serializedName, xmlNamespace = bodyMapper.xmlNamespace, xmlNamespacePrefix = bodyMapper.xmlNamespacePrefix;
         var typeName = bodyMapper.type.name;
         try {
             if ((httpRequest.body !== undefined && httpRequest.body !== null) || required) {
@@ -9176,11 +9400,13 @@ function serializeRequestBody(serviceClient, httpRequest, operationArguments, op
                 httpRequest.body = operationSpec.serializer.serialize(bodyMapper, httpRequest.body, requestBodyParameterPathString);
                 var isStream = typeName === MapperType.Stream;
                 if (operationSpec.isXML) {
+                    var xmlnsKey = xmlNamespacePrefix ? "xmlns:" + xmlNamespacePrefix : "xmlns";
+                    var value = getXmlValueWithNamespace(xmlNamespace, xmlnsKey, typeName, httpRequest.body);
                     if (typeName === MapperType.Sequence) {
-                        httpRequest.body = stringifyXML(prepareXMLRootList(httpRequest.body, xmlElementName || xmlName || serializedName), { rootName: xmlName || serializedName });
+                        httpRequest.body = stringifyXML(prepareXMLRootList(value, xmlElementName || xmlName || serializedName, xmlnsKey, xmlNamespace), { rootName: xmlName || serializedName });
                     }
                     else if (!isStream) {
-                        httpRequest.body = stringifyXML(httpRequest.body, {
+                        httpRequest.body = stringifyXML(value, {
                             rootName: xmlName || serializedName
                         });
                     }
@@ -9211,6 +9437,18 @@ function serializeRequestBody(serviceClient, httpRequest, operationArguments, op
             }
         }
     }
+}
+/**
+ * Adds an xml namespace to the xml serialized object if needed, otherwise it just returns the value itself
+ */
+function getXmlValueWithNamespace(xmlNamespace, xmlnsKey, typeName, serializedValue) {
+    var _a;
+    // Composite and Sequence schemas already got their root namespace set during serialization
+    // We just need to add xmlns to the other schema types
+    if (xmlNamespace && !["Composite", "Sequence", "Dictionary"].includes(typeName)) {
+        return { _: serializedValue, $: (_a = {}, _a[xmlnsKey] = xmlNamespace, _a) };
+    }
+    return serializedValue;
 }
 function getValueOrFunctionResult(value, defaultValueCreator) {
     var result;
@@ -9254,6 +9492,9 @@ function createDefaultRequestPolicyFactories(authPolicyFactory, options) {
 }
 function createPipelineFromOptions(pipelineOptions, authPolicyFactory) {
     var requestPolicyFactories = [];
+    if (pipelineOptions.sendStreamingJson) {
+        requestPolicyFactories.push(ndJsonPolicy());
+    }
     var userAgentValue = undefined;
     if (pipelineOptions.userAgentOptions && pipelineOptions.userAgentOptions.userAgentPrefix) {
         var userAgentInfo = [];
@@ -12540,15 +12781,15 @@ __webpack_require__.r(__webpack_exports__);
 
 // EXPORTS
 __webpack_require__.d(__webpack_exports__, {
+  "NIL": () => /* reexport */ nil,
+  "parse": () => /* reexport */ esm_node_parse,
+  "stringify": () => /* reexport */ esm_node_stringify,
   "v1": () => /* reexport */ esm_node_v1,
   "v3": () => /* reexport */ esm_node_v3,
   "v4": () => /* reexport */ esm_node_v4,
   "v5": () => /* reexport */ esm_node_v5,
-  "NIL": () => /* reexport */ nil,
-  "version": () => /* reexport */ esm_node_version,
   "validate": () => /* reexport */ esm_node_validate,
-  "stringify": () => /* reexport */ esm_node_stringify,
-  "parse": () => /* reexport */ esm_node_parse
+  "version": () => /* reexport */ esm_node_version
 });
 
 // EXTERNAL MODULE: external "crypto"
@@ -12557,9 +12798,16 @@ var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto
 
 // CONCATENATED MODULE: ./node_modules/@azure/core-http/node_modules/uuid/dist/esm-node/rng.js
 
-const rnds8 = new Uint8Array(16);
+const rnds8Pool = new Uint8Array(256); // # of random values to pre-allocate
+
+let poolPtr = rnds8Pool.length;
 function rng() {
-  return external_crypto_default().randomFillSync(rnds8);
+  if (poolPtr > rnds8Pool.length - 16) {
+    external_crypto_default().randomFillSync(rnds8Pool);
+    poolPtr = 0;
+  }
+
+  return rnds8Pool.slice(poolPtr, poolPtr += 16);
 }
 // CONCATENATED MODULE: ./node_modules/@azure/core-http/node_modules/uuid/dist/esm-node/regex.js
 /* harmony default export */ const regex = (/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i);
@@ -54418,45 +54666,33 @@ module.exports = v4;
 // ESM COMPAT FLAG
 __webpack_require__.r(__webpack_exports__);
 
-// EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __webpack_require__(2186);
-
 // EXTERNAL MODULE: ./node_modules/@actions/cache/lib/cache.js
 var cache = __webpack_require__(7799);
-
+// EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
+var core = __webpack_require__(2186);
 // EXTERNAL MODULE: ./node_modules/@actions/exec/lib/exec.js
 var exec = __webpack_require__(1514);
-
 // EXTERNAL MODULE: ./node_modules/@actions/glob/lib/glob.js
 var glob = __webpack_require__(8090);
-
 // EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
 var io = __webpack_require__(7436);
-
-// EXTERNAL MODULE: external "crypto"
-var external_crypto_ = __webpack_require__(6417);
-var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto_);
-
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __webpack_require__(5747);
 var external_fs_default = /*#__PURE__*/__webpack_require__.n(external_fs_);
-
-// EXTERNAL MODULE: external "os"
-var external_os_ = __webpack_require__(2087);
-var external_os_default = /*#__PURE__*/__webpack_require__.n(external_os_);
 
 // EXTERNAL MODULE: external "path"
 var external_path_ = __webpack_require__(5622);
 var external_path_default = /*#__PURE__*/__webpack_require__.n(external_path_);
 
+// EXTERNAL MODULE: external "crypto"
+var external_crypto_ = __webpack_require__(6417);
+var external_crypto_default = /*#__PURE__*/__webpack_require__.n(external_crypto_);
+
+// EXTERNAL MODULE: external "os"
+var external_os_ = __webpack_require__(2087);
+var external_os_default = /*#__PURE__*/__webpack_require__.n(external_os_);
+
 // CONCATENATED MODULE: ./src/common.ts
-var __asyncValues = (undefined && undefined.__asyncValues) || function (o) {
-    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-    var m = o[Symbol.asyncIterator], i;
-    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
-    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
-    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
-};
 
 
 
@@ -54518,32 +54754,25 @@ async function getRustVersion() {
 }
 async function getCmdOutput(cmd, args = [], options = {}) {
     let stdout = "";
-    await exec.exec(cmd, args, Object.assign({ silent: true, listeners: {
+    await exec.exec(cmd, args, {
+        silent: true,
+        listeners: {
             stdout(data) {
                 stdout += data.toString();
             },
-        } }, options));
+        },
+        ...options,
+    });
     return stdout;
 }
 async function getLockfileHash() {
-    var e_1, _a;
     const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock", { followSymbolicLinks: false });
     const files = await globber.glob();
     files.sort((a, b) => a.localeCompare(b));
     const hasher = external_crypto_default().createHash("sha1");
     for (const file of files) {
-        try {
-            for (var _b = (e_1 = void 0, __asyncValues(external_fs_default().createReadStream(file))), _c; _c = await _b.next(), !_c.done;) {
-                const chunk = _c.value;
-                hasher.update(chunk);
-            }
-        }
-        catch (e_1_1) { e_1 = { error: e_1_1 }; }
-        finally {
-            try {
-                if (_c && !_c.done && (_a = _b.return)) await _a.call(_b);
-            }
-            finally { if (e_1) throw e_1.error; }
+        for await (const chunk of external_fs_default().createReadStream(file)) {
+            hasher.update(chunk);
         }
     }
     return hasher.digest("hex").slice(0, 20);
@@ -54559,27 +54788,16 @@ async function getPackages() {
     });
 }
 async function cleanTarget(packages) {
-    var e_2, _a;
     await external_fs_default().promises.unlink("./target/.rustc_info.json");
     await io.rmRF("./target/debug/examples");
     await io.rmRF("./target/debug/incremental");
     let dir;
     // remove all *files* from debug
     dir = await external_fs_default().promises.opendir("./target/debug");
-    try {
-        for (var dir_1 = __asyncValues(dir), dir_1_1; dir_1_1 = await dir_1.next(), !dir_1_1.done;) {
-            const dirent = dir_1_1.value;
-            if (dirent.isFile()) {
-                await rm(dir.path, dirent);
-            }
+    for await (const dirent of dir) {
+        if (dirent.isFile()) {
+            await rm(dir.path, dirent);
         }
-    }
-    catch (e_2_1) { e_2 = { error: e_2_1 }; }
-    finally {
-        try {
-            if (dir_1_1 && !dir_1_1.done && (_a = dir_1.return)) await _a.call(dir_1);
-        }
-        finally { if (e_2) throw e_2.error; }
     }
     const keepPkg = new Set(packages.map((p) => p.name));
     await rmExcept("./target/debug/build", keepPkg);
@@ -54596,30 +54814,19 @@ async function cleanTarget(packages) {
 }
 const oneWeek = 7 * 24 * 3600 * 1000;
 async function rmExcept(dirName, keepPrefix) {
-    var e_3, _a;
     const dir = await external_fs_default().promises.opendir(dirName);
-    try {
-        for (var dir_2 = __asyncValues(dir), dir_2_1; dir_2_1 = await dir_2.next(), !dir_2_1.done;) {
-            const dirent = dir_2_1.value;
-            let name = dirent.name;
-            const idx = name.lastIndexOf("-");
-            if (idx !== -1) {
-                name = name.slice(0, idx);
-            }
-            const fileName = external_path_default().join(dir.path, dirent.name);
-            const { mtime } = await external_fs_default().promises.stat(fileName);
-            // we don’t really know
-            if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
-                await rm(dir.path, dirent);
-            }
+    for await (const dirent of dir) {
+        let name = dirent.name;
+        const idx = name.lastIndexOf("-");
+        if (idx !== -1) {
+            name = name.slice(0, idx);
         }
-    }
-    catch (e_3_1) { e_3 = { error: e_3_1 }; }
-    finally {
-        try {
-            if (dir_2_1 && !dir_2_1.done && (_a = dir_2.return)) await _a.call(dir_2);
+        const fileName = external_path_default().join(dir.path, dirent.name);
+        const { mtime } = await external_fs_default().promises.stat(fileName);
+        // we don’t really know
+        if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
+            await rm(dir.path, dirent);
         }
-        finally { if (e_3) throw e_3.error; }
     }
 }
 async function rm(parent, dirent) {
@@ -54634,13 +54841,6 @@ async function rm(parent, dirent) {
 }
 
 // CONCATENATED MODULE: ./src/save.ts
-var save_asyncValues = (undefined && undefined.__asyncValues) || function (o) {
-    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-    var m = o[Symbol.asyncIterator], i;
-    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
-    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
-    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
-};
 
 
 
@@ -54667,15 +54867,15 @@ async function run() {
         try {
             await cleanRegistry(registryName, packages);
         }
-        catch (_a) { }
+        catch { }
         try {
             await cleanGit(packages);
         }
-        catch (_b) { }
+        catch { }
         try {
             await cleanTarget(packages);
         }
-        catch (_c) { }
+        catch { }
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
         core.info(`Using key "${key}".`);
         try {
@@ -54704,28 +54904,16 @@ async function getRegistryName() {
     return external_path_default().basename(external_path_default().dirname(first));
 }
 async function cleanRegistry(registryName, packages) {
-    var e_1, _a;
     await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     const dir = await external_fs_default().promises.opendir(external_path_default().join(paths.cache, registryName));
-    try {
-        for (var dir_1 = save_asyncValues(dir), dir_1_1; dir_1_1 = await dir_1.next(), !dir_1_1.done;) {
-            const dirent = dir_1_1.value;
-            if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-                await rm(dir.path, dirent);
-            }
+    for await (const dirent of dir) {
+        if (dirent.isFile() && !pkgSet.has(dirent.name)) {
+            await rm(dir.path, dirent);
         }
-    }
-    catch (e_1_1) { e_1 = { error: e_1_1 }; }
-    finally {
-        try {
-            if (dir_1_1 && !dir_1_1.done && (_a = dir_1.return)) await _a.call(dir_1);
-        }
-        finally { if (e_1) throw e_1.error; }
     }
 }
 async function cleanGit(packages) {
-    var e_2, _a, e_3, _b, e_4, _c;
     const coPath = external_path_default().join(paths.git, "checkouts");
     const dbPath = external_path_default().join(paths.git, "db");
     const repos = new Map();
@@ -54747,58 +54935,28 @@ async function cleanGit(packages) {
     let dir;
     // clean the db
     dir = await external_fs_default().promises.opendir(dbPath);
-    try {
-        for (var dir_2 = save_asyncValues(dir), dir_2_1; dir_2_1 = await dir_2.next(), !dir_2_1.done;) {
-            const dirent = dir_2_1.value;
-            if (!repos.has(dirent.name)) {
-                await rm(dir.path, dirent);
-            }
+    for await (const dirent of dir) {
+        if (!repos.has(dirent.name)) {
+            await rm(dir.path, dirent);
         }
-    }
-    catch (e_2_1) { e_2 = { error: e_2_1 }; }
-    finally {
-        try {
-            if (dir_2_1 && !dir_2_1.done && (_a = dir_2.return)) await _a.call(dir_2);
-        }
-        finally { if (e_2) throw e_2.error; }
     }
     // clean the checkouts
     dir = await external_fs_default().promises.opendir(coPath);
-    try {
-        for (var dir_3 = save_asyncValues(dir), dir_3_1; dir_3_1 = await dir_3.next(), !dir_3_1.done;) {
-            const dirent = dir_3_1.value;
-            const refs = repos.get(dirent.name);
-            if (!refs) {
-                await rm(dir.path, dirent);
-                continue;
-            }
-            if (!dirent.isDirectory()) {
-                continue;
-            }
-            const refsDir = await external_fs_default().promises.opendir(external_path_default().join(dir.path, dirent.name));
-            try {
-                for (var refsDir_1 = (e_4 = void 0, save_asyncValues(refsDir)), refsDir_1_1; refsDir_1_1 = await refsDir_1.next(), !refsDir_1_1.done;) {
-                    const dirent = refsDir_1_1.value;
-                    if (!refs.has(dirent.name)) {
-                        await rm(refsDir.path, dirent);
-                    }
-                }
-            }
-            catch (e_4_1) { e_4 = { error: e_4_1 }; }
-            finally {
-                try {
-                    if (refsDir_1_1 && !refsDir_1_1.done && (_c = refsDir_1.return)) await _c.call(refsDir_1);
-                }
-                finally { if (e_4) throw e_4.error; }
+    for await (const dirent of dir) {
+        const refs = repos.get(dirent.name);
+        if (!refs) {
+            await rm(dir.path, dirent);
+            continue;
+        }
+        if (!dirent.isDirectory()) {
+            continue;
+        }
+        const refsDir = await external_fs_default().promises.opendir(external_path_default().join(dir.path, dirent.name));
+        for await (const dirent of refsDir) {
+            if (!refs.has(dirent.name)) {
+                await rm(refsDir.path, dirent);
             }
         }
-    }
-    catch (e_3_1) { e_3 = { error: e_3_1 }; }
-    finally {
-        try {
-            if (dir_3_1 && !dir_3_1.done && (_b = dir_3.return)) await _b.call(dir_3);
-        }
-        finally { if (e_3) throw e_3.error; }
     }
 }
 async function macOsWorkaround() {
@@ -54807,7 +54965,7 @@ async function macOsWorkaround() {
         // Also see https://github.com/rust-lang/cargo/issues/8603
         await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
     }
-    catch (_a) { }
+    catch { }
 }
 
 
@@ -54841,7 +54999,7 @@ module.exports = JSON.parse("[\"ac\",\"com.ac\",\"edu.ac\",\"gov.ac\",\"net.ac\"
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("assert");
+module.exports = require("assert");;
 
 /***/ }),
 
@@ -54849,7 +55007,7 @@ module.exports = require("assert");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("buffer");
+module.exports = require("buffer");;
 
 /***/ }),
 
@@ -54857,7 +55015,7 @@ module.exports = require("buffer");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("child_process");
+module.exports = require("child_process");;
 
 /***/ }),
 
@@ -54865,7 +55023,7 @@ module.exports = require("child_process");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("crypto");
+module.exports = require("crypto");;
 
 /***/ }),
 
@@ -54873,7 +55031,7 @@ module.exports = require("crypto");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("events");
+module.exports = require("events");;
 
 /***/ }),
 
@@ -54881,7 +55039,7 @@ module.exports = require("events");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("fs");
+module.exports = require("fs");;
 
 /***/ }),
 
@@ -54889,7 +55047,7 @@ module.exports = require("fs");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("http");
+module.exports = require("http");;
 
 /***/ }),
 
@@ -54897,7 +55055,7 @@ module.exports = require("http");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("https");
+module.exports = require("https");;
 
 /***/ }),
 
@@ -54905,7 +55063,7 @@ module.exports = require("https");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("net");
+module.exports = require("net");;
 
 /***/ }),
 
@@ -54913,7 +55071,7 @@ module.exports = require("net");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("os");
+module.exports = require("os");;
 
 /***/ }),
 
@@ -54921,7 +55079,7 @@ module.exports = require("os");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("path");
+module.exports = require("path");;
 
 /***/ }),
 
@@ -54929,7 +55087,7 @@ module.exports = require("path");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("punycode");
+module.exports = require("punycode");;
 
 /***/ }),
 
@@ -54937,7 +55095,7 @@ module.exports = require("punycode");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("stream");
+module.exports = require("stream");;
 
 /***/ }),
 
@@ -54945,7 +55103,7 @@ module.exports = require("stream");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("string_decoder");
+module.exports = require("string_decoder");;
 
 /***/ }),
 
@@ -54953,7 +55111,7 @@ module.exports = require("string_decoder");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("timers");
+module.exports = require("timers");;
 
 /***/ }),
 
@@ -54961,7 +55119,7 @@ module.exports = require("timers");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("tls");
+module.exports = require("tls");;
 
 /***/ }),
 
@@ -54969,7 +55127,7 @@ module.exports = require("tls");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("url");
+module.exports = require("url");;
 
 /***/ }),
 
@@ -54977,7 +55135,7 @@ module.exports = require("url");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("util");
+module.exports = require("util");;
 
 /***/ }),
 
@@ -54985,7 +55143,7 @@ module.exports = require("util");
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("zlib");
+module.exports = require("zlib");;
 
 /***/ })
 

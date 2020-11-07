@@ -4,7 +4,7 @@
     "diagnostics": true,
     "lib": ["esnext"],
 
-    "target": "es2017",
+    "target": "es2020",
 
     "resolveJsonModule": true,
     "moduleResolution": "node",
