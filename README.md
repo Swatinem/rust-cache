@@ -6,10 +6,26 @@ sensible defaults.
 ## Example usage
 
 ```yaml
+# selecting a toolchain either by action or manual `rustup` calls should happen
+# before the plugin, as it uses the current rustc version as its cache key
+- uses: actions-rs/toolchain@v1
+  with:
+    profile: minimal
+    toolchain: stable
+
 - uses: Swatinem/rust-cache@v1
 ```
 
-### Cache Details
+## Inputs
+
+: `key`
+An optional key that is added to the automatic cache key.
+
+: `working-directory`
+The working directory the action operates in, is case the cargo project is not
+located in the repo root.
+
+## Cache Details
 
 The cache currently caches the following directories:
 

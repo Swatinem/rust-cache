@@ -11,6 +11,11 @@ process.on("uncaughtException", (e) => {
   core.info(`[warning] ${e.message}`);
 });
 
+const cwd = core.getInput("working-directory");
+if (cwd) {
+  process.chdir(cwd);
+}
+
 export const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 
@@ -196,11 +201,13 @@ export async function rmExcept(dirName: string, keepPrefix: Set<string>) {
 }
 
 export async function rm(parent: string, dirent: fs.Dirent) {
-  const fileName = path.join(parent, dirent.name);
-  core.debug(`deleting "${fileName}"`);
-  if (dirent.isFile()) {
-    await fs.promises.unlink(fileName);
-  } else if (dirent.isDirectory()) {
-    await io.rmRF(fileName);
-  }
+  try {
+    const fileName = path.join(parent, dirent.name);
+    core.debug(`deleting "${fileName}"`);
+    if (dirent.isFile()) {
+      await fs.promises.unlink(fileName);
+    } else if (dirent.isDirectory()) {
+      await io.rmRF(fileName);
+    }
+  } catch {}
 }

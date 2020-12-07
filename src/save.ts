@@ -5,15 +5,10 @@ import * as glob from "@actions/glob";
 import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
-import { cleanTarget, getCacheConfig, getPackages, isValidEvent, Packages, paths, rm, stateKey } from "./common";
+import { cleanTarget, getCacheConfig, getPackages, Packages, paths, rm, stateKey } from "./common";
 
 async function run() {
-  if (!isValidEvent()) {
-    return;
-  }
-
   try {
-    const start = Date.now();
     const { paths: savePaths, key } = await getCacheConfig();
 
     if (core.getState(stateKey) === key) {
@@ -41,16 +36,7 @@ async function run() {
 
     core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
     core.info(`Using key "${key}".`);
-    try {
-      await cache.saveCache(savePaths, key);
-    } catch (e) {
-      core.info(`[warning] ${e.message}`);
-    }
-
-    const duration = Math.round((Date.now() - start) / 1000);
-    if (duration) {
-      core.info(`Took ${duration}s.`);
-    }
+    await cache.saveCache(savePaths, key);
   } catch (e) {
     core.info(`[warning] ${e.message}`);
   }

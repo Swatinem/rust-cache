@@ -5,6 +5,9 @@ inputs:
   key:
     description: "An additional key for the cache"
     required: false
+  working-directory:
+    description: "The working directory this action should operate in"
+    required: false
 runs:
   using: "node12"
   main: "dist/restore/index.js"
