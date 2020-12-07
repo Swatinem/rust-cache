@@ -55105,6 +55105,10 @@ var external_os_default = /*#__PURE__*/__webpack_require__.n(external_os_);
 process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
 });
+const cwd = core.getInput("working-directory");
+if (cwd) {
+    process.chdir(cwd);
+}
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
@@ -55231,14 +55235,17 @@ async function rmExcept(dirName, keepPrefix) {
     }
 }
 async function rm(parent, dirent) {
-    const fileName = external_path_default().join(parent, dirent.name);
-    core.debug(`deleting "${fileName}"`);
-    if (dirent.isFile()) {
-        await external_fs_default().promises.unlink(fileName);
+    try {
+        const fileName = external_path_default().join(parent, dirent.name);
+        core.debug(`deleting "${fileName}"`);
+        if (dirent.isFile()) {
+            await external_fs_default().promises.unlink(fileName);
+        }
+        else if (dirent.isDirectory()) {
+            await io.rmRF(fileName);
+        }
     }
-    else if (dirent.isDirectory()) {
-        await io.rmRF(fileName);
-    }
+    catch { }
 }
 
 // CONCATENATED MODULE: ./src/save.ts
@@ -55251,11 +55258,7 @@ async function rm(parent, dirent) {
 
 
 async function run() {
-    if (!isValidEvent()) {
-        return;
-    }
     try {
-        const start = Date.now();
         const { paths: savePaths, key } = await getCacheConfig();
         if (core.getState(stateKey) === key) {
             core.info(`Cache up-to-date.`);
@@ -55279,16 +55282,7 @@ async function run() {
         catch { }
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
         core.info(`Using key "${key}".`);
-        try {
-            await cache.saveCache(savePaths, key);
-        }
-        catch (e) {
-            core.info(`[warning] ${e.message}`);
-        }
-        const duration = Math.round((Date.now() - start) / 1000);
-        if (duration) {
-            core.info(`Took ${duration}s.`);
-        }
+        await cache.saveCache(savePaths, key);
     }
     catch (e) {
         core.info(`[warning] ${e.message}`);

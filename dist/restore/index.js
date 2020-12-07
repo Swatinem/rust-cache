@@ -55105,6 +55105,10 @@ var external_path_default = /*#__PURE__*/__webpack_require__.n(external_path_);
 process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
 });
+const cwd = core.getInput("working-directory");
+if (cwd) {
+    process.chdir(cwd);
+}
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
@@ -55231,14 +55235,17 @@ async function rmExcept(dirName, keepPrefix) {
     }
 }
 async function rm(parent, dirent) {
-    const fileName = external_path_default().join(parent, dirent.name);
-    core.debug(`deleting "${fileName}"`);
-    if (dirent.isFile()) {
-        await external_fs_default().promises.unlink(fileName);
+    try {
+        const fileName = external_path_default().join(parent, dirent.name);
+        core.debug(`deleting "${fileName}"`);
+        if (dirent.isFile()) {
+            await external_fs_default().promises.unlink(fileName);
+        }
+        else if (dirent.isDirectory()) {
+            await io.rmRF(fileName);
+        }
     }
-    else if (dirent.isDirectory()) {
-        await io.rmRF(fileName);
-    }
+    catch { }
 }
 
 // CONCATENATED MODULE: ./src/restore.ts
@@ -55246,36 +55253,23 @@ async function rm(parent, dirent) {
 
 
 async function run() {
-    if (!isValidEvent()) {
-        return;
-    }
     try {
         core.exportVariable("CARGO_INCREMENTAL", 0);
-        const start = Date.now();
         const { paths, key, restoreKeys } = await getCacheConfig();
         core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
         core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
-        try {
-            const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
-            if (restoreKey) {
-                core.info(`Restored from cache key "${restoreKey}".`);
-                core.saveState(stateKey, restoreKey);
-                if (restoreKey !== key) {
-                    // pre-clean the target directory on cache mismatch
-                    const packages = await getPackages();
-                    await cleanTarget(packages);
-                }
-            }
-            else {
-                core.info("No cache found.");
+        const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
+        if (restoreKey) {
+            core.info(`Restored from cache key "${restoreKey}".`);
+            core.saveState(stateKey, restoreKey);
+            if (restoreKey !== key) {
+                // pre-clean the target directory on cache mismatch
+                const packages = await getPackages();
+                await cleanTarget(packages);
             }
         }
-        catch (e) {
-            core.info(`[warning] ${e.message}`);
-        }
-        const duration = Math.round((Date.now() - start) / 1000);
-        if (duration) {
-            core.info(`Took ${duration}s.`);
+        else {
+            core.info("No cache found.");
         }
     }
     catch (e) {
