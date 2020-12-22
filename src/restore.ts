@@ -22,12 +22,22 @@ async function run() {
 
         await cleanTarget(packages);
       }
+
+      setCacheHitOutput(restoreKey === key);
     } else {
       core.info("No cache found.");
+
+      setCacheHitOutput(false);
     }
   } catch (e) {
+    setCacheHitOutput(false);
+
     core.info(`[warning] ${e.message}`);
   }
+}
+
+function setCacheHitOutput(cacheHit: boolean): void {
+  core.setOutput("cache-hit", cacheHit.toString());
 }
 
 run();
