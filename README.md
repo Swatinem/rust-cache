@@ -25,6 +25,23 @@ An optional key that is added to the automatic cache key.
 The working directory the action operates in, is case the cargo project is not
 located in the repo root.
 
+## Cache Effectiveness
+
+This action only caches the _dependencies_ of a crate, so is more effective if
+the dependency / own code ratio is higher.
+
+It is also most effective for repositories with a `Cargo.lock` file. Library
+repositories with only a `Cargo.toml` file have limited benefits, as cargo will
+_always_ use the most up-to-date dependency versions, which may not be cached.
+
+Usage with Stable Rust is most effective, as a cache is tied to the Rust version.
+Using it with Nightly Rust is less effective as it will throw away the cache every day.
+
+## Versioning
+
+I use the `v1` branch similar to `master` development, so if you want to have
+a more stable experience, please use a fixed revision or tag.
+
 ## Cache Details
 
 The cache currently caches the following directories:
