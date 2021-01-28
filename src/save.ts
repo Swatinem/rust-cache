@@ -35,7 +35,8 @@ async function run() {
     } catch {}
 
     core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
-    core.info(`Using key "${key}".`);
+    core.info(`In directory:\n    ${process.cwd()}`);
+    core.info(`Using key:\n    ${key}`);
     await cache.saveCache(savePaths, key);
   } catch (e) {
     core.info(`[warning] ${e.message}`);

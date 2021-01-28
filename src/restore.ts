@@ -9,6 +9,7 @@ async function run() {
     const { paths, key, restoreKeys } = await getCacheConfig();
 
     core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
+    core.info(`In directory:\n    ${process.cwd()}`);
     core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
     const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
     if (restoreKey) {

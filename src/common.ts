@@ -20,10 +20,11 @@ export const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 
 const home = os.homedir();
+const cargoHome = process.env.CARGO_HOME || path.join(home, ".cargo");
 export const paths = {
-  index: path.join(home, ".cargo/registry/index"),
-  cache: path.join(home, ".cargo/registry/cache"),
-  git: path.join(home, ".cargo/git"),
+  index: path.join(cargoHome, "registry/index"),
+  cache: path.join(cargoHome, "registry/cache"),
+  git: path.join(cargoHome, "git"),
   target: "target",
 };
 
