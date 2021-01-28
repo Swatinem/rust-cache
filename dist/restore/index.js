@@ -55713,10 +55713,11 @@ if (cwd) {
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
+const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
 const paths = {
-    index: external_path_default().join(home, ".cargo/registry/index"),
-    cache: external_path_default().join(home, ".cargo/registry/cache"),
-    git: external_path_default().join(home, ".cargo/git"),
+    index: external_path_default().join(cargoHome, "registry/index"),
+    cache: external_path_default().join(cargoHome, "registry/cache"),
+    git: external_path_default().join(cargoHome, "git"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -55730,13 +55731,19 @@ async function getCacheConfig() {
         core.saveState(stateHash, lockHash);
     }
     let key = `v0-rust-`;
-    let inputKey = core.getInput("key");
-    if (inputKey) {
-        key += `${inputKey}-`;
+    const sharedKey = core.getInput("sharedKey");
+    if (sharedKey) {
+        key += `${sharedKey}-`;
     }
-    const job = process.env.GITHUB_JOB;
-    if (job) {
-        key += `${job}-`;
+    else {
+        const inputKey = core.getInput("key");
+        if (inputKey) {
+            key += `${inputKey}-`;
+        }
+        const job = process.env.GITHUB_JOB;
+        if (job) {
+            key += `${job}-`;
+        }
     }
     key += await getRustKey();
     return {
@@ -55858,6 +55865,7 @@ async function run() {
         core.exportVariable("CARGO_INCREMENTAL", 0);
         const { paths, key, restoreKeys } = await getCacheConfig();
         core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
+        core.info(`In directory:\n    ${process.cwd()}`);
         core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
         const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
         if (restoreKey) {
@@ -55868,14 +55876,20 @@ async function run() {
                 const packages = await getPackages();
                 await cleanTarget(packages);
             }
+            setCacheHitOutput(restoreKey === key);
         }
         else {
             core.info("No cache found.");
+            setCacheHitOutput(false);
         }
     }
     catch (e) {
+        setCacheHitOutput(false);
         core.info(`[warning] ${e.message}`);
     }
+}
+function setCacheHitOutput(cacheHit) {
+    core.setOutput("cache-hit", cacheHit.toString());
 }
 run();
 

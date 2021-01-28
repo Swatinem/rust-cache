@@ -55713,10 +55713,11 @@ if (cwd) {
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
+const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
 const paths = {
-    index: external_path_default().join(home, ".cargo/registry/index"),
-    cache: external_path_default().join(home, ".cargo/registry/cache"),
-    git: external_path_default().join(home, ".cargo/git"),
+    index: external_path_default().join(cargoHome, "registry/index"),
+    cache: external_path_default().join(cargoHome, "registry/cache"),
+    git: external_path_default().join(cargoHome, "git"),
     target: "target",
 };
 const RefKey = "GITHUB_REF";
@@ -55730,13 +55731,19 @@ async function getCacheConfig() {
         core.saveState(stateHash, lockHash);
     }
     let key = `v0-rust-`;
-    let inputKey = core.getInput("key");
-    if (inputKey) {
-        key += `${inputKey}-`;
+    const sharedKey = core.getInput("sharedKey");
+    if (sharedKey) {
+        key += `${sharedKey}-`;
     }
-    const job = process.env.GITHUB_JOB;
-    if (job) {
-        key += `${job}-`;
+    else {
+        const inputKey = core.getInput("key");
+        if (inputKey) {
+            key += `${inputKey}-`;
+        }
+        const job = process.env.GITHUB_JOB;
+        if (job) {
+            key += `${job}-`;
+        }
     }
     key += await getRustKey();
     return {
@@ -55882,7 +55889,8 @@ async function run() {
         }
         catch { }
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
-        core.info(`Using key "${key}".`);
+        core.info(`In directory:\n    ${process.cwd()}`);
+        core.info(`Using key:\n    ${key}`);
         await cache.saveCache(savePaths, key);
     }
     catch (e) {
