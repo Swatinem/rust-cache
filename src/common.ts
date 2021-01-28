@@ -49,14 +49,19 @@ export async function getCacheConfig(): Promise<CacheConfig> {
 
   let key = `v0-rust-`;
 
-  let inputKey = core.getInput("key");
-  if (inputKey) {
-    key += `${inputKey}-`;
-  }
+  const sharedKey = core.getInput("sharedKey");
+  if (sharedKey) {
+    key += `${sharedKey}-`;
+  } else {
+    const inputKey = core.getInput("key");
+    if (inputKey) {
+      key += `${inputKey}-`;
+    }
 
-  const job = process.env.GITHUB_JOB;
-  if (job) {
-    key += `${job}-`;
+    const job = process.env.GITHUB_JOB;
+    if (job) {
+      key += `${job}-`;
+    }
   }
 
   key += await getRustKey();

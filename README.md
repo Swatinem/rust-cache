@@ -21,6 +21,9 @@ sensible defaults.
 : `key`
 An optional key that is added to the automatic cache key.
 
+: `sharedKey`
+An additional key that is stable over multiple jobs.
+
 : `working-directory`
 The working directory the action operates in, is case the cargo project is not
 located in the repo root.

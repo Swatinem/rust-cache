@@ -5,6 +5,9 @@ inputs:
   key:
     description: "An additional key for the cache"
     required: false
+  sharedKey:
+    description: "An additional cache key that is stable over multiple jobs"
+    required: false
   working-directory:
     description: "The working directory this action should operate in"
     required: false
