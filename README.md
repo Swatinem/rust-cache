@@ -28,6 +28,12 @@ An additional key that is stable over multiple jobs.
 The working directory the action operates in, is case the cargo project is not
 located in the repo root.
 
+## Outputs
+
+: `cache-hit`
+
+This is a boolean flag that will be set to `true` when there was an exact cache hit.
+
 ## Cache Effectiveness
 
 This action only caches the _dependencies_ of a crate, so is more effective if
