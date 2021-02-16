@@ -55710,11 +55710,13 @@ const cwd = core.getInput("working-directory");
 if (cwd) {
     process.chdir(cwd);
 }
+const stateBins = "RUST_CACHE_BINS";
 const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 const home = external_os_default().homedir();
 const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
 const paths = {
+    cargoHome,
     index: external_path_default().join(cargoHome, "registry/index"),
     cache: external_path_default().join(cargoHome, "registry/cache"),
     git: external_path_default().join(cargoHome, "git"),
@@ -55747,10 +55749,28 @@ async function getCacheConfig() {
     }
     key += await getRustKey();
     return {
-        paths: [paths.index, paths.cache, paths.git, paths.target],
+        paths: [
+            external_path_default().join(cargoHome, "bin"),
+            external_path_default().join(cargoHome, ".crates2.json"),
+            external_path_default().join(cargoHome, ".crates.toml"),
+            paths.git,
+            paths.cache,
+            paths.index,
+            paths.target,
+        ],
         key: `${key}-${lockHash}`,
         restoreKeys: [key],
     };
+}
+async function getCargoBins() {
+    const { installs } = JSON.parse(await external_fs_default().promises.readFile(external_path_default().join(paths.cargoHome, ".crates2.json"), "utf8"));
+    const bins = new Set();
+    for (const pkg of Object.values(installs)) {
+        for (const bin of pkg.bins) {
+            bins.add(bin);
+        }
+    }
+    return bins;
 }
 async function getRustKey() {
     const rustc = await getRustVersion();
@@ -55864,6 +55884,8 @@ async function run() {
     try {
         core.exportVariable("CARGO_INCREMENTAL", 0);
         const { paths, key, restoreKeys } = await getCacheConfig();
+        const bins = await getCargoBins();
+        core.saveState(stateBins, JSON.stringify([...bins]));
         core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
         core.info(`In directory:\n    ${process.cwd()}`);
         core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);

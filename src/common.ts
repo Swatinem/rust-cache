@@ -16,12 +16,14 @@ if (cwd) {
   process.chdir(cwd);
 }
 
+export const stateBins = "RUST_CACHE_BINS";
 export const stateKey = "RUST_CACHE_KEY";
 const stateHash = "RUST_CACHE_HASH";
 
 const home = os.homedir();
 const cargoHome = process.env.CARGO_HOME || path.join(home, ".cargo");
 export const paths = {
+  cargoHome,
   index: path.join(cargoHome, "registry/index"),
   cache: path.join(cargoHome, "registry/cache"),
   git: path.join(cargoHome, "git"),
@@ -67,10 +69,31 @@ export async function getCacheConfig(): Promise<CacheConfig> {
   key += await getRustKey();
 
   return {
-    paths: [paths.index, paths.cache, paths.git, paths.target],
+    paths: [
+      path.join(cargoHome, "bin"),
+      path.join(cargoHome, ".crates2.json"),
+      path.join(cargoHome, ".crates.toml"),
+      paths.git,
+      paths.cache,
+      paths.index,
+      paths.target,
+    ],
     key: `${key}-${lockHash}`,
     restoreKeys: [key],
   };
+}
+
+export async function getCargoBins(): Promise<Set<string>> {
+  const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
+    await fs.promises.readFile(path.join(paths.cargoHome, ".crates2.json"), "utf8"),
+  );
+  const bins = new Set<string>();
+  for (const pkg of Object.values(installs)) {
+    for (const bin of pkg.bins) {
+      bins.add(bin);
+    }
+  }
+  return bins;
 }
 
 async function getRustKey(): Promise<string> {

@@ -1,12 +1,15 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
-import { cleanTarget, getCacheConfig, getPackages, stateKey } from "./common";
+import { cleanTarget, getCacheConfig, getCargoBins, getPackages, stateBins, stateKey } from "./common";
 
 async function run() {
   try {
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const { paths, key, restoreKeys } = await getCacheConfig();
+
+    const bins = await getCargoBins();
+    core.saveState(stateBins, JSON.stringify([...bins]));
 
     core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
     core.info(`In directory:\n    ${process.cwd()}`);

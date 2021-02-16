@@ -5,7 +5,17 @@ import * as glob from "@actions/glob";
 import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
-import { cleanTarget, getCacheConfig, getPackages, Packages, paths, rm, stateKey } from "./common";
+import {
+  cleanTarget,
+  getCacheConfig,
+  getCargoBins,
+  getPackages,
+  Packages,
+  paths,
+  rm,
+  stateBins,
+  stateKey,
+} from "./common";
 
 async function run() {
   try {
@@ -24,6 +34,10 @@ async function run() {
 
     try {
       await cleanRegistry(registryName, packages);
+    } catch {}
+
+    try {
+      await cleanBin();
     } catch {}
 
     try {
@@ -54,6 +68,22 @@ async function getRegistryName(): Promise<string> {
 
   const first = files.shift()!;
   return path.basename(path.dirname(first));
+}
+
+async function cleanBin() {
+  const bins = await getCargoBins();
+  const oldBins = JSON.parse(core.getState(stateBins));
+
+  for (const bin of oldBins) {
+    bins.delete(bin);
+  }
+
+  const dir = await fs.promises.opendir(path.join(paths.cargoHome, "bin"));
+  for await (const dirent of dir) {
+    if (dirent.isFile() && !bins.has(dirent.name)) {
+      await rm(dir.path, dirent);
+    }
+  }
 }
 
 async function cleanRegistry(registryName: string, packages: Packages) {
