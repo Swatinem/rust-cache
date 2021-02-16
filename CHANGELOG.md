@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- Cache `~/.cargo/bin`.
+- Support for custom `$CARGO_HOME`.
+- Add a `cache-hit` output.
+- Add a new `sharedKey` option that overrides the automatic job-name based key.
+
 ## 1.1.0
 
 - Add a new `working-directory` input.
