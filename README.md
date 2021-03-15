@@ -64,7 +64,8 @@ This cache is automatically keyed by:
 
 - the github `job`,
 - the rustc release / host / hash, and
-- a hash of the `Cargo.lock` / `Cargo.toml` files.
+- a hash of the `Cargo.lock` / `Cargo.toml` files (if present).
+- a hash of the `rust-toolchain` / `rust-toolchain.toml` files (if present).
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 
