@@ -136,7 +136,7 @@ export async function getCmdOutput(
 }
 
 async function getLockfileHash(): Promise<string> {
-  const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock", { followSymbolicLinks: false });
+  const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", { followSymbolicLinks: false });
   const files = await globber.glob();
   files.sort((a, b) => a.localeCompare(b));
 
