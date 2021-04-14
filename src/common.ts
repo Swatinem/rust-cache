@@ -12,6 +12,8 @@ process.on("uncaughtException", (e) => {
 });
 
 const cwd = core.getInput("working-directory");
+//todo: this could be read from .cargo config file directly
+const targetDir = core.getInput("target-dir") || "./target";
 if (cwd) {
   process.chdir(cwd);
 }
@@ -180,13 +182,13 @@ export async function getPackages(): Promise<Packages> {
 }
 
 export async function cleanTarget(packages: Packages) {
-  await fs.promises.unlink("./target/.rustc_info.json");
-  await io.rmRF("./target/debug/examples");
-  await io.rmRF("./target/debug/incremental");
+  await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
+  await io.rmRF(path.join(targetDir, "./debug/examples"));
+  await io.rmRF(path.join(targetDir, "./debug/incremental"));
 
   let dir: fs.Dir;
   // remove all *files* from debug
-  dir = await fs.promises.opendir("./target/debug");
+  dir = await fs.promises.opendir(path.join(targetDir, "./debug"));
   for await (const dirent of dir) {
     if (dirent.isFile()) {
       await rm(dir.path, dirent);
@@ -194,8 +196,8 @@ export async function cleanTarget(packages: Packages) {
   }
 
   const keepPkg = new Set(packages.map((p) => p.name));
-  await rmExcept("./target/debug/build", keepPkg);
-  await rmExcept("./target/debug/.fingerprint", keepPkg);
+  await rmExcept(path.join(targetDir, "./debug/build"), keepPkg);
+  await rmExcept(path.join(targetDir, "./debug/.fingerprint"), keepPkg);
 
   const keepDeps = new Set(
     packages.flatMap((p) => {
@@ -207,7 +209,7 @@ export async function cleanTarget(packages: Packages) {
       return names;
     }),
   );
-  await rmExcept("./target/debug/deps", keepDeps);
+  await rmExcept(path.join(targetDir, "./debug/deps"), keepDeps);
 }
 
 const oneWeek = 7 * 24 * 3600 * 1000;
