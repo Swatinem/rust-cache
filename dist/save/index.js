@@ -56340,6 +56340,8 @@ process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
 });
 const cwd = core.getInput("working-directory");
+//todo: this could be read from .cargo config file directly
+const targetDir = core.getInput("target-directory") || "./target";
 if (cwd) {
     process.chdir(cwd);
 }
@@ -56454,20 +56456,20 @@ async function getPackages() {
     });
 }
 async function cleanTarget(packages) {
-    await external_fs_default().promises.unlink("./target/.rustc_info.json");
-    await io.rmRF("./target/debug/examples");
-    await io.rmRF("./target/debug/incremental");
+    await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
+    await io.rmRF(external_path_default().join(targetDir, "./debug/examples"));
+    await io.rmRF(external_path_default().join(targetDir, "./debug/incremental"));
     let dir;
     // remove all *files* from debug
-    dir = await external_fs_default().promises.opendir("./target/debug");
+    dir = await external_fs_default().promises.opendir(external_path_default().join(targetDir, "./debug"));
     for await (const dirent of dir) {
         if (dirent.isFile()) {
             await rm(dir.path, dirent);
         }
     }
     const keepPkg = new Set(packages.map((p) => p.name));
-    await rmExcept("./target/debug/build", keepPkg);
-    await rmExcept("./target/debug/.fingerprint", keepPkg);
+    await rmExcept(external_path_default().join(targetDir, "./debug/build"), keepPkg);
+    await rmExcept(external_path_default().join(targetDir, "./debug/.fingerprint"), keepPkg);
     const keepDeps = new Set(packages.flatMap((p) => {
         const names = [];
         for (const n of [p.name, ...p.targets]) {
@@ -56476,7 +56478,7 @@ async function cleanTarget(packages) {
         }
         return names;
     }));
-    await rmExcept("./target/debug/deps", keepDeps);
+    await rmExcept(external_path_default().join(targetDir, "./debug/deps"), keepDeps);
 }
 const oneWeek = 7 * 24 * 3600 * 1000;
 async function rmExcept(dirName, keepPrefix) {
