@@ -12,7 +12,7 @@ process.on("uncaughtException", (e) => {
 });
 
 const cwd = core.getInput("working-directory");
-//todo: this could be read from .cargo config file directly
+// TODO: this could be read from .cargo config file directly
 const targetDir = core.getInput("target-dir") || "./target";
 if (cwd) {
   process.chdir(cwd);
@@ -29,7 +29,7 @@ export const paths = {
   index: path.join(cargoHome, "registry/index"),
   cache: path.join(cargoHome, "registry/cache"),
   git: path.join(cargoHome, "git"),
-  target: "target",
+  target: targetDir,
 };
 
 interface CacheConfig {
@@ -138,7 +138,9 @@ export async function getCmdOutput(
 }
 
 async function getLockfileHash(): Promise<string> {
-  const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", { followSymbolicLinks: false });
+  const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", {
+    followSymbolicLinks: false,
+  });
   const files = await globber.glob();
   files.sort((a, b) => a.localeCompare(b));
 
