@@ -22,15 +22,15 @@
   },
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
   "dependencies": {
-    "@actions/cache": "^1.0.6",
-    "@actions/core": "^1.2.6",
+    "@actions/cache": "^1.0.7",
+    "@actions/core": "^1.2.7",
     "@actions/exec": "^1.0.4",
     "@actions/glob": "^0.1.1",
-    "@actions/io": "^1.0.2"
+    "@actions/io": "^1.1.0"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.27.0",
-    "typescript": "^4.2.3"
+    "@vercel/ncc": "^0.28.5",
+    "typescript": "^4.2.4"
   },
   "scripts": {
     "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts"
