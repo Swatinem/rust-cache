@@ -28,6 +28,9 @@ An additional key that is stable over multiple jobs.
 The working directory the action operates in, is case the cargo project is not
 located in the repo root.
 
+: `target-dir`
+The target directory that should be cleaned and persisted, defaults to `./target`.
+
 ## Outputs
 
 : `cache-hit`

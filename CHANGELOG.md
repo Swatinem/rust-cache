@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+
+- Use Rust toolchain file as additional cache key.
+- Allow for a configurable target-dir.
+
 ## 1.2.0
 
 - Cache `~/.cargo/bin`.
