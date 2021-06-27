@@ -22,8 +22,11 @@ jobs:
           override: true
 
       - uses: ./
+        with:
+          cache-on-failure: true
 
       - run: |
-          cargo install cargo-deny --locked
-          cargo check
-          cargo test
+          # cargo install cargo-deny --locked
+          # cargo check
+          # cargo test
+          wibble
