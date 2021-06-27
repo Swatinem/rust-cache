@@ -59804,6 +59804,9 @@ var external_path_default = /*#__PURE__*/__nccwpck_require__.n(external_path_);
 
 process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
+    if (e.stack) {
+        core.info(e.stack);
+    }
 });
 const cwd = core.getInput("working-directory");
 // TODO: this could be read from .cargo config file directly
