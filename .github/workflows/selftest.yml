@@ -26,8 +26,6 @@ jobs:
           cache-on-failure: true
 
       - run: |
-          # cargo install cargo-deny --locked
-          # cargo check
-          # cargo test
-          set
-          wibble
+          cargo install cargo-deny --locked
+          cargo check
+          cargo test
