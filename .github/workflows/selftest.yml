@@ -29,4 +29,5 @@ jobs:
           # cargo install cargo-deny --locked
           # cargo check
           # cargo test
+          set
           wibble
