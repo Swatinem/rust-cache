@@ -24,7 +24,7 @@ runs:
   using: "node12"
   main: "dist/restore/index.js"
   post: "dist/save/index.js"
-  post-if: "success() || env.INPUT_CACHE_ON_FAILURE == 'true'"
+  post-if: "success() || env.CACHE_ON_FAILURE == 'true'"
 branding:
   icon: "archive"
   color: "gray-dark"

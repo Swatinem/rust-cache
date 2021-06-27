@@ -59990,6 +59990,7 @@ async function rm(parent, dirent) {
 
 async function run() {
     try {
+        core.exportVariable("CACHE_ON_FAILURE", "true");
         core.exportVariable("CARGO_INCREMENTAL", 0);
         const { paths, key, restoreKeys } = await getCacheConfig();
         const bins = await getCargoBins();
