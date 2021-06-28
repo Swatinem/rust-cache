@@ -9,6 +9,9 @@ import path from "path";
 
 process.on("uncaughtException", (e) => {
   core.info(`[warning] ${e.message}`);
+  if (e.stack) {
+    core.info(e.stack)
+  }
 });
 
 const cwd = core.getInput("working-directory");

@@ -31,6 +31,9 @@ located in the repo root.
 : `target-dir`
 The target directory that should be cleaned and persisted, defaults to `./target`.
 
+: `cache-on-failure`
+Cache even if the build fails, defaults to false
+
 ## Outputs
 
 : `cache-hit`

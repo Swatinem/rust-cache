@@ -22,6 +22,8 @@ jobs:
           override: true
 
       - uses: ./
+        with:
+          cache-on-failure: true
 
       - run: |
           cargo install cargo-deny --locked
