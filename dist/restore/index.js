@@ -59804,9 +59804,6 @@ var external_path_default = /*#__PURE__*/__nccwpck_require__.n(external_path_);
 
 process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
-    if (e.stack) {
-        core.info(e.stack);
-    }
 });
 const cwd = core.getInput("working-directory");
 // TODO: this could be read from .cargo config file directly
@@ -59993,11 +59990,6 @@ async function rm(parent, dirent) {
 
 async function run() {
     try {
-        var cacheOnFailure = core.getInput("cache-on-failure").toLowerCase();
-        if (cacheOnFailure !== "true") {
-            cacheOnFailure = "false";
-        }
-        core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
         core.exportVariable("CARGO_INCREMENTAL", 0);
         const { paths, key, restoreKeys } = await getCacheConfig();
         const bins = await getCargoBins();
