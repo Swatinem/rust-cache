@@ -61604,6 +61604,7 @@ var external_os_default = /*#__PURE__*/__nccwpck_require__.n(external_os_);
 var external_path_ = __nccwpck_require__(1017);
 var external_path_default = /*#__PURE__*/__nccwpck_require__.n(external_path_);
 ;// CONCATENATED MODULE: ./src/common.ts
+<<<<<<< HEAD
 
 
 
@@ -61854,6 +61855,251 @@ function setCacheHitOutput(cacheHit) {
     core.setOutput("cache-hit", cacheHit.toString());
 }
 run();
+=======
+
+
+
+
+
+
+
+
+process.on("uncaughtException", (e) => {
+    core.info(`[warning] ${e.message}`);
+    if (e.stack) {
+        core.info(e.stack);
+    }
+});
+const cwd = core.getInput("working-directory");
+// Read each line of target-dir as a unique target directory
+// TODO: this could be read from .cargo config file directly
+const targetDirInput = core.getInput("target-dir") || "./target";
+const targetDirs = targetDirInput.trim().split("\n");
+core.info("Using target dirs: " + JSON.stringify(targetDirs));
+if (cwd) {
+    process.chdir(cwd);
+}
+const stateBins = "RUST_CACHE_BINS";
+const stateKey = "RUST_CACHE_KEY";
+const stateHash = "RUST_CACHE_HASH";
+const home = external_os_default().homedir();
+const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
+const paths = {
+    cargoHome,
+    index: external_path_default().join(cargoHome, "registry/index"),
+    cache: external_path_default().join(cargoHome, "registry/cache"),
+    git: external_path_default().join(cargoHome, "git"),
+    targets: targetDirs,
+};
+const RefKey = "GITHUB_REF";
+function isValidEvent() {
+    return RefKey in process.env && Boolean(process.env[RefKey]);
+}
+async function getCacheConfig() {
+    let lockHash = core.getState(stateHash);
+    if (!lockHash) {
+        lockHash = await getLockfileHash();
+        core.saveState(stateHash, lockHash);
+    }
+    let key = `v0-rust-`;
+    const sharedKey = core.getInput("sharedKey");
+    if (sharedKey) {
+        key += `${sharedKey}-`;
+    }
+    else {
+        const inputKey = core.getInput("key");
+        if (inputKey) {
+            key += `${inputKey}-`;
+        }
+        const job = process.env.GITHUB_JOB;
+        if (job) {
+            key += `${job}-`;
+        }
+    }
+    key += await getRustKey();
+    return {
+        paths: [
+            external_path_default().join(cargoHome, "bin"),
+            external_path_default().join(cargoHome, ".crates2.json"),
+            external_path_default().join(cargoHome, ".crates.toml"),
+            paths.git,
+            paths.cache,
+            paths.index,
+        ],
+        key: `${key}-${lockHash}`,
+        restoreKeys: [key],
+        targets: paths.targets,
+    };
+}
+async function getCargoBins() {
+    try {
+        const { installs } = JSON.parse(await external_fs_default().promises.readFile(external_path_default().join(paths.cargoHome, ".crates2.json"), "utf8"));
+        const bins = new Set();
+        for (const pkg of Object.values(installs)) {
+            for (const bin of pkg.bins) {
+                bins.add(bin);
+            }
+        }
+        return bins;
+    }
+    catch {
+        return new Set();
+    }
+}
+async function getRustKey() {
+    const rustc = await getRustVersion();
+    return `${rustc.release}-${rustc.host}-${rustc["commit-hash"].slice(0, 12)}`;
+}
+async function getRustVersion() {
+    const stdout = await getCmdOutput("rustc", ["-vV"]);
+    let splits = stdout
+        .split(/[\n\r]+/)
+        .filter(Boolean)
+        .map((s) => s.split(":").map((s) => s.trim()))
+        .filter((s) => s.length === 2);
+    return Object.fromEntries(splits);
+}
+async function getCmdOutput(cmd, args = [], options = {}) {
+    let stdout = "";
+    await exec.exec(cmd, args, {
+        silent: true,
+        listeners: {
+            stdout(data) {
+                stdout += data.toString();
+            },
+        },
+        ...options,
+    });
+    return stdout;
+}
+async function getLockfileHash() {
+    const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", {
+        followSymbolicLinks: false,
+    });
+    const files = await globber.glob();
+    core.info("Lockfile Hash includes: " + JSON.stringify(files));
+    files.sort((a, b) => a.localeCompare(b));
+    const hasher = external_crypto_default().createHash("sha1");
+    for (const file of files) {
+        for await (const chunk of external_fs_default().createReadStream(file)) {
+            hasher.update(chunk);
+        }
+    }
+    return hasher.digest("hex").slice(0, 20);
+}
+async function getPackages() {
+    const cwd = process.cwd();
+    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+    return meta.packages
+        .filter((p) => !p.manifest_path.startsWith(cwd))
+        .map((p) => {
+        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
+    });
+}
+async function cleanTarget(targetDir, packages) {
+    await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
+    await io.rmRF(external_path_default().join(targetDir, "./debug/examples"));
+    await io.rmRF(external_path_default().join(targetDir, "./debug/incremental"));
+    let dir;
+    // remove all *files* from debug
+    dir = await external_fs_default().promises.opendir(external_path_default().join(targetDir, "./debug"));
+    for await (const dirent of dir) {
+        if (dirent.isFile()) {
+            await rm(dir.path, dirent);
+        }
+    }
+    const keepPkg = new Set(packages.map((p) => p.name));
+    await rmExcept(external_path_default().join(targetDir, "./debug/build"), keepPkg);
+    await rmExcept(external_path_default().join(targetDir, "./debug/.fingerprint"), keepPkg);
+    const keepDeps = new Set(packages.flatMap((p) => {
+        const names = [];
+        for (const n of [p.name, ...p.targets]) {
+            const name = n.replace(/-/g, "_");
+            names.push(name, `lib${name}`);
+        }
+        return names;
+    }));
+    await rmExcept(external_path_default().join(targetDir, "./debug/deps"), keepDeps);
+}
+const oneWeek = 7 * 24 * 3600 * 1000;
+async function rmExcept(dirName, keepPrefix) {
+    const dir = await external_fs_default().promises.opendir(dirName);
+    for await (const dirent of dir) {
+        let name = dirent.name;
+        const idx = name.lastIndexOf("-");
+        if (idx !== -1) {
+            name = name.slice(0, idx);
+        }
+        const fileName = external_path_default().join(dir.path, dirent.name);
+        const { mtime } = await external_fs_default().promises.stat(fileName);
+        // we don’t really know
+        if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
+            await rm(dir.path, dirent);
+        }
+    }
+}
+async function rm(parent, dirent) {
+    try {
+        const fileName = external_path_default().join(parent, dirent.name);
+        core.debug(`deleting "${fileName}"`);
+        if (dirent.isFile()) {
+            await external_fs_default().promises.unlink(fileName);
+        }
+        else if (dirent.isDirectory()) {
+            await io.rmRF(fileName);
+        }
+    }
+    catch { }
+}
+
+;// CONCATENATED MODULE: ./src/restore.ts
+
+
+
+async function run() {
+    try {
+        var cacheOnFailure = core.getInput("cache-on-failure").toLowerCase();
+        if (cacheOnFailure !== "true") {
+            cacheOnFailure = "false";
+        }
+        core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
+        core.exportVariable("CARGO_INCREMENTAL", 0);
+        const { paths, key, restoreKeys, targets } = await getCacheConfig();
+        const restorePaths = paths.concat(targets);
+        const bins = await getCargoBins();
+        core.saveState(stateBins, JSON.stringify([...bins]));
+        core.info(`Restoring paths:\n    ${restorePaths.join("\n    ")}`);
+        core.info(`In directory:\n    ${process.cwd()}`);
+        core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
+        const restoreKey = await cache.restoreCache(restorePaths, key, restoreKeys);
+        if (restoreKey) {
+            core.info(`Restored from cache key "${restoreKey}".`);
+            core.saveState(stateKey, restoreKey);
+            if (restoreKey !== key) {
+                // pre-clean the target directory on cache mismatch
+                const packages = await getPackages();
+                for (const target of targets) {
+                    await cleanTarget(target, packages);
+                }
+            }
+            setCacheHitOutput(restoreKey === key);
+        }
+        else {
+            core.info("No cache found.");
+            setCacheHitOutput(false);
+        }
+    }
+    catch (e) {
+        setCacheHitOutput(false);
+        core.info(`[warning] ${e.message}`);
+    }
+}
+function setCacheHitOutput(cacheHit) {
+    core.setOutput("cache-hit", cacheHit.toString());
+}
+run();
+>>>>>>> 16da4ac (Cache multiple target directories from 'target-dir')
 
 })();
 

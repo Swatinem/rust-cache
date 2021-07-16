@@ -16,15 +16,16 @@ async function run() {
     core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
-    const { paths, key, restoreKeys } = await getCacheConfig();
+    const { paths, key, restoreKeys, targets } = await getCacheConfig();
+    const restorePaths = paths.concat(targets);
 
     const bins = await getCargoBins();
     core.saveState(stateBins, JSON.stringify([...bins]));
 
-    core.info(`Restoring paths:\n    ${paths.join("\n    ")}`);
+    core.info(`Restoring paths:\n    ${restorePaths.join("\n    ")}`);
     core.info(`In directory:\n    ${process.cwd()}`);
     core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
-    const restoreKey = await cache.restoreCache(paths, key, restoreKeys);
+    const restoreKey = await cache.restoreCache(restorePaths, key, restoreKeys);
     if (restoreKey) {
       core.info(`Restored from cache key "${restoreKey}".`);
       core.saveState(stateKey, restoreKey);
@@ -33,7 +34,9 @@ async function run() {
         // pre-clean the target directory on cache mismatch
         const packages = await getPackages();
 
-        await cleanTarget(packages);
+        for (const target of targets) {
+          await cleanTarget(target, packages);
+        }
       }
 
       setCacheHitOutput(restoreKey === key);

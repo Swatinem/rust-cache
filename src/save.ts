@@ -23,7 +23,8 @@ async function run() {
   }
 
   try {
-    const { paths: savePaths, key } = await getCacheConfig();
+    const { paths, targets, key } = await getCacheConfig();
+    const savePaths = paths.concat(targets);
 
     if (core.getState(stateKey) === key) {
       core.info(`Cache up-to-date.`);
@@ -56,10 +57,13 @@ async function run() {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
-    try {
-      await cleanTarget(packages);
-    } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+    for (const target of targets) {
+      try {
+        await cleanTarget(target, packages);
+      }
+      catch (e) {
+        core.info(`[warning] ${(e as any).stack}`);
+      }
     }
 
     core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
@@ -170,5 +174,5 @@ async function macOsWorkaround() {
     // Workaround for https://github.com/actions/cache/issues/403
     // Also see https://github.com/rust-lang/cargo/issues/8603
     await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
-  } catch {}
+  } catch { }
 }

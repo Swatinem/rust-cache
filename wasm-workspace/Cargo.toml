@@ -1,0 +1,18 @@
+[workspace]
+members = ["."]
+
+[package]
+name = "wasm-workspace"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = "0.11.0"
+async-std = "1"
+tracing = "0.1"
+tracing-futures = "0.2"
+serde = "1"
+serde_json = "1"
+toml = ""

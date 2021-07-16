@@ -15,8 +15,12 @@ process.on("uncaughtException", (e) => {
 });
 
 const cwd = core.getInput("working-directory");
+
+// Read each line of target-dir as a unique target directory
 // TODO: this could be read from .cargo config file directly
-const targetDir = core.getInput("target-dir") || "./target";
+const targetDirInput = core.getInput("target-dir") || "./target";
+const targetDirs = targetDirInput.trim().split("\n");
+
 if (cwd) {
   process.chdir(cwd);
 }
@@ -32,13 +36,16 @@ export const paths = {
   index: path.join(cargoHome, "registry/index"),
   cache: path.join(cargoHome, "registry/cache"),
   git: path.join(cargoHome, "git"),
-  target: targetDir,
+  targets: targetDirs,
 };
 
 interface CacheConfig {
+  // A list of common paths needing caching
   paths: Array<string>;
   key: string;
   restoreKeys: Array<string>;
+  // A list of one or more target directories to cache
+  targets: Array<string>;
 }
 
 const RefKey = "GITHUB_REF";
@@ -81,10 +88,10 @@ export async function getCacheConfig(): Promise<CacheConfig> {
       paths.git,
       paths.cache,
       paths.index,
-      paths.target,
     ],
     key: `${key}-${lockHash}`,
     restoreKeys: [key],
+    targets: paths.targets,
   };
 }
 
@@ -149,6 +156,7 @@ async function getLockfileHash(): Promise<string> {
     followSymbolicLinks: false,
   });
   const files = await globber.glob();
+  core.debug("Lockfile Hash includes: " + JSON.stringify(files));
   files.sort((a, b) => a.localeCompare(b));
 
   const hasher = crypto.createHash("sha1");
@@ -190,7 +198,7 @@ export async function getPackages(): Promise<Packages> {
     });
 }
 
-export async function cleanTarget(packages: Packages) {
+export async function cleanTarget(targetDir: string, packages: Packages) {
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
 
   await cleanProfileTarget(packages, "debug");
