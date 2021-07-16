@@ -24,8 +24,13 @@ jobs:
       - uses: ./
         with:
           cache-on-failure: true
+          workspace-paths: |
+            ./
+            wasm-workspace/
 
       - run: |
           cargo install cargo-deny --locked
           cargo check
           cargo test
+          rustup target install wasm32-unknown-unknown
+          cd wasm-workspace && cargo check

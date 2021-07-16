@@ -17,6 +17,9 @@ inputs:
   target-dir:
     description: "The target dir that should be cleaned and persisted, defaults to `./target`"
     required: false
+  workspace-paths:
+    description: "Paths to multiple Cargo workspaces, separated by newlines"
+    required: false
   cache-on-failure:
     description: "Cache even if the build fails. Defaults to false"
     required: false

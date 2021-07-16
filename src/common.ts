@@ -15,8 +15,12 @@ process.on("uncaughtException", (e) => {
 });
 
 const cwd = core.getInput("working-directory");
+
+// Read each line of workspace-paths as a unique path
 // TODO: this could be read from .cargo config file directly
-const targetDir = core.getInput("target-dir") || "./target";
+const workspacePathsInput = core.getInput("workspace-paths") || "./";
+const workspacePaths = workspacePathsInput.trim().split("\n");
+
 if (cwd) {
   process.chdir(cwd);
 }
@@ -32,13 +36,16 @@ export const paths = {
   index: path.join(cargoHome, "registry/index"),
   cache: path.join(cargoHome, "registry/cache"),
   git: path.join(cargoHome, "git"),
-  target: targetDir,
+  workspaces: workspacePaths,
 };
 
 interface CacheConfig {
+  // A list of common paths needing caching
   paths: Array<string>;
   key: string;
   restoreKeys: Array<string>;
+  // A list of one or more workspace directories
+  workspaces: Array<string>;
 }
 
 const RefKey = "GITHUB_REF";
@@ -84,10 +91,10 @@ export async function getCacheConfig(): Promise<CacheConfig> {
       paths.git,
       paths.cache,
       paths.index,
-      paths.target,
     ],
     key: `${key}-${lockHash}`,
     restoreKeys: [key],
+    workspaces: paths.workspaces,
   };
 }
 
@@ -191,6 +198,7 @@ async function getLockfileHash(): Promise<string> {
     followSymbolicLinks: false,
   });
   const files = await globber.glob();
+  core.debug("Lockfile Hash includes: " + JSON.stringify(files));
   files.sort((a, b) => a.localeCompare(b));
 
   const hasher = crypto.createHash("sha1");
@@ -220,26 +228,34 @@ interface Meta {
   }>;
 }
 
-export async function getPackages(): Promise<Packages> {
+export async function getPackages(workspacePaths: Array<string>): Promise<Packages> {
   const cwd = process.cwd();
-  const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
 
-  return meta.packages
-    .filter((p) => !p.manifest_path.startsWith(cwd))
-    .map((p) => {
-      const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-      return { name: p.name, version: p.version, targets, path: path.dirname(p.manifest_path) };
-    });
+  let allPackages: Packages = [];
+  for (const workspacePath of workspacePaths) {
+    process.chdir(workspacePath);
+    const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+    const workspacePackages = meta.packages
+      .filter((p) => !p.manifest_path.startsWith(cwd))
+      .map((p) => {
+        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        return { name: p.name, version: p.version, targets, path: path.dirname(p.manifest_path) };
+      });
+    allPackages = allPackages.concat(workspacePackages);
+  }
+
+  process.chdir(cwd);
+  return allPackages;
 }
 
-export async function cleanTarget(packages: Packages) {
+export async function cleanTarget(targetDir: string, packages: Packages) {
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
 
-  await cleanProfileTarget(packages, "debug");
-  await cleanProfileTarget(packages, "release");
+  await cleanProfileTarget(targetDir, packages, "debug");
+  await cleanProfileTarget(targetDir, packages, "release");
 }
 
-async function cleanProfileTarget(packages: Packages, profile: string) {
+async function cleanProfileTarget(targetDir: string, packages: Packages, profile: string) {
   try {
     await fs.promises.access(path.join(targetDir, profile));
   } catch {
