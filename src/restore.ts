@@ -4,11 +4,11 @@ import { cleanTarget, getCacheConfig, getCargoBins, getPackages, stateBins, stat
 
 async function run() {
   try {
-    var cacheOnFailure = core.getInput("cache-on-failure").toLowerCase()
+    var cacheOnFailure = core.getInput("cache-on-failure").toLowerCase();
     if (cacheOnFailure !== "true") {
-      cacheOnFailure = "false"
+      cacheOnFailure = "false";
     }
-    core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure)
+    core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const { paths, key, restoreKeys } = await getCacheConfig();
@@ -40,7 +40,7 @@ async function run() {
   } catch (e) {
     setCacheHitOutput(false);
 
-    core.info(`[warning] ${e.message}`);
+    core.info(`[warning] ${(e as any).message}`);
   }
 }
 

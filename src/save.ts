@@ -53,7 +53,7 @@ async function run() {
     core.info(`Using key:\n    ${key}`);
     await cache.saveCache(savePaths, key);
   } catch (e) {
-    core.info(`[warning] ${e.message}`);
+    core.info(`[warning] ${(e as any).message}`);
   }
 }
 
