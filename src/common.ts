@@ -71,6 +71,9 @@ export async function getCacheConfig(): Promise<CacheConfig> {
     }
   }
 
+  const extraEnvKeys = core.getInput("envVars").split(/\s+/);
+
+  key += `${getEnvKey(extraEnvKeys)}-`;
   key += await getRustKey();
 
   return {
@@ -103,6 +106,45 @@ export async function getCargoBins(): Promise<Set<string>> {
   } catch {
     return new Set<string>();
   }
+}
+
+/**
+ * Create a key hash, generated from environment variables.
+ *
+ * The available environment variables are filtered by a set of defaults that are common for Rust
+ * projects and should apply to almost all runs, as they modify the Rustc compiler's, Clippy's and
+ * other tools' behavior.
+ *
+ * @param extraKeys additional user-provided keys that are added to the default list. These are
+ * treated as regular expressions ({@link RegExp}), and will each be surrounded by a `^` and `$`,
+ * to make sure they are matched against the whole env var name.
+ * @returns An SHA-1 hash over all the environment variable values, whose names were not filtered
+ * out. The hash is returned as hex-string, **reduced to half its length**.
+ */
+function getEnvKey(extraKeys: string[]): string {
+  const hasher = crypto.createHash("sha1");
+  const defaultValidKeys = [
+    /^CARGO_.+$/,
+    /^CC_.+$/,
+    /^CXX_.+$/,
+    /^RUSTC_.+$/,
+    /^RUSTC$/,
+    /^RUSTDOC$/,
+    /^RUSTDOCFLAGS$/,
+    /^RUSTFLAGS$/,
+    /^RUSTFMT$/,
+  ];
+
+  // Combine default key filters with user-provided ones.
+  const keyFilter = defaultValidKeys.concat(extraKeys.map((key) => new RegExp(`^${key}$`)));
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (keyFilter.some((re) => re.test(key)) && value) {
+      hasher.update(`${key}=${value}`);
+    }
+  }
+
+  return hasher.digest("hex").slice(0, 20);
 }
 
 async function getRustKey(): Promise<string> {
@@ -261,5 +303,5 @@ export async function rm(parent: string, dirent: fs.Dirent) {
     } else if (dirent.isDirectory()) {
       await io.rmRF(fileName);
     }
-  } catch {}
+  } catch { }
 }

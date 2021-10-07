@@ -26,6 +26,10 @@ An optional key that is added to the automatic cache key.
 : `sharedKey`
 An additional key that is stable over multiple jobs.
 
+: `envVars`
+A space-separated list of regular expressions that define additional environment variable filters.
+These are added to an additional cache key that's generated from environment variable contents.
+
 : `working-directory`
 The working directory the action operates in, is case the cargo project is not
 located in the repo root.

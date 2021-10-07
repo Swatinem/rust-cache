@@ -8,6 +8,9 @@ inputs:
   sharedKey:
     description: "An additional cache key that is stable over multiple jobs"
     required: false
+  envVars:
+    description: "Additional environment variables to include in the cache key, separeted by spaces"
+    required: false
   working-directory:
     description: "The working directory this action should operate in"
     required: false
