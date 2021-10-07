@@ -59564,6 +59564,7 @@ async function getCacheConfig() {
             key += `${job}-`;
         }
     }
+    key += `${getEnvKey()}-`;
     key += await getRustKey();
     return {
         paths: [
@@ -59593,6 +59594,15 @@ async function getCargoBins() {
     catch {
         return new Set();
     }
+}
+function getEnvKey() {
+    const hasher = external_crypto_default().createHash("sha1");
+    for (const [key, value] of Object.entries(process.env)) {
+        if (value) {
+            hasher.update(`${key}=${value}`);
+        }
+    }
+    return hasher.digest("hex").slice(0, 20);
 }
 async function getRustKey() {
     const rustc = await getRustVersion();

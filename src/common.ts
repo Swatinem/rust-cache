@@ -71,6 +71,7 @@ export async function getCacheConfig(): Promise<CacheConfig> {
     }
   }
 
+  key += `${getEnvKey()}-`;
   key += await getRustKey();
 
   return {
@@ -103,6 +104,17 @@ export async function getCargoBins(): Promise<Set<string>> {
   } catch {
     return new Set<string>();
   }
+}
+
+function getEnvKey(): string {
+  const hasher = crypto.createHash("sha1");
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value) {
+      hasher.update(`${key}=${value}`);
+    }
+  }
+
+  return hasher.digest("hex").slice(0, 20);
 }
 
 async function getRustKey(): Promise<string> {
@@ -249,5 +261,5 @@ export async function rm(parent: string, dirent: fs.Dirent) {
     } else if (dirent.isDirectory()) {
       await io.rmRF(fileName);
     }
-  } catch {}
+  } catch { }
 }
