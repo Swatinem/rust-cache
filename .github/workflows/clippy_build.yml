@@ -1,0 +1,30 @@
+name: clippy_build
+
+on: [push, pull_request]
+
+jobs:
+  selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Test Action on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - uses: ./
+        with:
+          cache-on-failure: true
+
+      - run: |
+          cargo install cargo-deny --locked
+          cargo clippy
+          cargo build
