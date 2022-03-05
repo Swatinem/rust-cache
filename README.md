@@ -61,27 +61,40 @@ a more stable experience, please use a fixed revision or tag.
 
 ## Cache Details
 
-The cache currently caches the following directories:
+This action currently caches the following files/directories:
 
+- `~/.cargo/bin`
 - `~/.cargo/registry/index`
 - `~/.cargo/registry/cache`
 - `~/.cargo/git`
+- `~/.cargo/.crates.toml`
+- `~/.cargo/.crates2.json`
 - `./target`
 
 This cache is automatically keyed by:
 
-- the github `job`,
+- the github [`job_id`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_id),
 - the rustc release / host / hash, and
-- a hash of the `Cargo.lock` / `Cargo.toml` files (if present).
-- a hash of the `rust-toolchain` / `rust-toolchain.toml` files (if present).
+- a hash of all `Cargo.lock` / `Cargo.toml` files found anywhere in the repository (if present).
+- a hash of all `rust-toolchain` / `rust-toolchain.toml` files in the root of the repository (if present).
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 
-Before persisting, the cache is cleaned of intermediate artifacts and
-anything that is not a workspace dependency.
-In particular, no caching of workspace crates will be done. For
-this reason, this action will automatically set `CARGO_INCREMENTAL=0` to
-disable incremental compilation.
+Before being persisted, the cache is cleaned of:
+- Any files in `~/.cargo/bin` that were present before the action ran (for example `rustc`).
+- Dependencies that are no longer used.
+- Anything that is not a dependency.
+- Incremental build artifacts.
+- Any build artifacts with an `mtime` older than one week.
+
+In particular, the workspace crates themselves are not cached since doing so is
+[generally not effective](https://github.com/Swatinem/rust-cache/issues/37#issuecomment-944697938).
+For this reason, this action automatically sets `CARGO_INCREMENTAL=0` to disable
+incremental compilation, so that the Rust compiler doesn't waste time creating
+the additional artifacts required for incremental builds.
+
+The `~/.cargo/registry/src` directory is not cached since it is quicker for Cargo
+to recreate it from the compressed crate archives in `~/.cargo/registry/cache`.
 
 The action will try to restore from a previous `Cargo.lock` version as well, so
 lockfile updates should only re-build changed dependencies.
@@ -90,3 +103,9 @@ Additionally, the action automatically works around
 [cargo#8603](https://github.com/rust-lang/cargo/issues/8603) /
 [actions/cache#403](https://github.com/actions/cache/issues/403) which would
 otherwise corrupt the cache on macOS builds.
+
+## Known issues
+
+- The cache cleaning process currently only runs against the build artifacts under
+  `./target/debug/`, so projects using release or cross-compiled builds will experience
+  larger cache sizes.
