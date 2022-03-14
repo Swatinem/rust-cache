@@ -59597,8 +59597,19 @@ async function getCargoBins() {
 }
 function getEnvKey() {
     const hasher = external_crypto_default().createHash("sha1");
+    const validKeys = [
+        /^CARGO_.+$/,
+        /^CC_.+$/,
+        /^CXX_.+$/,
+        /^RUSTC_.+$/,
+        /^RUSTC$/,
+        /^RUSTDOC$/,
+        /^RUSTDOCFLAGS$/,
+        /^RUSTFLAGS$/,
+        /^RUSTFMT$/,
+    ];
     for (const [key, value] of Object.entries(process.env)) {
-        if (value) {
+        if (validKeys.some((re) => re.test(key)) && value) {
             hasher.update(`${key}=${value}`);
         }
     }

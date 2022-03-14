@@ -108,8 +108,20 @@ export async function getCargoBins(): Promise<Set<string>> {
 
 function getEnvKey(): string {
   const hasher = crypto.createHash("sha1");
+  const validKeys = [
+    /^CARGO_.+$/,
+    /^CC_.+$/,
+    /^CXX_.+$/,
+    /^RUSTC_.+$/,
+    /^RUSTC$/,
+    /^RUSTDOC$/,
+    /^RUSTDOCFLAGS$/,
+    /^RUSTFLAGS$/,
+    /^RUSTFMT$/,
+  ];
+
   for (const [key, value] of Object.entries(process.env)) {
-    if (value) {
+    if (validKeys.some((re) => re.test(key)) && value) {
       hasher.update(`${key}=${value}`);
     }
   }
