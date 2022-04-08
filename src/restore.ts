@@ -3,6 +3,11 @@ import * as core from "@actions/core";
 import { cleanTarget, getCacheConfig, getCargoBins, getPackages, stateBins, stateKey } from "./common";
 
 async function run() {
+  if (!cache.isFeatureAvailable()) {
+    setCacheHitOutput(false);
+    return;
+  }
+
   try {
     var cacheOnFailure = core.getInput("cache-on-failure").toLowerCase();
     if (cacheOnFailure !== "true") {

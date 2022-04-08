@@ -18,6 +18,10 @@ import {
 } from "./common";
 
 async function run() {
+  if (!cache.isFeatureAvailable()) {
+    return;
+  }
+
   try {
     const { paths: savePaths, key } = await getCacheConfig();
 

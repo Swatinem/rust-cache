@@ -10,7 +10,7 @@ import path from "path";
 process.on("uncaughtException", (e) => {
   core.info(`[warning] ${e.message}`);
   if (e.stack) {
-    core.info(e.stack)
+    core.info(e.stack);
   }
 });
 
@@ -192,12 +192,24 @@ export async function getPackages(): Promise<Packages> {
 
 export async function cleanTarget(packages: Packages) {
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
-  await io.rmRF(path.join(targetDir, "./debug/examples"));
-  await io.rmRF(path.join(targetDir, "./debug/incremental"));
+
+  await cleanProfileTarget(packages, "debug");
+  await cleanProfileTarget(packages, "release");
+}
+
+async function cleanProfileTarget(packages: Packages, profile: string) {
+  try {
+    await fs.promises.access(path.join(targetDir, profile));
+  } catch {
+    return;
+  }
+
+  await io.rmRF(path.join(targetDir, profile, "./examples"));
+  await io.rmRF(path.join(targetDir, profile, "./incremental"));
 
   let dir: fs.Dir;
-  // remove all *files* from debug
-  dir = await fs.promises.opendir(path.join(targetDir, "./debug"));
+  // remove all *files* from the profile directory
+  dir = await fs.promises.opendir(path.join(targetDir, profile));
   for await (const dirent of dir) {
     if (dirent.isFile()) {
       await rm(dir.path, dirent);
@@ -205,8 +217,8 @@ export async function cleanTarget(packages: Packages) {
   }
 
   const keepPkg = new Set(packages.map((p) => p.name));
-  await rmExcept(path.join(targetDir, "./debug/build"), keepPkg);
-  await rmExcept(path.join(targetDir, "./debug/.fingerprint"), keepPkg);
+  await rmExcept(path.join(targetDir, profile, "./build"), keepPkg);
+  await rmExcept(path.join(targetDir, profile, "./.fingerprint"), keepPkg);
 
   const keepDeps = new Set(
     packages.flatMap((p) => {
@@ -218,7 +230,7 @@ export async function cleanTarget(packages: Packages) {
       return names;
     }),
   );
-  await rmExcept(path.join(targetDir, "./debug/deps"), keepDeps);
+  await rmExcept(path.join(targetDir, profile, "./deps"), keepDeps);
 }
 
 const oneWeek = 7 * 24 * 3600 * 1000;
