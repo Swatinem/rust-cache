@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0
+
+- Clean both `debug` and `release` target directories.
+
 ## 1.3.0
 
 - Use Rust toolchain file as additional cache key.
