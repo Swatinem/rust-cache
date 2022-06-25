@@ -45,7 +45,7 @@ async function run() {
   } catch (e) {
     setCacheHitOutput(false);
 
-    core.info(`[warning] ${(e as any).message}`);
+    core.info(`[warning] ${(e as any).stack}`);
   }
 }
 
