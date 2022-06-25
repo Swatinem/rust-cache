@@ -38,26 +38,34 @@ async function run() {
 
     try {
       await cleanRegistry(registryName, packages);
-    } catch {}
+    } catch (e) {
+      core.info(`[warning] ${(e as any).stack}`);
+    }
 
     try {
       await cleanBin();
-    } catch {}
+    } catch (e) {
+      core.info(`[warning] ${(e as any).stack}`);
+    }
 
     try {
       await cleanGit(packages);
-    } catch {}
+    } catch (e) {
+      core.info(`[warning] ${(e as any).stack}`);
+    }
 
     try {
       await cleanTarget(packages);
-    } catch {}
+    } catch (e) {
+      core.info(`[warning] ${(e as any).stack}`);
+    }
 
     core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
     core.info(`In directory:\n    ${process.cwd()}`);
     core.info(`Using key:\n    ${key}`);
     await cache.saveCache(savePaths, key);
   } catch (e) {
-    core.info(`[warning] ${(e as any).message}`);
+    core.info(`[warning] ${(e as any).stack}`);
   }
 }
 
