@@ -36,10 +36,12 @@ async function run() {
     const registryName = await getRegistryName();
     const packages = await getPackages();
 
-    try {
-      await cleanRegistry(registryName, packages);
-    } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+    if (registryName) {
+      try {
+        await cleanRegistry(registryName, packages);
+      } catch (e) {
+        core.info(`[warning] ${(e as any).stack}`);
+      }
     }
 
     try {
@@ -71,7 +73,7 @@ async function run() {
 
 run();
 
-async function getRegistryName(): Promise<string> {
+async function getRegistryName(): Promise<string | null> {
   const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
   const files = await globber.glob();
   if (files.length > 1) {
@@ -79,6 +81,9 @@ async function getRegistryName(): Promise<string> {
   }
 
   const first = files.shift()!;
+  if (!first) {
+    return null;
+  }
   return path.basename(path.dirname(first));
 }
 
