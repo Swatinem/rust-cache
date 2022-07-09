@@ -24,9 +24,9 @@ jobs:
       - uses: ./
         with:
           cache-on-failure: true
-          target-dir: |
-            target/
-            wasm-workspace/target/
+          workspace-paths: |
+            ./
+            wasm-workspace/
 
       - run: |
           cargo install cargo-deny --locked
