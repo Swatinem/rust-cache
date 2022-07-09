@@ -3,9 +3,8 @@ publish = false
 name = "rust-cache"
 version = "0.1.0"
 authors = ["Arpad Borsos <arpad.borsos@googlemail.com>"]
-edition = "2018"
+edition = "2021"
 
-[dev-dependencies]
+[dependencies]
 reqwest = "0.11.0"
-clap = "3"
-actix-web = { git = "https://github.com/actix/actix-web.git", rev = "bd26083f333ecf63e3eb444748250364ce124f5e" }
+proguard = { git = "https://github.com/getsentry/rust-proguard", rev = "4bc2cddd79cc8f7c9d14dda2f9f4c431e10c9424" }
