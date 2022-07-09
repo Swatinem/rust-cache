@@ -61734,15 +61734,22 @@ async function getLockfileHash() {
     }
     return hasher.digest("hex").slice(0, 20);
 }
-async function getPackages() {
+async function getPackages(workspacePaths) {
     const cwd = process.cwd();
-    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
-    return meta.packages
-        .filter((p) => !p.manifest_path.startsWith(cwd))
-        .map((p) => {
-        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
-    });
+    let allPackages = [];
+    for (const workspacePath of workspacePaths) {
+        process.chdir(workspacePath);
+        const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+        const workspacePackages = meta.packages
+            .filter((p) => !p.manifest_path.startsWith(cwd))
+            .map((p) => {
+            const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+            return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
+        });
+        allPackages = allPackages.concat(workspacePackages);
+    }
+    process.chdir(cwd);
+    return allPackages;
 }
 async function cleanTarget(targetDir, packages) {
     await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
@@ -61833,7 +61840,8 @@ async function run() {
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
         const registryName = await getRegistryName();
-        const packages = await getPackages();
+        const packages = await getPackages(workspaces);
+        core.info("Detected repository packages to cache: " + JSON.stringify(packages));
         if (registryName) {
             try {
                 await cleanRegistry(registryName, packages);
