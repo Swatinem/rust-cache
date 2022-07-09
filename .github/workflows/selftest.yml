@@ -3,34 +3,75 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  selftest:
+  simple:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    name: Test Action on ${{ matrix.os }}
+    name: Test root check/test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+      - run: |
+          rustup toolchain install --profile minimal stable
+          rustup default stable
 
       - uses: ./
         with:
-          cache-on-failure: true
-          workspace-paths: |
-            ./
-            wasm-workspace/
+          workspace-paths: tests
 
       - run: |
-          cargo install cargo-deny --locked
+          cd tests
           cargo check
           cargo test
-          rustup target install wasm32-unknown-unknown
-          cd wasm-workspace && cargo check
+
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Test `cargo install` on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: |
+          rustup toolchain install --profile minimal stable
+          rustup default stable
+
+      - uses: ./
+
+      - run: cargo install cargo-deny --locked
+
+  workspaces:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Test multiple workspaces on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: |
+          rustup toolchain install --profile minimal --target wasm32-unknown-unknown stable
+          rustup default stable
+
+      - uses: ./
+        with:
+          workspace-paths: |
+            tests
+            tests/wasm-workspace
+
+      - run: |
+          cd tests
+          cargo check
+          cd wasm-workspace
+          cargo check
