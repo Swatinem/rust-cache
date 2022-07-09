@@ -2,6 +2,7 @@ fn main() {
     println!("Hello, world!");
 }
 
+#[cfg(test)]
 fn some_fn(input: bool) -> usize {
     if input {
         2 + 4

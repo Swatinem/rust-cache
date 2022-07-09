@@ -2,5 +2,3 @@
 - better .cargo/bin handling:
   - get a list of all the files on "pre"/"restore"
   - move the files out of the way on "post"/"save" and move them back afterwards
-- better .cargo/registry handling:
-  - rather implement better cleaning logic for the registry

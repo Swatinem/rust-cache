@@ -93,6 +93,7 @@ export async function cleanBin() {
 
 export async function cleanRegistry(packages: Packages) {
   // `.cargo/registry/src`
+  // we can remove this completely, as cargo will recreate this from `cache`
   const srcDir = path.join(CARGO_HOME, "registry", "src");
   await io.rmRF(srcDir);
 
@@ -104,9 +105,11 @@ export async function cleanRegistry(packages: Packages) {
       // or `.cargo/registry/index/index.crates.io-e139d0d48fed7772`
       const dir = await fs.promises.opendir(path.join(indexDir.path, dirent.name));
 
-      // TODO: check for `.git` etc, for now we just always remove the `.cache`
-      // and leave other stuff untouched.
-      await io.rmRF(path.join(dir.path, ".cache"));
+      // for a git registry, we can remove `.cache`, as cargo will recreate it from git
+      if (await exists(path.join(dir.path, ".git"))) {
+        await io.rmRF(path.join(dir.path, ".cache"));
+      }
+      // TODO: else, clean `.cache` based on the `packages`
     }
   }
 
@@ -120,6 +123,7 @@ export async function cleanRegistry(packages: Packages) {
       // or `.cargo/registry/cache/index.crates.io-e139d0d48fed7772`
       const dir = await fs.promises.opendir(path.join(cacheDir.path, dirent.name));
       for await (const dirent of dir) {
+        // here we check that the downloaded `.crate` matches one from our dependencies
         if (dirent.isFile() && !pkgSet.has(dirent.name)) {
           await rm(dir.path, dirent);
         }
