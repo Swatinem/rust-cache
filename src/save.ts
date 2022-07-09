@@ -23,8 +23,8 @@ async function run() {
   }
 
   try {
-    const { paths, targets, key } = await getCacheConfig();
-    const savePaths = paths.concat(targets);
+    const { paths, workspaces, key } = await getCacheConfig();
+    const savePaths = paths.concat(workspaces);
 
     if (core.getState(stateKey) === key) {
       core.info(`Cache up-to-date.`);
@@ -57,7 +57,8 @@ async function run() {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
-    for (const target of targets) {
+    for (const workspace of workspaces) {
+      const target = path.join(workspace, "target");
       try {
         await cleanTarget(target, packages);
       }

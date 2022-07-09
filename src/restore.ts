@@ -1,5 +1,6 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
+import path from "path";
 import { cleanTarget, getCacheConfig, getCargoBins, getPackages, stateBins, stateKey } from "./common";
 
 async function run() {
@@ -16,8 +17,8 @@ async function run() {
     core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
-    const { paths, key, restoreKeys, targets } = await getCacheConfig();
-    const restorePaths = paths.concat(targets);
+    const { paths, key, restoreKeys, workspaces } = await getCacheConfig();
+    const restorePaths = paths.concat(workspaces);
 
     const bins = await getCargoBins();
     core.saveState(stateBins, JSON.stringify([...bins]));
@@ -34,7 +35,8 @@ async function run() {
         // pre-clean the target directory on cache mismatch
         const packages = await getPackages();
 
-        for (const target of targets) {
+        for (const workspace of workspaces) {
+          const target = path.join(workspace, "target");
           await cleanTarget(target, packages);
         }
       }

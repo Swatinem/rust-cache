@@ -16,10 +16,10 @@ process.on("uncaughtException", (e) => {
 
 const cwd = core.getInput("working-directory");
 
-// Read each line of target-dir as a unique target directory
+// Read each line of workspace-paths as a unique path
 // TODO: this could be read from .cargo config file directly
-const targetDirInput = core.getInput("target-dir") || "./target";
-const targetDirs = targetDirInput.trim().split("\n");
+const workspacePathsInput = core.getInput("workspace-paths") || "./";
+const workspacePaths = workspacePathsInput.trim().split("\n");
 
 if (cwd) {
   process.chdir(cwd);
@@ -36,7 +36,7 @@ export const paths = {
   index: path.join(cargoHome, "registry/index"),
   cache: path.join(cargoHome, "registry/cache"),
   git: path.join(cargoHome, "git"),
-  targets: targetDirs,
+  workspaces: workspacePaths,
 };
 
 interface CacheConfig {
@@ -44,8 +44,8 @@ interface CacheConfig {
   paths: Array<string>;
   key: string;
   restoreKeys: Array<string>;
-  // A list of one or more target directories to cache
-  targets: Array<string>;
+  // A list of one or more workspace directories
+  workspaces: Array<string>;
 }
 
 const RefKey = "GITHUB_REF";
@@ -91,7 +91,7 @@ export async function getCacheConfig(): Promise<CacheConfig> {
     ],
     key: `${key}-${lockHash}`,
     restoreKeys: [key],
-    targets: paths.targets,
+    workspaces: paths.workspaces,
   };
 }
 
@@ -201,11 +201,11 @@ export async function getPackages(): Promise<Packages> {
 export async function cleanTarget(targetDir: string, packages: Packages) {
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
 
-  await cleanProfileTarget(packages, "debug");
-  await cleanProfileTarget(packages, "release");
+  await cleanProfileTarget(targetDir, packages, "debug");
+  await cleanProfileTarget(targetDir, packages, "release");
 }
 
-async function cleanProfileTarget(packages: Packages, profile: string) {
+async function cleanProfileTarget(targetDir: string, packages: Packages, profile: string) {
   try {
     await fs.promises.access(path.join(targetDir, profile));
   } catch {
@@ -269,5 +269,5 @@ export async function rm(parent: string, dirent: fs.Dirent) {
     } else if (dirent.isDirectory()) {
       await io.rmRF(fileName);
     }
-  } catch {}
+  } catch { }
 }

@@ -61604,7 +61604,6 @@ var external_crypto_default = /*#__PURE__*/__nccwpck_require__.n(external_crypto
 var external_os_ = __nccwpck_require__(2037);
 var external_os_default = /*#__PURE__*/__nccwpck_require__.n(external_os_);
 ;// CONCATENATED MODULE: ./src/common.ts
-<<<<<<< HEAD
 
 
 
@@ -61620,8 +61619,10 @@ process.on("uncaughtException", (e) => {
     }
 });
 const cwd = core.getInput("working-directory");
+// Read each line of workspace-paths as a unique path
 // TODO: this could be read from .cargo config file directly
-const targetDir = core.getInput("target-dir") || "./target";
+const workspacePathsInput = core.getInput("workspace-paths") || "./";
+const workspacePaths = workspacePathsInput.trim().split("\n");
 if (cwd) {
     process.chdir(cwd);
 }
@@ -61635,7 +61636,7 @@ const paths = {
     index: external_path_default().join(cargoHome, "registry/index"),
     cache: external_path_default().join(cargoHome, "registry/cache"),
     git: external_path_default().join(cargoHome, "git"),
-    target: targetDir,
+    workspaces: workspacePaths,
 };
 const RefKey = "GITHUB_REF";
 function isValidEvent() {
@@ -61671,10 +61672,10 @@ async function getCacheConfig() {
             paths.git,
             paths.cache,
             paths.index,
-            paths.target,
         ],
         key: `${key}-${lockHash}`,
         restoreKeys: [key],
+        workspaces: paths.workspaces,
     };
 }
 async function getCargoBins() {
@@ -61723,6 +61724,7 @@ async function getLockfileHash() {
         followSymbolicLinks: false,
     });
     const files = await globber.glob();
+    core.debug("Lockfile Hash includes: " + JSON.stringify(files));
     files.sort((a, b) => a.localeCompare(b));
     const hasher = external_crypto_default().createHash("sha1");
     for (const file of files) {
@@ -61742,12 +61744,12 @@ async function getPackages() {
         return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
     });
 }
-async function cleanTarget(packages) {
+async function cleanTarget(targetDir, packages) {
     await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
-    await cleanProfileTarget(packages, "debug");
-    await cleanProfileTarget(packages, "release");
+    await cleanProfileTarget(targetDir, packages, "debug");
+    await cleanProfileTarget(targetDir, packages, "release");
 }
-async function cleanProfileTarget(packages, profile) {
+async function cleanProfileTarget(targetDir, packages, profile) {
     try {
         await external_fs_default().promises.access(external_path_default().join(targetDir, profile));
     }
@@ -61822,7 +61824,8 @@ async function run() {
         return;
     }
     try {
-        const { paths: savePaths, key } = await getCacheConfig();
+        const { paths, workspaces, key } = await getCacheConfig();
+        const savePaths = paths.concat(workspaces);
         if (core.getState(stateKey) === key) {
             core.info(`Cache up-to-date.`);
             return;
@@ -61851,11 +61854,14 @@ async function run() {
         catch (e) {
             core.info(`[warning] ${e.stack}`);
         }
-        try {
-            await cleanTarget(packages);
-        }
-        catch (e) {
-            core.info(`[warning] ${e.stack}`);
+        for (const workspace of workspaces) {
+            const target = external_path_default().join(workspace, "target");
+            try {
+                await cleanTarget(target, packages);
+            }
+            catch (e) {
+                core.info(`[warning] ${e.stack}`);
+            }
         }
         core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
         core.info(`In directory:\n    ${process.cwd()}`);
@@ -61956,340 +61962,6 @@ async function macOsWorkaround() {
     }
     catch { }
 }
-=======
-
-
-
-
-
-
-
-
-process.on("uncaughtException", (e) => {
-    core.info(`[warning] ${e.message}`);
-    if (e.stack) {
-        core.info(e.stack);
-    }
-});
-const cwd = core.getInput("working-directory");
-// Read each line of target-dir as a unique target directory
-// TODO: this could be read from .cargo config file directly
-const targetDirInput = core.getInput("target-dir") || "./target";
-const targetDirs = targetDirInput.trim().split("\n");
-core.info("Using target dirs: " + JSON.stringify(targetDirs));
-if (cwd) {
-    process.chdir(cwd);
-}
-const stateBins = "RUST_CACHE_BINS";
-const stateKey = "RUST_CACHE_KEY";
-const stateHash = "RUST_CACHE_HASH";
-const home = external_os_default().homedir();
-const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
-const paths = {
-    cargoHome,
-    index: external_path_default().join(cargoHome, "registry/index"),
-    cache: external_path_default().join(cargoHome, "registry/cache"),
-    git: external_path_default().join(cargoHome, "git"),
-    targets: targetDirs,
-};
-const RefKey = "GITHUB_REF";
-function isValidEvent() {
-    return RefKey in process.env && Boolean(process.env[RefKey]);
-}
-async function getCacheConfig() {
-    let lockHash = core.getState(stateHash);
-    if (!lockHash) {
-        lockHash = await getLockfileHash();
-        core.saveState(stateHash, lockHash);
-    }
-    let key = `v0-rust-`;
-    const sharedKey = core.getInput("sharedKey");
-    if (sharedKey) {
-        key += `${sharedKey}-`;
-    }
-    else {
-        const inputKey = core.getInput("key");
-        if (inputKey) {
-            key += `${inputKey}-`;
-        }
-        const job = process.env.GITHUB_JOB;
-        if (job) {
-            key += `${job}-`;
-        }
-    }
-    key += await getRustKey();
-    return {
-        paths: [
-            external_path_default().join(cargoHome, "bin"),
-            external_path_default().join(cargoHome, ".crates2.json"),
-            external_path_default().join(cargoHome, ".crates.toml"),
-            paths.git,
-            paths.cache,
-            paths.index,
-        ],
-        key: `${key}-${lockHash}`,
-        restoreKeys: [key],
-        targets: paths.targets,
-    };
-}
-async function getCargoBins() {
-    try {
-        const { installs } = JSON.parse(await external_fs_default().promises.readFile(external_path_default().join(paths.cargoHome, ".crates2.json"), "utf8"));
-        const bins = new Set();
-        for (const pkg of Object.values(installs)) {
-            for (const bin of pkg.bins) {
-                bins.add(bin);
-            }
-        }
-        return bins;
-    }
-    catch {
-        return new Set();
-    }
-}
-async function getRustKey() {
-    const rustc = await getRustVersion();
-    return `${rustc.release}-${rustc.host}-${rustc["commit-hash"].slice(0, 12)}`;
-}
-async function getRustVersion() {
-    const stdout = await getCmdOutput("rustc", ["-vV"]);
-    let splits = stdout
-        .split(/[\n\r]+/)
-        .filter(Boolean)
-        .map((s) => s.split(":").map((s) => s.trim()))
-        .filter((s) => s.length === 2);
-    return Object.fromEntries(splits);
-}
-async function getCmdOutput(cmd, args = [], options = {}) {
-    let stdout = "";
-    await exec.exec(cmd, args, {
-        silent: true,
-        listeners: {
-            stdout(data) {
-                stdout += data.toString();
-            },
-        },
-        ...options,
-    });
-    return stdout;
-}
-async function getLockfileHash() {
-    const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", {
-        followSymbolicLinks: false,
-    });
-    const files = await globber.glob();
-    core.info("Lockfile Hash includes: " + JSON.stringify(files));
-    files.sort((a, b) => a.localeCompare(b));
-    const hasher = external_crypto_default().createHash("sha1");
-    for (const file of files) {
-        for await (const chunk of external_fs_default().createReadStream(file)) {
-            hasher.update(chunk);
-        }
-    }
-    return hasher.digest("hex").slice(0, 20);
-}
-async function getPackages() {
-    const cwd = process.cwd();
-    const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
-    return meta.packages
-        .filter((p) => !p.manifest_path.startsWith(cwd))
-        .map((p) => {
-        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-        return { name: p.name, version: p.version, targets, path: external_path_default().dirname(p.manifest_path) };
-    });
-}
-async function cleanTarget(targetDir, packages) {
-    await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
-    await io.rmRF(external_path_default().join(targetDir, "./debug/examples"));
-    await io.rmRF(external_path_default().join(targetDir, "./debug/incremental"));
-    let dir;
-    // remove all *files* from debug
-    dir = await external_fs_default().promises.opendir(external_path_default().join(targetDir, "./debug"));
-    for await (const dirent of dir) {
-        if (dirent.isFile()) {
-            await rm(dir.path, dirent);
-        }
-    }
-    const keepPkg = new Set(packages.map((p) => p.name));
-    await rmExcept(external_path_default().join(targetDir, "./debug/build"), keepPkg);
-    await rmExcept(external_path_default().join(targetDir, "./debug/.fingerprint"), keepPkg);
-    const keepDeps = new Set(packages.flatMap((p) => {
-        const names = [];
-        for (const n of [p.name, ...p.targets]) {
-            const name = n.replace(/-/g, "_");
-            names.push(name, `lib${name}`);
-        }
-        return names;
-    }));
-    await rmExcept(external_path_default().join(targetDir, "./debug/deps"), keepDeps);
-}
-const oneWeek = 7 * 24 * 3600 * 1000;
-async function rmExcept(dirName, keepPrefix) {
-    const dir = await external_fs_default().promises.opendir(dirName);
-    for await (const dirent of dir) {
-        let name = dirent.name;
-        const idx = name.lastIndexOf("-");
-        if (idx !== -1) {
-            name = name.slice(0, idx);
-        }
-        const fileName = external_path_default().join(dir.path, dirent.name);
-        const { mtime } = await external_fs_default().promises.stat(fileName);
-        // we don’t really know
-        if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > oneWeek) {
-            await rm(dir.path, dirent);
-        }
-    }
-}
-async function rm(parent, dirent) {
-    try {
-        const fileName = external_path_default().join(parent, dirent.name);
-        core.debug(`deleting "${fileName}"`);
-        if (dirent.isFile()) {
-            await external_fs_default().promises.unlink(fileName);
-        }
-        else if (dirent.isDirectory()) {
-            await io.rmRF(fileName);
-        }
-    }
-    catch { }
-}
-
-;// CONCATENATED MODULE: ./src/save.ts
-
-
-
-
-
-
-
-
-async function run() {
-    try {
-        const { paths, targets, key } = await getCacheConfig();
-        const savePaths = paths.concat(targets);
-        if (core.getState(stateKey) === key) {
-            core.info(`Cache up-to-date.`);
-            return;
-        }
-        // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
-        await macOsWorkaround();
-        const registryName = await getRegistryName();
-        const packages = await getPackages();
-        try {
-            await cleanRegistry(registryName, packages);
-        }
-        catch { }
-        try {
-            await cleanBin();
-        }
-        catch { }
-        try {
-            await cleanGit(packages);
-        }
-        catch { }
-        try {
-            for (const target of targets) {
-                await cleanTarget(target, packages);
-            }
-        }
-        catch { }
-        core.info(`Saving paths:\n    ${savePaths.join("\n    ")}`);
-        core.info(`In directory:\n    ${process.cwd()}`);
-        core.info(`Using key:\n    ${key}`);
-        await cache.saveCache(savePaths, key);
-    }
-    catch (e) {
-        core.info(`[warning] ${e.message}`);
-    }
-}
-run();
-async function getRegistryName() {
-    const globber = await glob.create(`${paths.index}/**/.last-updated`, { followSymbolicLinks: false });
-    const files = await globber.glob();
-    if (files.length > 1) {
-        core.warning(`got multiple registries: "${files.join('", "')}"`);
-    }
-    const first = files.shift();
-    return external_path_default().basename(external_path_default().dirname(first));
-}
-async function cleanBin() {
-    const bins = await getCargoBins();
-    const oldBins = JSON.parse(core.getState(stateBins));
-    for (const bin of oldBins) {
-        bins.delete(bin);
-    }
-    const dir = await external_fs_default().promises.opendir(external_path_default().join(paths.cargoHome, "bin"));
-    for await (const dirent of dir) {
-        if (dirent.isFile() && !bins.has(dirent.name)) {
-            await rm(dir.path, dirent);
-        }
-    }
-}
-async function cleanRegistry(registryName, packages) {
-    await io.rmRF(external_path_default().join(paths.index, registryName, ".cache"));
-    const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
-    const dir = await external_fs_default().promises.opendir(external_path_default().join(paths.cache, registryName));
-    for await (const dirent of dir) {
-        if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-            await rm(dir.path, dirent);
-        }
-    }
-}
-async function cleanGit(packages) {
-    const coPath = external_path_default().join(paths.git, "checkouts");
-    const dbPath = external_path_default().join(paths.git, "db");
-    const repos = new Map();
-    for (const p of packages) {
-        if (!p.path.startsWith(coPath)) {
-            continue;
-        }
-        const [repo, ref] = p.path.slice(coPath.length + 1).split((external_path_default()).sep);
-        const refs = repos.get(repo);
-        if (refs) {
-            refs.add(ref);
-        }
-        else {
-            repos.set(repo, new Set([ref]));
-        }
-    }
-    // we have to keep both the clone, and the checkout, removing either will
-    // trigger a rebuild
-    let dir;
-    // clean the db
-    dir = await external_fs_default().promises.opendir(dbPath);
-    for await (const dirent of dir) {
-        if (!repos.has(dirent.name)) {
-            await rm(dir.path, dirent);
-        }
-    }
-    // clean the checkouts
-    dir = await external_fs_default().promises.opendir(coPath);
-    for await (const dirent of dir) {
-        const refs = repos.get(dirent.name);
-        if (!refs) {
-            await rm(dir.path, dirent);
-            continue;
-        }
-        if (!dirent.isDirectory()) {
-            continue;
-        }
-        const refsDir = await external_fs_default().promises.opendir(external_path_default().join(dir.path, dirent.name));
-        for await (const dirent of refsDir) {
-            if (!refs.has(dirent.name)) {
-                await rm(refsDir.path, dirent);
-            }
-        }
-    }
-}
-async function macOsWorkaround() {
-    try {
-        // Workaround for https://github.com/actions/cache/issues/403
-        // Also see https://github.com/rust-lang/cargo/issues/8603
-        await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
-    }
-    catch { }
-}
->>>>>>> 16da4ac (Cache multiple target directories from 'target-dir')
 
 })();
 
