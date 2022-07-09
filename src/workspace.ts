@@ -9,7 +9,9 @@ export class Workspace {
     let packages: Packages = [];
     try {
       const meta: Meta = JSON.parse(
-        await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]),
+        await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+          cwd: this.root,
+        }),
       );
       for (const pkg of meta.packages) {
         if (!pkg.manifest_path.startsWith(this.root)) {

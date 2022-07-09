@@ -61642,7 +61642,9 @@ class Workspace {
     async getPackages() {
         let packages = [];
         try {
-            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+                cwd: this.root,
+            }));
             for (const pkg of meta.packages) {
                 if (!pkg.manifest_path.startsWith(this.root)) {
                     continue;
@@ -61809,6 +61811,7 @@ class CacheConfig {
         return self;
     }
     printInfo() {
+        core.startGroup("Cache Configuration");
         core.info(`Workspaces:`);
         for (const workspace of this.workspaces) {
             core.info(`    ${workspace.root}`);
@@ -61832,6 +61835,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             core.info(`  - ${file}`);
         }
+        core.endGroup();
     }
     async getCargoBins() {
         const bins = new Set();
@@ -62019,14 +62023,15 @@ async function run() {
     }
     try {
         const config = await CacheConfig["new"]();
+        config.printInfo();
+        core.info("");
         if (core.getState(STATE_KEY) === config.cacheKey) {
             core.info(`Cache up-to-date.`);
             return;
         }
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
-        core.info(`# Cleaning Cache`);
-        config.printInfo();
+        core.info(`... Cleaning Cache ...`);
         const registryName = await getRegistryName(config);
         const allPackages = [];
         for (const workspace of config.workspaces) {
@@ -62059,7 +62064,7 @@ async function run() {
         catch (e) {
             core.info(`[warning] ${e.stack}`);
         }
-        core.info(`# Saving cache`);
+        core.info(`... Saving cache ...`);
         await cache.saveCache(config.cachePaths, config.cacheKey);
     }
     catch (e) {

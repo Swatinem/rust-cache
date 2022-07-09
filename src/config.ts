@@ -180,6 +180,7 @@ export class CacheConfig {
   }
 
   printInfo() {
+    core.startGroup("Cache Configuration");
     core.info(`Workspaces:`);
     for (const workspace of this.workspaces) {
       core.info(`    ${workspace.root}`);
@@ -203,6 +204,7 @@ export class CacheConfig {
     for (const file of this.keyFiles) {
       core.info(`  - ${file}`);
     }
+    core.endGroup();
   }
 
   public async getCargoBins(): Promise<Set<string>> {

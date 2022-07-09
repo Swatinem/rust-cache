@@ -61642,7 +61642,9 @@ class Workspace {
     async getPackages() {
         let packages = [];
         try {
-            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+                cwd: this.root,
+            }));
             for (const pkg of meta.packages) {
                 if (!pkg.manifest_path.startsWith(this.root)) {
                     continue;
@@ -61809,6 +61811,7 @@ class CacheConfig {
         return self;
     }
     printInfo() {
+        lib_core.startGroup("Cache Configuration");
         lib_core.info(`Workspaces:`);
         for (const workspace of this.workspaces) {
             lib_core.info(`    ${workspace.root}`);
@@ -61832,6 +61835,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             lib_core.info(`  - ${file}`);
         }
+        lib_core.endGroup();
     }
     async getCargoBins() {
         const bins = new Set();
@@ -62023,10 +62027,11 @@ async function run() {
         lib_core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
         lib_core.exportVariable("CARGO_INCREMENTAL", 0);
         const config = await CacheConfig["new"]();
+        config.printInfo();
+        lib_core.info("");
         const bins = await config.getCargoBins();
         lib_core.saveState(config_STATE_BINS, JSON.stringify([...bins]));
-        lib_core.info(`# Restoring cache`);
-        config.printInfo();
+        lib_core.info(`... Restoring cache ...`);
         const key = config.cacheKey;
         const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
         if (restoreKey) {

@@ -21,6 +21,8 @@ async function run() {
 
   try {
     const config = await CacheConfig.new();
+    config.printInfo();
+    core.info("");
 
     if (core.getState(STATE_KEY) === config.cacheKey) {
       core.info(`Cache up-to-date.`);
@@ -30,8 +32,7 @@ async function run() {
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
 
-    core.info(`# Cleaning Cache`);
-    config.printInfo();
+    core.info(`... Cleaning Cache ...`);
 
     const registryName = await getRegistryName(config);
 
@@ -66,7 +67,7 @@ async function run() {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
-    core.info(`# Saving cache`);
+    core.info(`... Saving cache ...`);
     await cache.saveCache(config.cachePaths, config.cacheKey);
   } catch (e) {
     core.info(`[warning] ${(e as any).stack}`);

@@ -26,12 +26,13 @@ async function run() {
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const config = await CacheConfig.new();
+    config.printInfo();
+    core.info("");
 
     const bins = await config.getCargoBins();
     core.saveState(STATE_BINS, JSON.stringify([...bins]));
 
-    core.info(`# Restoring cache`);
-    config.printInfo();
+    core.info(`... Restoring cache ...`);
     const key = config.cacheKey;
     const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
     if (restoreKey) {
