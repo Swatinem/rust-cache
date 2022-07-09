@@ -61624,7 +61624,8 @@ async function getCmdOutput(cmd, args = [], options = {}) {
         });
     }
     catch (e) {
-        lib_core.error(stderr);
+        lib_core.info(`[warning] Command failed: ${cmd} ${args.join(" ")}`);
+        lib_core.info(`[warning] ${stderr}`);
         throw e;
     }
     return stdout;
@@ -61736,7 +61737,7 @@ class CacheConfig {
         self.keyRust = keyRust;
         // these prefixes should cover most of the compiler / rust / cargo keys
         const envPrefixes = ["CARGO", "CC", "CXX", "CMAKE", "RUST"];
-        envPrefixes.push(...lib_core.getInput("envVars").split(/\s+/));
+        envPrefixes.push(...lib_core.getInput("envVars").split(/\s+/).filter(Boolean));
         // sort the available env vars so we have a more stable hash
         const keyEnvs = [];
         const envKeys = Object.keys(process.env);

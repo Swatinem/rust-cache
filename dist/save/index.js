@@ -61624,7 +61624,8 @@ async function getCmdOutput(cmd, args = [], options = {}) {
         });
     }
     catch (e) {
-        core.error(stderr);
+        core.info(`[warning] Command failed: ${cmd} ${args.join(" ")}`);
+        core.info(`[warning] ${stderr}`);
         throw e;
     }
     return stdout;
@@ -61736,7 +61737,7 @@ class CacheConfig {
         self.keyRust = keyRust;
         // these prefixes should cover most of the compiler / rust / cargo keys
         const envPrefixes = ["CARGO", "CC", "CXX", "CMAKE", "RUST"];
-        envPrefixes.push(...core.getInput("envVars").split(/\s+/));
+        envPrefixes.push(...core.getInput("envVars").split(/\s+/).filter(Boolean));
         // sort the available env vars so we have a more stable hash
         const keyEnvs = [];
         const envKeys = Object.keys(process.env);
@@ -62024,6 +62025,8 @@ async function run() {
         }
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
+        core.info(`# Cleaning Cache`);
+        config.printInfo();
         const registryName = await getRegistryName(config);
         const allPackages = [];
         for (const workspace of config.workspaces) {
@@ -62057,7 +62060,6 @@ async function run() {
             core.info(`[warning] ${e.stack}`);
         }
         core.info(`# Saving cache`);
-        config.printInfo();
         await cache.saveCache(config.cachePaths, config.cacheKey);
     }
     catch (e) {

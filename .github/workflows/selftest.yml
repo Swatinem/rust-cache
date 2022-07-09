@@ -21,7 +21,7 @@ jobs:
 
       - uses: ./
         with:
-          workspace-paths: tests
+          workspaces: tests
 
       - run: |
           cargo check
@@ -66,7 +66,7 @@ jobs:
 
       - uses: ./
         with:
-          workspace-paths: |
+          workspaces: |
             tests
             tests/wasm-workspace
 

@@ -30,6 +30,9 @@ async function run() {
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
 
+    core.info(`# Cleaning Cache`);
+    config.printInfo();
+
     const registryName = await getRegistryName(config);
 
     const allPackages = [];
@@ -64,7 +67,6 @@ async function run() {
     }
 
     core.info(`# Saving cache`);
-    config.printInfo();
     await cache.saveCache(config.cachePaths, config.cacheKey);
   } catch (e) {
     core.info(`[warning] ${(e as any).stack}`);
