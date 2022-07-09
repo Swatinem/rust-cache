@@ -28,8 +28,6 @@ export async function cleanTargetDir(targetDir: string, packages: Packages) {
       await rm(dir.path, dirent);
     }
   }
-
-  await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
 }
 
 async function cleanProfileTarget(profileDir: string, packages: Packages) {
