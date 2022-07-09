@@ -33,7 +33,7 @@ async function run() {
 
       if (restoreKey !== key) {
         // pre-clean the target directory on cache mismatch
-        const packages = await getPackages();
+        const packages = await getPackages(workspaces);
 
         for (const workspace of workspaces) {
           const target = path.join(workspace, "target");

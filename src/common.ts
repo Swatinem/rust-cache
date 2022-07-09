@@ -186,16 +186,24 @@ interface Meta {
   }>;
 }
 
-export async function getPackages(): Promise<Packages> {
+export async function getPackages(workspacePaths: Array<string>): Promise<Packages> {
   const cwd = process.cwd();
-  const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
 
-  return meta.packages
-    .filter((p) => !p.manifest_path.startsWith(cwd))
-    .map((p) => {
-      const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
-      return { name: p.name, version: p.version, targets, path: path.dirname(p.manifest_path) };
-    });
+  let allPackages: Packages = [];
+  for (const workspacePath of workspacePaths) {
+    process.chdir(workspacePath);
+    const meta: Meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"]));
+    const workspacePackages = meta.packages
+      .filter((p) => !p.manifest_path.startsWith(cwd))
+      .map((p) => {
+        const targets = p.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        return { name: p.name, version: p.version, targets, path: path.dirname(p.manifest_path) };
+      });
+    allPackages = allPackages.concat(workspacePackages);
+  }
+
+  process.chdir(cwd);
+  return allPackages;
 }
 
 export async function cleanTarget(targetDir: string, packages: Packages) {

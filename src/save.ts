@@ -35,7 +35,7 @@ async function run() {
     await macOsWorkaround();
 
     const registryName = await getRegistryName();
-    const packages = await getPackages();
+    const packages = await getPackages(workspaces);
 
     if (registryName) {
       try {
