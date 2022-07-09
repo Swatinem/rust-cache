@@ -42,9 +42,9 @@ async function run() {
       if (restoreKey !== key) {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
-          const packages = await workspace.getPackages();
-
           try {
+            const packages = await workspace.getPackages();
+
             await cleanTargetDir(workspace.target, packages);
           } catch {}
         }

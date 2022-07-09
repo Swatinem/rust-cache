@@ -7,6 +7,27 @@ import { CacheConfig, STATE_BINS } from "./config";
 import { Packages } from "./workspace";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages) {
+  let dir: fs.Dir;
+  // remove all *files* from the profile directory
+  dir = await fs.promises.opendir(targetDir);
+  for await (const dirent of dir) {
+    if (dirent.isDirectory()) {
+      let dirName = path.join(dir.path, dirent.name);
+      // is it a profile dir, or a nested target dir?
+      let isNestedTarget = await exists(path.join(dirName, "CACHEDIR.TAG"));
+
+      try {
+        if (isNestedTarget) {
+          await cleanTargetDir(dirName, packages);
+        } else {
+          await cleanProfileTarget(dirName, packages);
+        }
+      } catch {}
+    } else if (dirent.name !== "CACHEDIR.TAG") {
+      await rm(dir.path, dirent);
+    }
+  }
+
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
 
   // TODO: remove all unknown files, clean all directories like profiles
@@ -155,4 +176,13 @@ export async function rm(parent: string, dirent: fs.Dirent) {
       await io.rmRF(fileName);
     }
   } catch {}
+}
+
+async function exists(path: string) {
+  try {
+    await fs.promises.access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -61868,6 +61868,28 @@ async function getRustVersion() {
 
 
 async function cleanTargetDir(targetDir, packages) {
+    let dir;
+    // remove all *files* from the profile directory
+    dir = await external_fs_default().promises.opendir(targetDir);
+    for await (const dirent of dir) {
+        if (dirent.isDirectory()) {
+            let dirName = external_path_default().join(dir.path, dirent.name);
+            // is it a profile dir, or a nested target dir?
+            let isNestedTarget = await exists(external_path_default().join(dirName, "CACHEDIR.TAG"));
+            try {
+                if (isNestedTarget) {
+                    await cleanTargetDir(dirName, packages);
+                }
+                else {
+                    await cleanProfileTarget(dirName, packages);
+                }
+            }
+            catch { }
+        }
+        else if (dirent.name !== "CACHEDIR.TAG") {
+            await rm(dir.path, dirent);
+        }
+    }
     await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
     // TODO: remove all unknown files, clean all directories like profiles
     try {
@@ -62001,6 +62023,15 @@ async function rm(parent, dirent) {
         }
     }
     catch { }
+}
+async function exists(path) {
+    try {
+        await external_fs_default().promises.access(path);
+        return true;
+    }
+    catch {
+        return false;
+    }
 }
 
 ;// CONCATENATED MODULE: ./src/save.ts
