@@ -93,7 +93,7 @@ export class CacheConfig {
 
     // these prefixes should cover most of the compiler / rust / cargo keys
     const envPrefixes = ["CARGO", "CC", "CXX", "CMAKE", "RUST"];
-    envPrefixes.push(...core.getInput("envVars").split(/\s+/));
+    envPrefixes.push(...core.getInput("envVars").split(/\s+/).filter(Boolean));
 
     // sort the available env vars so we have a more stable hash
     const keyEnvs = [];
