@@ -6,7 +6,7 @@ fn some_fn(input: bool) -> usize {
     if input {
         2 + 4
     } else {
-        3.saturating_add(5)
+        3_usize.saturating_add(5)
     }
 }
 
