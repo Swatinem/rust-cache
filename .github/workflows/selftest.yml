@@ -24,9 +24,9 @@ jobs:
           workspace-paths: tests
 
       - run: |
-          cd tests
           cargo check
           cargo test
+        working-directory: tests
 
   install:
     strategy:
@@ -70,8 +70,8 @@ jobs:
             tests
             tests/wasm-workspace
 
-      - run: |
-          cd tests
-          cargo check
-          cd wasm-workspace
-          cargo check
+      - run: cargo check
+        working-directory: tests
+
+      - run: cargo check
+        working-directory: tests/wasm-workspace
