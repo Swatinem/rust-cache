@@ -34,6 +34,7 @@ async function run() {
       if (restoreKey !== key) {
         // pre-clean the target directory on cache mismatch
         const packages = await getPackages(workspaces);
+        core.info("Restoring the following repository packages: " + JSON.stringify(packages));
 
         for (const workspace of workspaces) {
           const target = path.join(workspace, "target");

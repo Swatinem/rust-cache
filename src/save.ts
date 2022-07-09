@@ -36,6 +36,7 @@ async function run() {
 
     const registryName = await getRegistryName();
     const packages = await getPackages(workspaces);
+    core.info("Detected repository packages to cache: " + JSON.stringify(packages));
 
     if (registryName) {
       try {
