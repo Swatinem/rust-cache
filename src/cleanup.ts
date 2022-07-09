@@ -2,8 +2,8 @@ import * as core from "@actions/core";
 import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
-import { CacheConfig, STATE_BINS } from "./config";
 
+import { CARGO_HOME, STATE_BINS } from "./config";
 import { Packages } from "./workspace";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages) {
@@ -60,15 +60,30 @@ async function cleanProfileTarget(profileDir: string, packages: Packages) {
   await rmExcept(path.join(profileDir, "deps"), keepDeps);
 }
 
-export async function cleanBin(config: CacheConfig) {
-  const bins = await config.getCargoBins();
+export async function getCargoBins(): Promise<Set<string>> {
+  const bins = new Set<string>();
+  try {
+    const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
+      await fs.promises.readFile(path.join(CARGO_HOME, ".crates2.json"), "utf8"),
+    );
+    for (const pkg of Object.values(installs)) {
+      for (const bin of pkg.bins) {
+        bins.add(bin);
+      }
+    }
+  } catch {}
+  return bins;
+}
+
+export async function cleanBin() {
+  const bins = await getCargoBins();
   const oldBins = JSON.parse(core.getState(STATE_BINS));
 
   for (const bin of oldBins) {
     bins.delete(bin);
   }
 
-  const dir = await fs.promises.opendir(path.join(config.cargoHome, "bin"));
+  const dir = await fs.promises.opendir(path.join(CARGO_HOME, "bin"));
   for await (const dirent of dir) {
     if (dirent.isFile() && !bins.has(dirent.name)) {
       await rm(dir.path, dirent);
@@ -76,22 +91,46 @@ export async function cleanBin(config: CacheConfig) {
   }
 }
 
-export async function cleanRegistry(config: CacheConfig, registryName: string, packages: Packages) {
-  await io.rmRF(path.join(config.cargoIndex, registryName, ".cache"));
+export async function cleanRegistry(packages: Packages) {
+  // `.cargo/registry/src`
+  const srcDir = path.join(CARGO_HOME, "registry", "src");
+  await io.rmRF(srcDir);
+
+  // `.cargo/registry/index`
+  const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));
+  for await (const dirent of indexDir) {
+    if (dirent.isDirectory()) {
+      // eg `.cargo/registry/index/github.com-1ecc6299db9ec823`
+      // or `.cargo/registry/index/index.crates.io-e139d0d48fed7772`
+      const dir = await fs.promises.opendir(path.join(indexDir.path, dirent.name));
+
+      // TODO: check for `.git` etc, for now we just always remove the `.cache`
+      // and leave other stuff untouched.
+      await io.rmRF(path.join(dir.path, ".cache"));
+    }
+  }
 
   const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
 
-  const dir = await fs.promises.opendir(path.join(config.cargoCache, registryName));
-  for await (const dirent of dir) {
-    if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-      await rm(dir.path, dirent);
+  // `.cargo/registry/cache`
+  const cacheDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "cache"));
+  for await (const dirent of cacheDir) {
+    if (dirent.isDirectory()) {
+      // eg `.cargo/registry/cache/github.com-1ecc6299db9ec823`
+      // or `.cargo/registry/cache/index.crates.io-e139d0d48fed7772`
+      const dir = await fs.promises.opendir(path.join(cacheDir.path, dirent.name));
+      for await (const dirent of dir) {
+        if (dirent.isFile() && !pkgSet.has(dirent.name)) {
+          await rm(dir.path, dirent);
+        }
+      }
     }
   }
 }
 
-export async function cleanGit(config: CacheConfig, packages: Packages) {
-  const coPath = path.join(config.cargoGit, "checkouts");
-  const dbPath = path.join(config.cargoGit, "db");
+export async function cleanGit(packages: Packages) {
+  const coPath = path.join(CARGO_HOME, "git", "checkouts");
+  const dbPath = path.join(CARGO_HOME, "git", "db");
   const repos = new Map<string, Set<string>>();
   for (const p of packages) {
     if (!p.path.startsWith(coPath)) {

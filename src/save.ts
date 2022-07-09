@@ -1,8 +1,6 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
-import * as glob from "@actions/glob";
-import path from "path";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, STATE_KEY } from "./config";
@@ -44,26 +42,23 @@ async function run() {
       }
     }
 
-    const registryName = await getRegistryName(config);
-    if (registryName) {
-      try {
-        core.info(`... Cleaning cargo registry ...`);
-        await cleanRegistry(config, registryName, allPackages);
-      } catch (e) {
-        core.info(`[warning] ${(e as any).stack}`);
-      }
+    try {
+      core.info(`... Cleaning cargo registry ...`);
+      await cleanRegistry(allPackages);
+    } catch (e) {
+      core.info(`[warning] ${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo/bin ...`);
-      await cleanBin(config);
+      await cleanBin();
     } catch (e) {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo git cache ...`);
-      await cleanGit(config, allPackages);
+      await cleanGit(allPackages);
     } catch (e) {
       core.info(`[warning] ${(e as any).stack}`);
     }
@@ -76,20 +71,6 @@ async function run() {
 }
 
 run();
-
-async function getRegistryName(config: CacheConfig): Promise<string | null> {
-  const globber = await glob.create(`${config.cargoIndex}/**/.last-updated`, { followSymbolicLinks: false });
-  const files = await globber.glob();
-  if (files.length > 1) {
-    core.warning(`got multiple registries: "${files.join('", "')}"`);
-  }
-
-  const first = files.shift()!;
-  if (!first) {
-    return null;
-  }
-  return path.basename(path.dirname(first));
-}
 
 async function macOsWorkaround() {
   try {

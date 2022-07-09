@@ -8,6 +8,9 @@ import path from "path";
 import { getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
 
+const HOME = os.homedir();
+export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
+
 const STATE_LOCKFILE_HASH = "RUST_CACHE_LOCKFILE_HASH";
 const STATE_LOCKFILES = "RUST_CACHE_LOCKFILES";
 export const STATE_BINS = "RUST_CACHE_BINS";
@@ -21,14 +24,6 @@ export class CacheConfig {
   /** The secondary (restore) key that only contains the prefix and environment */
   public restoreKey = "";
 
-  /** The `~/.cargo` directory */
-  public cargoHome = "";
-  /** The cargo registry index directory */
-  public cargoIndex = "";
-  /** The cargo registry cache directory */
-  public cargoCache = "";
-  /** The cargo git checkouts directory */
-  public cargoGit = "";
   /** The workspace configurations */
   public workspaces: Array<Workspace> = [];
 
@@ -146,15 +141,8 @@ export class CacheConfig {
     key += `-${lockHash}`;
     self.cacheKey = key;
 
-    // Constructs some generic paths, workspace config and paths to restore:
+    // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
-
-    const home = os.homedir();
-    const cargoHome = process.env.CARGO_HOME || path.join(home, ".cargo");
-    self.cargoHome = cargoHome;
-    self.cargoIndex = path.join(cargoHome, "registry/index");
-    self.cargoCache = path.join(cargoHome, "registry/cache");
-    self.cargoGit = path.join(cargoHome, "git");
 
     const workspaces: Array<Workspace> = [];
     const workspacesInput = core.getInput("workspaces") || ".";
@@ -166,15 +154,7 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    self.cachePaths = [
-      path.join(cargoHome, "bin"),
-      path.join(cargoHome, ".crates2.json"),
-      path.join(cargoHome, ".crates.toml"),
-      self.cargoIndex,
-      self.cargoCache,
-      self.cargoGit,
-      ...workspaces.map((ws) => ws.target),
-    ];
+    self.cachePaths = [CARGO_HOME, ...workspaces.map((ws) => ws.target)];
 
     return self;
   }
@@ -205,21 +185,6 @@ export class CacheConfig {
       core.info(`  - ${file}`);
     }
     core.endGroup();
-  }
-
-  public async getCargoBins(): Promise<Set<string>> {
-    const bins = new Set<string>();
-    try {
-      const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
-        await fs.promises.readFile(path.join(this.cargoHome, ".crates2.json"), "utf8"),
-      );
-      for (const pkg of Object.values(installs)) {
-        for (const bin of pkg.bins) {
-          bins.add(bin);
-        }
-      }
-    } catch {}
-    return bins;
   }
 }
 

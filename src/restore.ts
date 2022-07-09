@@ -1,7 +1,7 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 
-import { cleanTargetDir } from "./cleanup";
+import { cleanTargetDir, getCargoBins } from "./cleanup";
 import { CacheConfig, STATE_BINS, STATE_KEY } from "./config";
 
 process.on("uncaughtException", (e) => {
@@ -29,7 +29,7 @@ async function run() {
     config.printInfo();
     core.info("");
 
-    const bins = await config.getCargoBins();
+    const bins = await getCargoBins();
     core.saveState(STATE_BINS, JSON.stringify([...bins]));
 
     core.info(`... Restoring cache ...`);

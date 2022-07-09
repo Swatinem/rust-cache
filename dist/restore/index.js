@@ -61667,6 +61667,8 @@ class Workspace {
 
 
 
+const HOME = external_os_default().homedir();
+const config_CARGO_HOME = process.env.CARGO_HOME || external_path_default().join(HOME, ".cargo");
 const STATE_LOCKFILE_HASH = "RUST_CACHE_LOCKFILE_HASH";
 const STATE_LOCKFILES = "RUST_CACHE_LOCKFILES";
 const config_STATE_BINS = "RUST_CACHE_BINS";
@@ -61679,14 +61681,6 @@ class CacheConfig {
         this.cacheKey = "";
         /** The secondary (restore) key that only contains the prefix and environment */
         this.restoreKey = "";
-        /** The `~/.cargo` directory */
-        this.cargoHome = "";
-        /** The cargo registry index directory */
-        this.cargoIndex = "";
-        /** The cargo registry cache directory */
-        this.cargoCache = "";
-        /** The cargo git checkouts directory */
-        this.cargoGit = "";
         /** The workspace configurations */
         this.workspaces = [];
         /** The prefix portion of the cache key */
@@ -61782,14 +61776,8 @@ class CacheConfig {
         self.keyFiles = keyFiles;
         key += `-${lockHash}`;
         self.cacheKey = key;
-        // Constructs some generic paths, workspace config and paths to restore:
+        // Constructs the workspace config and paths to restore:
         // The workspaces are given using a `$workspace -> $target` syntax.
-        const home = external_os_default().homedir();
-        const cargoHome = process.env.CARGO_HOME || external_path_default().join(home, ".cargo");
-        self.cargoHome = cargoHome;
-        self.cargoIndex = external_path_default().join(cargoHome, "registry/index");
-        self.cargoCache = external_path_default().join(cargoHome, "registry/cache");
-        self.cargoGit = external_path_default().join(cargoHome, "git");
         const workspaces = [];
         const workspacesInput = lib_core.getInput("workspaces") || ".";
         for (const workspace of workspacesInput.trim().split("\n")) {
@@ -61799,15 +61787,7 @@ class CacheConfig {
             workspaces.push(new Workspace(root, target));
         }
         self.workspaces = workspaces;
-        self.cachePaths = [
-            external_path_default().join(cargoHome, "bin"),
-            external_path_default().join(cargoHome, ".crates2.json"),
-            external_path_default().join(cargoHome, ".crates.toml"),
-            self.cargoIndex,
-            self.cargoCache,
-            self.cargoGit,
-            ...workspaces.map((ws) => ws.target),
-        ];
+        self.cachePaths = [config_CARGO_HOME, ...workspaces.map((ws) => ws.target)];
         return self;
     }
     printInfo() {
@@ -61836,19 +61816,6 @@ class CacheConfig {
             lib_core.info(`  - ${file}`);
         }
         lib_core.endGroup();
-    }
-    async getCargoBins() {
-        const bins = new Set();
-        try {
-            const { installs } = JSON.parse(await external_fs_default().promises.readFile(external_path_default().join(this.cargoHome, ".crates2.json"), "utf8"));
-            for (const pkg of Object.values(installs)) {
-                for (const bin of pkg.bins) {
-                    bins.add(bin);
-                }
-            }
-        }
-        catch { }
-        return bins;
     }
 }
 async function getRustVersion() {
@@ -61890,7 +61857,6 @@ async function cleanTargetDir(targetDir, packages) {
             await rm(dir.path, dirent);
         }
     }
-    await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
 }
 async function cleanProfileTarget(profileDir, packages) {
     await lib_io.rmRF(external_path_default().join(profileDir, "examples"));
@@ -61916,32 +61882,67 @@ async function cleanProfileTarget(profileDir, packages) {
     }));
     await rmExcept(external_path_default().join(profileDir, "deps"), keepDeps);
 }
-async function cleanBin(config) {
-    const bins = await config.getCargoBins();
+async function getCargoBins() {
+    const bins = new Set();
+    try {
+        const { installs } = JSON.parse(await external_fs_default().promises.readFile(external_path_default().join(config_CARGO_HOME, ".crates2.json"), "utf8"));
+        for (const pkg of Object.values(installs)) {
+            for (const bin of pkg.bins) {
+                bins.add(bin);
+            }
+        }
+    }
+    catch { }
+    return bins;
+}
+async function cleanBin() {
+    const bins = await getCargoBins();
     const oldBins = JSON.parse(core.getState(STATE_BINS));
     for (const bin of oldBins) {
         bins.delete(bin);
     }
-    const dir = await fs.promises.opendir(path.join(config.cargoHome, "bin"));
+    const dir = await fs.promises.opendir(path.join(CARGO_HOME, "bin"));
     for await (const dirent of dir) {
         if (dirent.isFile() && !bins.has(dirent.name)) {
             await rm(dir.path, dirent);
         }
     }
 }
-async function cleanRegistry(config, registryName, packages) {
-    await io.rmRF(path.join(config.cargoIndex, registryName, ".cache"));
+async function cleanRegistry(packages) {
+    // `.cargo/registry/src`
+    const srcDir = path.join(CARGO_HOME, "registry", "src");
+    await io.rmRF(srcDir);
+    // `.cargo/registry/index`
+    const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));
+    for await (const dirent of indexDir) {
+        if (dirent.isDirectory()) {
+            // eg `.cargo/registry/index/github.com-1ecc6299db9ec823`
+            // or `.cargo/registry/index/index.crates.io-e139d0d48fed7772`
+            const dir = await fs.promises.opendir(path.join(indexDir.path, dirent.name));
+            // TODO: check for `.git` etc, for now we just always remove the `.cache`
+            // and leave other stuff untouched.
+            await io.rmRF(path.join(dir.path, ".cache"));
+        }
+    }
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
-    const dir = await fs.promises.opendir(path.join(config.cargoCache, registryName));
-    for await (const dirent of dir) {
-        if (dirent.isFile() && !pkgSet.has(dirent.name)) {
-            await rm(dir.path, dirent);
+    // `.cargo/registry/cache`
+    const cacheDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "cache"));
+    for await (const dirent of cacheDir) {
+        if (dirent.isDirectory()) {
+            // eg `.cargo/registry/cache/github.com-1ecc6299db9ec823`
+            // or `.cargo/registry/cache/index.crates.io-e139d0d48fed7772`
+            const dir = await fs.promises.opendir(path.join(cacheDir.path, dirent.name));
+            for await (const dirent of dir) {
+                if (dirent.isFile() && !pkgSet.has(dirent.name)) {
+                    await rm(dir.path, dirent);
+                }
+            }
         }
     }
 }
-async function cleanGit(config, packages) {
-    const coPath = path.join(config.cargoGit, "checkouts");
-    const dbPath = path.join(config.cargoGit, "db");
+async function cleanGit(packages) {
+    const coPath = path.join(CARGO_HOME, "git", "checkouts");
+    const dbPath = path.join(CARGO_HOME, "git", "db");
     const repos = new Map();
     for (const p of packages) {
         if (!p.path.startsWith(coPath)) {
@@ -62051,7 +62052,7 @@ async function run() {
         const config = await CacheConfig["new"]();
         config.printInfo();
         lib_core.info("");
-        const bins = await config.getCargoBins();
+        const bins = await getCargoBins();
         lib_core.saveState(config_STATE_BINS, JSON.stringify([...bins]));
         lib_core.info(`... Restoring cache ...`);
         const key = config.cacheKey;
