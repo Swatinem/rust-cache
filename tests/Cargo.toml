@@ -6,5 +6,5 @@ authors = ["Arpad Borsos <arpad.borsos@googlemail.com>"]
 edition = "2021"
 
 [dependencies]
-reqwest = "0.11.0"
+reqwest = "0.11.11"
 proguard = { git = "https://github.com/getsentry/rust-proguard", rev = "4bc2cddd79cc8f7c9d14dda2f9f4c431e10c9424" }
