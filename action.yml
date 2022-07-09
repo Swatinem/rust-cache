@@ -1,6 +1,6 @@
 name: "Rust Cache"
 description: "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults."
-author: "Arpad Borsos <arpad.borsos@googlemail.com>"
+author: "Arpad Borsos <swatinem@swatinem.de>"
 inputs:
   key:
     description: "An additional key for the cache"
@@ -11,14 +11,8 @@ inputs:
   envVars:
     description: "Additional environment variables to include in the cache key, separeted by spaces"
     required: false
-  working-directory:
-    description: "The working directory this action should operate in"
-    required: false
-  target-dir:
-    description: "The target dir that should be cleaned and persisted, defaults to `./target`"
-    required: false
-  workspace-paths:
-    description: "Paths to multiple Cargo workspaces, separated by newlines"
+  workspaces:
+    description: "Paths to multiple Cargo workspaces and their target directories, separated by newlines"
     required: false
   cache-on-failure:
     description: "Cache even if the build fails. Defaults to false"
@@ -27,7 +21,7 @@ outputs:
   cache-hit:
     description: "A boolean value that indicates an exact match was found"
 runs:
-  using: "node12"
+  using: "node16"
   main: "dist/restore/index.js"
   post: "dist/save/index.js"
   post-if: "success() || env.CACHE_ON_FAILURE == 'true'"

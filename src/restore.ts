@@ -1,7 +1,15 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
-import path from "path";
-import { cleanTarget, getCacheConfig, getCargoBins, getPackages, stateBins, stateKey } from "./common";
+
+import { cleanTargetDir } from "./cleanup";
+import { CacheConfig, STATE_BINS, STATE_KEY } from "./config";
+
+process.on("uncaughtException", (e) => {
+  core.info(`[warning] ${e.message}`);
+  if (e.stack) {
+    core.info(e.stack);
+  }
+});
 
 async function run() {
   if (!cache.isFeatureAvailable()) {
@@ -17,28 +25,27 @@ async function run() {
     core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
-    const { paths, key, restoreKeys, workspaces } = await getCacheConfig();
-    const restorePaths = paths.concat(workspaces);
+    const config = await CacheConfig.new();
 
-    const bins = await getCargoBins();
-    core.saveState(stateBins, JSON.stringify([...bins]));
+    const bins = await config.getCargoBins();
+    core.saveState(STATE_BINS, JSON.stringify([...bins]));
 
-    core.info(`Restoring paths:\n    ${restorePaths.join("\n    ")}`);
-    core.info(`In directory:\n    ${process.cwd()}`);
-    core.info(`Using keys:\n    ${[key, ...restoreKeys].join("\n    ")}`);
-    const restoreKey = await cache.restoreCache(restorePaths, key, restoreKeys);
+    core.info(`# Restoring cache`);
+    config.printInfo();
+    const key = config.cacheKey;
+    const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
     if (restoreKey) {
       core.info(`Restored from cache key "${restoreKey}".`);
-      core.saveState(stateKey, restoreKey);
+      core.saveState(STATE_KEY, restoreKey);
 
       if (restoreKey !== key) {
         // pre-clean the target directory on cache mismatch
-        const packages = await getPackages(workspaces);
-        core.info("Restoring the following repository packages: " + JSON.stringify(packages));
+        for (const workspace of config.workspaces) {
+          const packages = await workspace.getPackages();
 
-        for (const workspace of workspaces) {
-          const target = path.join(workspace, "target");
-          await cleanTarget(target, packages);
+          try {
+            await cleanTargetDir(workspace.target, packages);
+          } catch {}
         }
       }
 
