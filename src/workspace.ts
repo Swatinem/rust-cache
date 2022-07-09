@@ -14,7 +14,7 @@ export class Workspace {
         }),
       );
       for (const pkg of meta.packages) {
-        if (!pkg.manifest_path.startsWith(this.root)) {
+        if (pkg.manifest_path.startsWith(this.root)) {
           continue;
         }
         const targets = pkg.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);

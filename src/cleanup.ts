@@ -14,7 +14,8 @@ export async function cleanTargetDir(targetDir: string, packages: Packages) {
     if (dirent.isDirectory()) {
       let dirName = path.join(dir.path, dirent.name);
       // is it a profile dir, or a nested target dir?
-      let isNestedTarget = await exists(path.join(dirName, "CACHEDIR.TAG"));
+      let isNestedTarget =
+        (await exists(path.join(dirName, "CACHEDIR.TAG"))) || (await exists(path.join(dirName, ".rustc_info.json")));
 
       try {
         if (isNestedTarget) {
@@ -29,19 +30,11 @@ export async function cleanTargetDir(targetDir: string, packages: Packages) {
   }
 
   await fs.promises.unlink(path.join(targetDir, "./.rustc_info.json"));
-
-  // TODO: remove all unknown files, clean all directories like profiles
-  try {
-    await cleanProfileTarget(path.join(targetDir, "debug"), packages);
-  } catch {}
-  try {
-    await cleanProfileTarget(path.join(targetDir, "release"), packages);
-  } catch {}
 }
 
 async function cleanProfileTarget(profileDir: string, packages: Packages) {
-  await io.rmRF(path.join(profileDir, "./examples"));
-  await io.rmRF(path.join(profileDir, "./incremental"));
+  await io.rmRF(path.join(profileDir, "examples"));
+  await io.rmRF(path.join(profileDir, "incremental"));
 
   let dir: fs.Dir;
   // remove all *files* from the profile directory
@@ -53,8 +46,8 @@ async function cleanProfileTarget(profileDir: string, packages: Packages) {
   }
 
   const keepPkg = new Set(packages.map((p) => p.name));
-  await rmExcept(path.join(profileDir, "./build"), keepPkg);
-  await rmExcept(path.join(profileDir, "./.fingerprint"), keepPkg);
+  await rmExcept(path.join(profileDir, "build"), keepPkg);
+  await rmExcept(path.join(profileDir, ".fingerprint"), keepPkg);
 
   const keepDeps = new Set(
     packages.flatMap((p) => {
@@ -66,7 +59,7 @@ async function cleanProfileTarget(profileDir: string, packages: Packages) {
       return names;
     }),
   );
-  await rmExcept(path.join(profileDir, "./deps"), keepDeps);
+  await rmExcept(path.join(profileDir, "deps"), keepDeps);
 }
 
 export async function cleanBin(config: CacheConfig) {

@@ -32,23 +32,22 @@ async function run() {
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
 
-    core.info(`... Cleaning Cache ...`);
-
-    const registryName = await getRegistryName(config);
-
     const allPackages = [];
     for (const workspace of config.workspaces) {
       const packages = await workspace.getPackages();
       allPackages.push(...packages);
       try {
+        core.info(`... Cleaning ${workspace.target} ...`);
         await cleanTargetDir(workspace.target, packages);
       } catch (e) {
         core.info(`[warning] ${(e as any).stack}`);
       }
     }
 
+    const registryName = await getRegistryName(config);
     if (registryName) {
       try {
+        core.info(`... Cleaning cargo registry ...`);
         await cleanRegistry(config, registryName, allPackages);
       } catch (e) {
         core.info(`[warning] ${(e as any).stack}`);
@@ -56,12 +55,14 @@ async function run() {
     }
 
     try {
+      core.info(`... Cleaning cargo/bin ...`);
       await cleanBin(config);
     } catch (e) {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
     try {
+      core.info(`... Cleaning cargo git cache ...`);
       await cleanGit(config, allPackages);
     } catch (e) {
       core.info(`[warning] ${(e as any).stack}`);

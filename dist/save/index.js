@@ -61646,7 +61646,7 @@ class Workspace {
                 cwd: this.root,
             }));
             for (const pkg of meta.packages) {
-                if (!pkg.manifest_path.startsWith(this.root)) {
+                if (pkg.manifest_path.startsWith(this.root)) {
                     continue;
                 }
                 const targets = pkg.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
@@ -61875,7 +61875,7 @@ async function cleanTargetDir(targetDir, packages) {
         if (dirent.isDirectory()) {
             let dirName = external_path_default().join(dir.path, dirent.name);
             // is it a profile dir, or a nested target dir?
-            let isNestedTarget = await exists(external_path_default().join(dirName, "CACHEDIR.TAG"));
+            let isNestedTarget = (await exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
                     await cleanTargetDir(dirName, packages);
@@ -61891,19 +61891,10 @@ async function cleanTargetDir(targetDir, packages) {
         }
     }
     await external_fs_default().promises.unlink(external_path_default().join(targetDir, "./.rustc_info.json"));
-    // TODO: remove all unknown files, clean all directories like profiles
-    try {
-        await cleanProfileTarget(external_path_default().join(targetDir, "debug"), packages);
-    }
-    catch { }
-    try {
-        await cleanProfileTarget(external_path_default().join(targetDir, "release"), packages);
-    }
-    catch { }
 }
 async function cleanProfileTarget(profileDir, packages) {
-    await io.rmRF(external_path_default().join(profileDir, "./examples"));
-    await io.rmRF(external_path_default().join(profileDir, "./incremental"));
+    await io.rmRF(external_path_default().join(profileDir, "examples"));
+    await io.rmRF(external_path_default().join(profileDir, "incremental"));
     let dir;
     // remove all *files* from the profile directory
     dir = await external_fs_default().promises.opendir(profileDir);
@@ -61913,8 +61904,8 @@ async function cleanProfileTarget(profileDir, packages) {
         }
     }
     const keepPkg = new Set(packages.map((p) => p.name));
-    await rmExcept(external_path_default().join(profileDir, "./build"), keepPkg);
-    await rmExcept(external_path_default().join(profileDir, "./.fingerprint"), keepPkg);
+    await rmExcept(external_path_default().join(profileDir, "build"), keepPkg);
+    await rmExcept(external_path_default().join(profileDir, ".fingerprint"), keepPkg);
     const keepDeps = new Set(packages.flatMap((p) => {
         const names = [];
         for (const n of [p.name, ...p.targets]) {
@@ -61923,7 +61914,7 @@ async function cleanProfileTarget(profileDir, packages) {
         }
         return names;
     }));
-    await rmExcept(external_path_default().join(profileDir, "./deps"), keepDeps);
+    await rmExcept(external_path_default().join(profileDir, "deps"), keepDeps);
 }
 async function cleanBin(config) {
     const bins = await config.getCargoBins();
@@ -62062,21 +62053,22 @@ async function run() {
         }
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         await macOsWorkaround();
-        core.info(`... Cleaning Cache ...`);
-        const registryName = await getRegistryName(config);
         const allPackages = [];
         for (const workspace of config.workspaces) {
             const packages = await workspace.getPackages();
             allPackages.push(...packages);
             try {
+                core.info(`... Cleaning ${workspace.target} ...`);
                 await cleanTargetDir(workspace.target, packages);
             }
             catch (e) {
                 core.info(`[warning] ${e.stack}`);
             }
         }
+        const registryName = await getRegistryName(config);
         if (registryName) {
             try {
+                core.info(`... Cleaning cargo registry ...`);
                 await cleanRegistry(config, registryName, allPackages);
             }
             catch (e) {
@@ -62084,12 +62076,14 @@ async function run() {
             }
         }
         try {
+            core.info(`... Cleaning cargo/bin ...`);
             await cleanBin(config);
         }
         catch (e) {
             core.info(`[warning] ${e.stack}`);
         }
         try {
+            core.info(`... Cleaning cargo git cache ...`);
             await cleanGit(config, allPackages);
         }
         catch (e) {
