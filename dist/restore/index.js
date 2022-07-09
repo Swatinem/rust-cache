@@ -61808,8 +61808,12 @@ class CacheConfig {
         return self;
     }
     printInfo() {
+        lib_core.info(`Workspaces:`);
+        for (const workspace of this.workspaces) {
+            lib_core.info(`    ${workspace.root}`);
+        }
         lib_core.info(`Cache Paths:`);
-        for (const path in this.cachePaths) {
+        for (const path of this.cachePaths) {
             lib_core.info(`    ${path}`);
         }
         lib_core.info(`Restore Key:`);
@@ -61820,16 +61824,12 @@ class CacheConfig {
         lib_core.info(`  - ${this.keyPrefix}`);
         lib_core.info(`.. Environment considered:`);
         lib_core.info(`  - Rust Version: ${this.keyRust}`);
-        for (const env in this.keyEnvs) {
+        for (const env of this.keyEnvs) {
             lib_core.info(`  - ${env}`);
         }
         lib_core.info(`.. Lockfiles considered:`);
-        for (const file in this.keyFiles) {
+        for (const file of this.keyFiles) {
             lib_core.info(`  - ${file}`);
-        }
-        lib_core.info(`Workspaces configured:`);
-        for (const workspace of this.workspaces) {
-            lib_core.info(`    ${workspace.root}`);
         }
     }
     async getCargoBins() {

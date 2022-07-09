@@ -180,8 +180,12 @@ export class CacheConfig {
   }
 
   printInfo() {
+    core.info(`Workspaces:`);
+    for (const workspace of this.workspaces) {
+      core.info(`    ${workspace.root}`);
+    }
     core.info(`Cache Paths:`);
-    for (const path in this.cachePaths) {
+    for (const path of this.cachePaths) {
       core.info(`    ${path}`);
     }
     core.info(`Restore Key:`);
@@ -192,16 +196,12 @@ export class CacheConfig {
     core.info(`  - ${this.keyPrefix}`);
     core.info(`.. Environment considered:`);
     core.info(`  - Rust Version: ${this.keyRust}`);
-    for (const env in this.keyEnvs) {
+    for (const env of this.keyEnvs) {
       core.info(`  - ${env}`);
     }
     core.info(`.. Lockfiles considered:`);
-    for (const file in this.keyFiles) {
+    for (const file of this.keyFiles) {
       core.info(`  - ${file}`);
-    }
-    core.info(`Workspaces configured:`);
-    for (const workspace of this.workspaces) {
-      core.info(`    ${workspace.root}`);
     }
   }
 
