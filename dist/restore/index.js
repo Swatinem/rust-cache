@@ -61586,7 +61586,7 @@ var cache = __nccwpck_require__(7799);
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var lib_core = __nccwpck_require__(2186);
 // EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
-var lib_io = __nccwpck_require__(7436);
+var io = __nccwpck_require__(7436);
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __nccwpck_require__(7147);
 var external_fs_default = /*#__PURE__*/__nccwpck_require__.n(external_fs_);
@@ -61700,10 +61700,10 @@ class CacheConfig {
     static async new() {
         const self = new CacheConfig();
         // Construct key prefix:
-        // This uses either the `sharedKey` input,
+        // This uses either the `shared-key` input,
         // or the `key` input combined with the `job` key.
         let key = `v0-rust`;
-        const sharedKey = lib_core.getInput("sharedKey");
+        const sharedKey = lib_core.getInput("shared-key");
         if (sharedKey) {
             key += `-${sharedKey}`;
         }
@@ -61721,7 +61721,7 @@ class CacheConfig {
         // Construct environment portion of the key:
         // This consists of a hash that considers the rust version
         // as well as all the environment variables as given by a default list
-        // and the `envVars` input.
+        // and the `env-vars` input.
         // The env vars are sorted, matched by prefix and hashed into the
         // resulting environment hash.
         let hasher = external_crypto_default().createHash("sha1");
@@ -61732,8 +61732,8 @@ class CacheConfig {
         keyRust += ` (${rustVersion["commit-hash"]})`;
         self.keyRust = keyRust;
         // these prefixes should cover most of the compiler / rust / cargo keys
-        const envPrefixes = ["CARGO", "CC", "CXX", "CMAKE", "RUST"];
-        envPrefixes.push(...lib_core.getInput("envVars").split(/\s+/).filter(Boolean));
+        const envPrefixes = ["CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST"];
+        envPrefixes.push(...lib_core.getInput("env-vars").split(/\s+/).filter(Boolean));
         // sort the available env vars so we have a more stable hash
         const keyEnvs = [];
         const envKeys = Object.keys(process.env);
@@ -61781,7 +61781,7 @@ class CacheConfig {
         const workspaces = [];
         const workspacesInput = lib_core.getInput("workspaces") || ".";
         for (const workspace of workspacesInput.trim().split("\n")) {
-            let [root, target = "target"] = workspace.split(" -> ");
+            let [root, target = "target"] = workspace.split("->").map((s) => s.trim());
             root = external_path_default().resolve(root);
             target = external_path_default().join(root, target);
             workspaces.push(new Workspace(root, target));
@@ -61859,8 +61859,8 @@ async function cleanTargetDir(targetDir, packages) {
     }
 }
 async function cleanProfileTarget(profileDir, packages) {
-    await lib_io.rmRF(external_path_default().join(profileDir, "examples"));
-    await lib_io.rmRF(external_path_default().join(profileDir, "incremental"));
+    await rmRF(external_path_default().join(profileDir, "examples"));
+    await rmRF(external_path_default().join(profileDir, "incremental"));
     let dir;
     // remove all *files* from the profile directory
     dir = await external_fs_default().promises.opendir(profileDir);
@@ -61911,8 +61911,7 @@ async function cleanBin() {
 async function cleanRegistry(packages) {
     // `.cargo/registry/src`
     // we can remove this completely, as cargo will recreate this from `cache`
-    const srcDir = path.join(CARGO_HOME, "registry", "src");
-    await io.rmRF(srcDir);
+    await rmRF(path.join(CARGO_HOME, "registry", "src"));
     // `.cargo/registry/index`
     const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));
     for await (const dirent of indexDir) {
@@ -61922,7 +61921,7 @@ async function cleanRegistry(packages) {
             const dir = await fs.promises.opendir(path.join(indexDir.path, dirent.name));
             // for a git registry, we can remove `.cache`, as cargo will recreate it from git
             if (await exists(path.join(dir.path, ".git"))) {
-                await io.rmRF(path.join(dir.path, ".cache"));
+                await rmRF(path.join(dir.path, ".cache"));
             }
             // TODO: else, clean `.cache` based on the `packages`
         }
@@ -62015,10 +62014,14 @@ async function rm(parent, dirent) {
             await external_fs_default().promises.unlink(fileName);
         }
         else if (dirent.isDirectory()) {
-            await lib_io.rmRF(fileName);
+            await io.rmRF(fileName);
         }
     }
     catch { }
+}
+async function rmRF(dirName) {
+    lib_core.debug(`deleting "${dirName}"`);
+    await io.rmRF(dirName);
 }
 async function exists(path) {
     try {
