@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0
+
+- The action code was refactored to allow for caching multiple workspaces and
+  different `target` directory layouts.
+- The `working-directory` and `target-dir` input options were replaced by a
+  single `workspaces` option that has the form of `$workspace -> $target`.
+- Support for considering `env-vars` as part of the cache key.
+- The `sharedKey` input option was renamed to `shared-key` for consistency.
+
 ## 1.4.0
 
 - Clean both `debug` and `release` target directories.

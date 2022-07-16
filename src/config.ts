@@ -47,12 +47,12 @@ export class CacheConfig {
     const self = new CacheConfig();
 
     // Construct key prefix:
-    // This uses either the `sharedKey` input,
+    // This uses either the `shared-key` input,
     // or the `key` input combined with the `job` key.
 
     let key = `v0-rust`;
 
-    const sharedKey = core.getInput("sharedKey");
+    const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
       key += `-${sharedKey}`;
     } else {
@@ -72,7 +72,7 @@ export class CacheConfig {
     // Construct environment portion of the key:
     // This consists of a hash that considers the rust version
     // as well as all the environment variables as given by a default list
-    // and the `envVars` input.
+    // and the `env-vars` input.
     // The env vars are sorted, matched by prefix and hashed into the
     // resulting environment hash.
 
@@ -87,8 +87,8 @@ export class CacheConfig {
     self.keyRust = keyRust;
 
     // these prefixes should cover most of the compiler / rust / cargo keys
-    const envPrefixes = ["CARGO", "CC", "CXX", "CMAKE", "RUST"];
-    envPrefixes.push(...core.getInput("envVars").split(/\s+/).filter(Boolean));
+    const envPrefixes = ["CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST"];
+    envPrefixes.push(...core.getInput("env-vars").split(/\s+/).filter(Boolean));
 
     // sort the available env vars so we have a more stable hash
     const keyEnvs = [];
@@ -147,7 +147,7 @@ export class CacheConfig {
     const workspaces: Array<Workspace> = [];
     const workspacesInput = core.getInput("workspaces") || ".";
     for (const workspace of workspacesInput.trim().split("\n")) {
-      let [root, target = "target"] = workspace.split(" -> ");
+      let [root, target = "target"] = workspace.split("->").map((s) => s.trim());
       root = path.resolve(root);
       target = path.join(root, target);
       workspaces.push(new Workspace(root, target));

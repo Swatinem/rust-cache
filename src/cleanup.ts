@@ -31,8 +31,8 @@ export async function cleanTargetDir(targetDir: string, packages: Packages) {
 }
 
 async function cleanProfileTarget(profileDir: string, packages: Packages) {
-  await io.rmRF(path.join(profileDir, "examples"));
-  await io.rmRF(path.join(profileDir, "incremental"));
+  await rmRF(path.join(profileDir, "examples"));
+  await rmRF(path.join(profileDir, "incremental"));
 
   let dir: fs.Dir;
   // remove all *files* from the profile directory
@@ -94,8 +94,7 @@ export async function cleanBin() {
 export async function cleanRegistry(packages: Packages) {
   // `.cargo/registry/src`
   // we can remove this completely, as cargo will recreate this from `cache`
-  const srcDir = path.join(CARGO_HOME, "registry", "src");
-  await io.rmRF(srcDir);
+  await rmRF(path.join(CARGO_HOME, "registry", "src"));
 
   // `.cargo/registry/index`
   const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));
@@ -107,7 +106,7 @@ export async function cleanRegistry(packages: Packages) {
 
       // for a git registry, we can remove `.cache`, as cargo will recreate it from git
       if (await exists(path.join(dir.path, ".git"))) {
-        await io.rmRF(path.join(dir.path, ".cache"));
+        await rmRF(path.join(dir.path, ".cache"));
       }
       // TODO: else, clean `.cache` based on the `packages`
     }
@@ -183,7 +182,7 @@ export async function cleanGit(packages: Packages) {
 
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
 
-export async function rmExcept(dirName: string, keepPrefix: Set<string>) {
+async function rmExcept(dirName: string, keepPrefix: Set<string>) {
   const dir = await fs.promises.opendir(dirName);
   for await (const dirent of dir) {
     let name = dirent.name;
@@ -200,7 +199,7 @@ export async function rmExcept(dirName: string, keepPrefix: Set<string>) {
   }
 }
 
-export async function rm(parent: string, dirent: fs.Dirent) {
+async function rm(parent: string, dirent: fs.Dirent) {
   try {
     const fileName = path.join(parent, dirent.name);
     core.debug(`deleting "${fileName}"`);
@@ -210,6 +209,11 @@ export async function rm(parent: string, dirent: fs.Dirent) {
       await io.rmRF(fileName);
     }
   } catch {}
+}
+
+async function rmRF(dirName: string) {
+  core.debug(`deleting "${dirName}"`);
+  await io.rmRF(dirName);
 }
 
 async function exists(path: string) {

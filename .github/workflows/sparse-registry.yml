@@ -17,7 +17,7 @@ jobs:
       CARGO_UNSTABLE_SPARSE_REGISTRY: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - run: |
           rustup toolchain install nightly --profile minimal

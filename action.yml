@@ -2,14 +2,14 @@ name: "Rust Cache"
 description: "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults."
 author: "Arpad Borsos <swatinem@swatinem.de>"
 inputs:
+  shared-key:
+    description: "An additional cache key that is stable over multiple jobs"
+    required: false
   key:
     description: "An additional key for the cache"
     required: false
-  sharedKey:
-    description: "An additional cache key that is stable over multiple jobs"
-    required: false
-  envVars:
-    description: "Additional environment variables to include in the cache key, separeted by spaces"
+  env-vars:
+    description: "Additional environment variables to include in the cache key, separated by spaces"
     required: false
   workspaces:
     description: "Paths to multiple Cargo workspaces and their target directories, separated by newlines"

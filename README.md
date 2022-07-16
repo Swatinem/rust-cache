@@ -6,43 +6,48 @@ sensible defaults.
 ## Example usage
 
 ```yaml
-- uses: actions/checkout@v2
+- uses: actions/checkout@v3
 
 # selecting a toolchain either by action or manual `rustup` calls should happen
-# before the plugin, as it uses the current rustc version as its cache key
-- uses: actions-rs/toolchain@v1
-  with:
-    profile: minimal
-    toolchain: stable
+# before the plugin, as the cache uses the current rustc version as its cache key
+- run: rustup toolchain install stable --profile minimal
 
-- uses: Swatinem/rust-cache@v1
+- uses: Swatinem/rust-cache@v2
+  with:
+    # An explicit cache key that is used instead of the automatic `job`-based
+    # cache key and is thus stable across jobs.
+    # Default: empty
+    shared-key: ""
+
+    # An additional cache key that is added alongside the automatic `job`-based
+    # cache key and can be used to further differentiate jobs.
+    # Default: empty
+    key: ""
+
+    # A whitespace separated list of env-var *prefixes* who's value contributes
+    # to the environment cache key.
+    # The env-vars are matched by *prefix*, so the default `RUST` var will
+    # match all of `RUSTC`, `RUSTUP_*`, `RUSTFLAGS`, `RUSTDOC_*`, etc.
+    # Default: "CARGO CC CFLAGS CXX CMAKE RUST"
+    env-vars: ""
+
+    # The cargo workspaces and target directory configuration.
+    # These entries are separated by newlines and have the form
+    # `$workspace -> $target`. The `$target` part is treated as a directory
+    # relative to the `$workspace` and defaults to "target" if not explicitly given.
+    # Default: ". -> target"
+    workspaces: ""
+
+    # Determines if the cache should be saved even when the workflow has failed.
+    # Default: "false"
+    cache-on-failure: ""
 ```
 
-## Inputs
-
-: `key`
-An optional key that is added to the automatic cache key.
-
-: `sharedKey`
-An additional key that is stable over multiple jobs.
-
-: `envVars`
-A space-separated list of regular expressions that define additional environment variable filters.
-These are added to an additional cache key that's generated from environment variable contents.
-
-: `working-directory`
-The working directory the action operates in, is case the cargo project is not
-located in the repo root.
-
-: `target-dir`
-The target directory that should be cleaned and persisted, defaults to `./target`.
-
-: `cache-on-failure`
-Cache even if the build fails, defaults to false
+Further examples are available in the [.github/workflows][] directory.
 
 ## Outputs
 
-: `cache-hit`
+**`cache-hit`**
 
 This is a boolean flag that will be set to `true` when there was an exact cache hit.
 
@@ -67,24 +72,21 @@ a more stable experience, please use a fixed revision or tag.
 
 This action currently caches the following files/directories:
 
-- `~/.cargo/bin`
-- `~/.cargo/registry/index`
-- `~/.cargo/registry/cache`
-- `~/.cargo/git`
-- `~/.cargo/.crates.toml`
-- `~/.cargo/.crates2.json`
-- `./target`
+- `~/.cargo` (installed binaries, the cargo registry, cache, and git dependencies)
+- `./target` (build artifacts of dependencies)
 
 This cache is automatically keyed by:
 
 - the github [`job_id`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_id),
-- the rustc release / host / hash, and
+- the rustc release / host / hash,
+- the value of some compiler-specific environment variables (eg. RUSTFLAGS, etc), and
 - a hash of all `Cargo.lock` / `Cargo.toml` files found anywhere in the repository (if present).
 - a hash of all `rust-toolchain` / `rust-toolchain.toml` files in the root of the repository (if present).
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 
 Before being persisted, the cache is cleaned of:
+
 - Any files in `~/.cargo/bin` that were present before the action ran (for example `rustc`).
 - Dependencies that are no longer used.
 - Anything that is not a dependency.
@@ -103,13 +105,39 @@ to recreate it from the compressed crate archives in `~/.cargo/registry/cache`.
 The action will try to restore from a previous `Cargo.lock` version as well, so
 lockfile updates should only re-build changed dependencies.
 
+The action invokes `cargo metadata` to determine the current set of dependencies.
+
 Additionally, the action automatically works around
 [cargo#8603](https://github.com/rust-lang/cargo/issues/8603) /
 [actions/cache#403](https://github.com/actions/cache/issues/403) which would
 otherwise corrupt the cache on macOS builds.
 
+## Cache Limits and Control
+
+This specialized cache action is built on top of the upstream cache action
+maintained by GitHub. The same restrictions and limits apply, which are
+documented here:
+https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows
+
+In particular, caches are currently limited to 10 GB in total and exceeding that
+limit will cause eviction of older caches.
+
+Caches from base branches are available to PRs, but not across unrelated
+branches.
+
+The caches can be controlled using the [Cache API](https://docs.github.com/en/rest/actions/cache)
+which allows listing existing caches and manually removing entries.
+
+## Debugging
+
+The action prints detailed information about which information it considers
+for its cache key, and it outputs more debug-only information about which
+cleanup steps it performs before persisting the cache.
+
+You can read up on how to [enable debug logging](https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging)
+to see those details as well as further details related to caching operations.
+
 ## Known issues
 
-- The cache cleaning process currently only runs against the build artifacts under
-  `./target/debug/`, so projects using release or cross-compiled builds will experience
-  larger cache sizes.
+- The cache cleaning process currently removes all the files from `~/.cargo/bin`
+  that were present before the action ran (for example `rustc`).
