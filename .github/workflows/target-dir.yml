@@ -18,7 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - run: rustup toolchain install stable --profile minimal
+      # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
+      # This can result in the CI failure, see: https://github.com/rust-lang/rustup/issues/3029
+      - run: |
+          rustup set auto-self-update disable
+          rustup toolchain install stable --profile minimal
 
       # the `workspaces` option has the format `$workspace -> $target-dir`
       # and the `$target-dir` is relative to the `$workspace`.
