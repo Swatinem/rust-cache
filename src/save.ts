@@ -4,6 +4,7 @@ import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, STATE_KEY } from "./config";
+import { withRetries, withTimeout } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.info(`[warning] ${e.message}`);
@@ -64,7 +65,15 @@ async function run() {
     }
 
     core.info(`... Saving cache ...`);
-    await cache.saveCache(config.cachePaths, config.cacheKey);
+    await withRetries(
+      () =>
+        withTimeout(
+          () => cache.saveCache(config.cachePaths, config.cacheKey),
+          config.timeout
+        ),
+      config.maxRetryAttempts,
+      () => true
+    );
   } catch (e) {
     core.info(`[warning] ${(e as any).stack}`);
   }

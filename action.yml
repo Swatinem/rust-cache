@@ -14,6 +14,12 @@ inputs:
   workspaces:
     description: "Paths to multiple Cargo workspaces and their target directories, separated by newlines"
     required: false
+  maxRetryAttempts:
+    description: "The amount of attempts to retry the network operations after retriable errors"
+    required: false
+  timeout:
+    description: "The timeout for the networking operations"
+    required: false
   cache-on-failure:
     description: "Cache even if the build fails. Defaults to false"
     required: false
