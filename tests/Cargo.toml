@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 reqwest = "0.11.11"
-proguard = { git = "https://github.com/getsentry/rust-proguard", rev = "4bc2cddd79cc8f7c9d14dda2f9f4c431e10c9424" }
+watto = { git = "https://github.com/getsentry/watto", rev = "d71c8218506bddba102a124a460d64da25e303dc", features = ["strings"] }

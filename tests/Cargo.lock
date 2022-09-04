@@ -302,6 +302,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
+name = "leb128"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -449,11 +455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proguard"
-version = "5.0.0"
-source = "git+https://github.com/getsentry/rust-proguard?rev=4bc2cddd79cc8f7c9d14dda2f9f4c431e10c9424#4bc2cddd79cc8f7c9d14dda2f9f4c431e10c9424"
-
-[[package]]
 name = "quote"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,8 +522,8 @@ dependencies = [
 name = "rust-cache"
 version = "0.1.0"
 dependencies = [
- "proguard",
  "reqwest",
+ "watto",
 ]
 
 [[package]]
@@ -632,6 +633,26 @@ dependencies = [
  "redox_syscall",
  "remove_dir_all",
  "winapi",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d0a539a918745651435ac7db7a18761589a94cd7e94cd56999f828bf73c8a57"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c251e90f708e16c49a16f4917dc2131e75222b72edfa9cb7f7c58ae56aae0c09"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -841,6 +862,15 @@ name = "wasm-bindgen-shared"
 version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a89911bd99e5f3659ec4acf9c4d93b0a90fe4a2a11f15328472058edc5261be"
+
+[[package]]
+name = "watto"
+version = "0.1.0"
+source = "git+https://github.com/getsentry/watto?rev=d71c8218506bddba102a124a460d64da25e303dc#d71c8218506bddba102a124a460d64da25e303dc"
+dependencies = [
+ "leb128",
+ "thiserror",
+]
 
 [[package]]
 name = "web-sys"
