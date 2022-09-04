@@ -29,7 +29,6 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
       await rm(dir.path, dirent);
     }
   }
-  await dir.close();
 }
 
 async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp = false) {
@@ -84,7 +83,6 @@ export async function cleanBin() {
       await rm(dir.path, dirent);
     }
   }
-  await dir.close();
 }
 
 export async function cleanRegistry(packages: Packages) {
@@ -98,17 +96,15 @@ export async function cleanRegistry(packages: Packages) {
     if (dirent.isDirectory()) {
       // eg `.cargo/registry/index/github.com-1ecc6299db9ec823`
       // or `.cargo/registry/index/index.crates.io-e139d0d48fed7772`
-      const dir = await fs.promises.opendir(path.join(indexDir.path, dirent.name));
+      const dirPath = path.join(indexDir.path, dirent.name);
 
       // for a git registry, we can remove `.cache`, as cargo will recreate it from git
-      if (await exists(path.join(dir.path, ".git"))) {
-        await rmRF(path.join(dir.path, ".cache"));
+      if (await exists(path.join(dirPath, ".git"))) {
+        await rmRF(path.join(dirPath, ".cache"));
       }
-      await dir.close();
       // TODO: else, clean `.cache` based on the `packages`
     }
   }
-  await indexDir.close();
 
   const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
 
@@ -125,10 +121,8 @@ export async function cleanRegistry(packages: Packages) {
           await rm(dir.path, dirent);
         }
       }
-      await dir.close();
     }
   }
-  await cacheDir.close();
 }
 
 export async function cleanGit(packages: Packages) {
@@ -159,7 +153,6 @@ export async function cleanGit(packages: Packages) {
         await rm(dir.path, dirent);
       }
     }
-    await dir.close();
   } catch {}
 
   // clean the checkouts
@@ -180,9 +173,7 @@ export async function cleanGit(packages: Packages) {
           await rm(refsDir.path, dirent);
         }
       }
-      await refsDir.close();
     }
-    await dir.close();
   } catch {}
 }
 
@@ -219,7 +210,6 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp
       await rm(dir.path, dirent);
     }
   }
-  await dir.close();
 }
 
 async function rm(parent: string, dirent: fs.Dirent) {

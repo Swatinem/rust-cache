@@ -64618,7 +64618,6 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
             await rm(dir.path, dirent);
         }
     }
-    await dir.close();
 }
 async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
     core.debug(`cleaning profile directory "${profileDir}"`);
@@ -64662,7 +64661,6 @@ async function cleanBin() {
             await rm(dir.path, dirent);
         }
     }
-    await dir.close();
 }
 async function cleanRegistry(packages) {
     // `.cargo/registry/src`
@@ -64674,16 +64672,14 @@ async function cleanRegistry(packages) {
         if (dirent.isDirectory()) {
             // eg `.cargo/registry/index/github.com-1ecc6299db9ec823`
             // or `.cargo/registry/index/index.crates.io-e139d0d48fed7772`
-            const dir = await external_fs_default().promises.opendir(external_path_default().join(indexDir.path, dirent.name));
+            const dirPath = external_path_default().join(indexDir.path, dirent.name);
             // for a git registry, we can remove `.cache`, as cargo will recreate it from git
-            if (await exists(external_path_default().join(dir.path, ".git"))) {
-                await rmRF(external_path_default().join(dir.path, ".cache"));
+            if (await exists(external_path_default().join(dirPath, ".git"))) {
+                await rmRF(external_path_default().join(dirPath, ".cache"));
             }
-            await dir.close();
             // TODO: else, clean `.cache` based on the `packages`
         }
     }
-    await indexDir.close();
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     // `.cargo/registry/cache`
     const cacheDir = await external_fs_default().promises.opendir(external_path_default().join(CARGO_HOME, "registry", "cache"));
@@ -64698,10 +64694,8 @@ async function cleanRegistry(packages) {
                     await rm(dir.path, dirent);
                 }
             }
-            await dir.close();
         }
     }
-    await cacheDir.close();
 }
 async function cleanGit(packages) {
     const coPath = external_path_default().join(CARGO_HOME, "git", "checkouts");
@@ -64730,7 +64724,6 @@ async function cleanGit(packages) {
                 await rm(dir.path, dirent);
             }
         }
-        await dir.close();
     }
     catch { }
     // clean the checkouts
@@ -64751,9 +64744,7 @@ async function cleanGit(packages) {
                     await rm(refsDir.path, dirent);
                 }
             }
-            await refsDir.close();
         }
-        await dir.close();
     }
     catch { }
 }
@@ -64786,7 +64777,6 @@ async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
             await rm(dir.path, dirent);
         }
     }
-    await dir.close();
 }
 async function rm(parent, dirent) {
     try {
