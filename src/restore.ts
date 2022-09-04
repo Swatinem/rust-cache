@@ -45,7 +45,7 @@ async function run() {
           try {
             const packages = await workspace.getPackages();
 
-            await cleanTargetDir(workspace.target, packages);
+            await cleanTargetDir(workspace.target, packages, true);
           } catch {}
         }
       }

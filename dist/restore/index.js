@@ -64346,7 +64346,7 @@ var cache = __nccwpck_require__(7799);
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var lib_core = __nccwpck_require__(2186);
 // EXTERNAL MODULE: ./node_modules/@actions/io/lib/io.js
-var io = __nccwpck_require__(7436);
+var lib_io = __nccwpck_require__(7436);
 // EXTERNAL MODULE: external "fs"
 var external_fs_ = __nccwpck_require__(7147);
 var external_fs_default = /*#__PURE__*/__nccwpck_require__.n(external_fs_);
@@ -64394,6 +64394,7 @@ async function getCmdOutput(cmd, args = [], options = {}) {
 ;// CONCATENATED MODULE: ./src/workspace.ts
 
 
+const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
 class Workspace {
     constructor(root, target) {
         this.root = root;
@@ -64409,7 +64410,7 @@ class Workspace {
                 if (pkg.manifest_path.startsWith(this.root)) {
                     continue;
                 }
-                const targets = pkg.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+                const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
                 packages.push({ name: pkg.name, version: pkg.version, targets, path: external_path_default().dirname(pkg.manifest_path) });
             }
         }
@@ -64594,10 +64595,10 @@ async function getRustVersion() {
 
 
 
-async function cleanTargetDir(targetDir, packages) {
-    let dir;
+async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
+    lib_core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
-    dir = await external_fs_default().promises.opendir(targetDir);
+    let dir = await external_fs_default().promises.opendir(targetDir);
     for await (const dirent of dir) {
         if (dirent.isDirectory()) {
             let dirName = external_path_default().join(dir.path, dirent.name);
@@ -64605,10 +64606,10 @@ async function cleanTargetDir(targetDir, packages) {
             let isNestedTarget = (await exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
-                    await cleanTargetDir(dirName, packages);
+                    await cleanTargetDir(dirName, packages, checkTimestamp);
                 }
                 else {
-                    await cleanProfileTarget(dirName, packages);
+                    await cleanProfileTarget(dirName, packages, checkTimestamp);
                 }
             }
             catch { }
@@ -64617,21 +64618,15 @@ async function cleanTargetDir(targetDir, packages) {
             await rm(dir.path, dirent);
         }
     }
+    await dir.close();
 }
-async function cleanProfileTarget(profileDir, packages) {
-    await rmRF(external_path_default().join(profileDir, "examples"));
-    await rmRF(external_path_default().join(profileDir, "incremental"));
-    let dir;
-    // remove all *files* from the profile directory
-    dir = await external_fs_default().promises.opendir(profileDir);
-    for await (const dirent of dir) {
-        if (dirent.isFile()) {
-            await rm(dir.path, dirent);
-        }
-    }
+async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
+    lib_core.debug(`cleaning profile directory "${profileDir}"`);
+    let keepProfile = new Set(["build", ".fingerprint", "deps"]);
+    await rmExcept(profileDir, keepProfile);
     const keepPkg = new Set(packages.map((p) => p.name));
-    await rmExcept(external_path_default().join(profileDir, "build"), keepPkg);
-    await rmExcept(external_path_default().join(profileDir, ".fingerprint"), keepPkg);
+    await rmExcept(external_path_default().join(profileDir, "build"), keepPkg, checkTimestamp);
+    await rmExcept(external_path_default().join(profileDir, ".fingerprint"), keepPkg, checkTimestamp);
     const keepDeps = new Set(packages.flatMap((p) => {
         const names = [];
         for (const n of [p.name, ...p.targets]) {
@@ -64640,7 +64635,7 @@ async function cleanProfileTarget(profileDir, packages) {
         }
         return names;
     }));
-    await rmExcept(external_path_default().join(profileDir, "deps"), keepDeps);
+    await rmExcept(external_path_default().join(profileDir, "deps"), keepDeps, checkTimestamp);
 }
 async function getCargoBins() {
     const bins = new Set();
@@ -64667,6 +64662,7 @@ async function cleanBin() {
             await rm(dir.path, dirent);
         }
     }
+    await dir.close();
 }
 async function cleanRegistry(packages) {
     // `.cargo/registry/src`
@@ -64683,9 +64679,11 @@ async function cleanRegistry(packages) {
             if (await exists(path.join(dir.path, ".git"))) {
                 await rmRF(path.join(dir.path, ".cache"));
             }
+            await dir.close();
             // TODO: else, clean `.cache` based on the `packages`
         }
     }
+    await indexDir.close();
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     // `.cargo/registry/cache`
     const cacheDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "cache"));
@@ -64700,8 +64698,10 @@ async function cleanRegistry(packages) {
                     await rm(dir.path, dirent);
                 }
             }
+            await dir.close();
         }
     }
+    await cacheDir.close();
 }
 async function cleanGit(packages) {
     const coPath = path.join(CARGO_HOME, "git", "checkouts");
@@ -64722,49 +64722,71 @@ async function cleanGit(packages) {
     }
     // we have to keep both the clone, and the checkout, removing either will
     // trigger a rebuild
-    let dir;
     // clean the db
-    dir = await fs.promises.opendir(dbPath);
-    for await (const dirent of dir) {
-        if (!repos.has(dirent.name)) {
-            await rm(dir.path, dirent);
-        }
-    }
-    // clean the checkouts
-    dir = await fs.promises.opendir(coPath);
-    for await (const dirent of dir) {
-        const refs = repos.get(dirent.name);
-        if (!refs) {
-            await rm(dir.path, dirent);
-            continue;
-        }
-        if (!dirent.isDirectory()) {
-            continue;
-        }
-        const refsDir = await fs.promises.opendir(path.join(dir.path, dirent.name));
-        for await (const dirent of refsDir) {
-            if (!refs.has(dirent.name)) {
-                await rm(refsDir.path, dirent);
+    try {
+        let dir = await fs.promises.opendir(dbPath);
+        for await (const dirent of dir) {
+            if (!repos.has(dirent.name)) {
+                await rm(dir.path, dirent);
             }
         }
+        await dir.close();
     }
+    catch { }
+    // clean the checkouts
+    try {
+        let dir = await fs.promises.opendir(coPath);
+        for await (const dirent of dir) {
+            const refs = repos.get(dirent.name);
+            if (!refs) {
+                await rm(dir.path, dirent);
+                continue;
+            }
+            if (!dirent.isDirectory()) {
+                continue;
+            }
+            const refsDir = await fs.promises.opendir(path.join(dir.path, dirent.name));
+            for await (const dirent of refsDir) {
+                if (!refs.has(dirent.name)) {
+                    await rm(refsDir.path, dirent);
+                }
+            }
+            await refsDir.close();
+        }
+        await dir.close();
+    }
+    catch { }
 }
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
-async function rmExcept(dirName, keepPrefix) {
+/**
+ * Removes all files or directories in `dirName`, except the ones matching
+ * any string in the `keepPrefix` set.
+ *
+ * The matching strips and trailing `-$hash` suffix.
+ *
+ * When the `checkTimestamp` flag is set, this will also remove anything older
+ * than one week.
+ */
+async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
     const dir = await external_fs_default().promises.opendir(dirName);
     for await (const dirent of dir) {
         let name = dirent.name;
+        // strip the trailing hash
         const idx = name.lastIndexOf("-");
         if (idx !== -1) {
             name = name.slice(0, idx);
         }
-        const fileName = external_path_default().join(dir.path, dirent.name);
-        const { mtime } = await external_fs_default().promises.stat(fileName);
-        // we don’t really know
-        if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > ONE_WEEK) {
+        let isOutdated = false;
+        if (checkTimestamp) {
+            const fileName = external_path_default().join(dir.path, dirent.name);
+            const { mtime } = await external_fs_default().promises.stat(fileName);
+            isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
+        }
+        if (!keepPrefix.has(name) || isOutdated) {
             await rm(dir.path, dirent);
         }
     }
+    await dir.close();
 }
 async function rm(parent, dirent) {
     try {
@@ -64774,13 +64796,13 @@ async function rm(parent, dirent) {
             await external_fs_default().promises.unlink(fileName);
         }
         else if (dirent.isDirectory()) {
-            await io.rmRF(fileName);
+            await lib_io.rmRF(fileName);
         }
     }
     catch { }
 }
 async function rmRF(dirName) {
-    lib_core.debug(`deleting "${dirName}"`);
+    core.debug(`deleting "${dirName}"`);
     await io.rmRF(dirName);
 }
 async function exists(path) {
@@ -64832,7 +64854,7 @@ async function run() {
                 for (const workspace of config.workspaces) {
                     try {
                         const packages = await workspace.getPackages();
-                        await cleanTargetDir(workspace.target, packages);
+                        await cleanTargetDir(workspace.target, packages, true);
                     }
                     catch { }
                 }

@@ -2,6 +2,8 @@ import path from "path";
 
 import { getCmdOutput } from "./utils";
 
+const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
+
 export class Workspace {
   constructor(public root: string, public target: string) {}
 
@@ -17,7 +19,7 @@ export class Workspace {
         if (pkg.manifest_path.startsWith(this.root)) {
           continue;
         }
-        const targets = pkg.targets.filter((t) => t.kind[0] === "lib").map((t) => t.name);
+        const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
         packages.push({ name: pkg.name, version: pkg.version, targets, path: path.dirname(pkg.manifest_path) });
       }
     } catch {}

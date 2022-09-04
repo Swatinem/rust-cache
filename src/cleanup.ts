@@ -6,10 +6,11 @@ import path from "path";
 import { CARGO_HOME, STATE_BINS } from "./config";
 import { Packages } from "./workspace";
 
-export async function cleanTargetDir(targetDir: string, packages: Packages) {
-  let dir: fs.Dir;
+export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
+  core.debug(`cleaning target directory "${targetDir}"`);
+
   // remove all *files* from the profile directory
-  dir = await fs.promises.opendir(targetDir);
+  let dir = await fs.promises.opendir(targetDir);
   for await (const dirent of dir) {
     if (dirent.isDirectory()) {
       let dirName = path.join(dir.path, dirent.name);
@@ -19,33 +20,27 @@ export async function cleanTargetDir(targetDir: string, packages: Packages) {
 
       try {
         if (isNestedTarget) {
-          await cleanTargetDir(dirName, packages);
+          await cleanTargetDir(dirName, packages, checkTimestamp);
         } else {
-          await cleanProfileTarget(dirName, packages);
+          await cleanProfileTarget(dirName, packages, checkTimestamp);
         }
       } catch {}
     } else if (dirent.name !== "CACHEDIR.TAG") {
       await rm(dir.path, dirent);
     }
   }
+  await dir.close();
 }
 
-async function cleanProfileTarget(profileDir: string, packages: Packages) {
-  await rmRF(path.join(profileDir, "examples"));
-  await rmRF(path.join(profileDir, "incremental"));
+async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp = false) {
+  core.debug(`cleaning profile directory "${profileDir}"`);
 
-  let dir: fs.Dir;
-  // remove all *files* from the profile directory
-  dir = await fs.promises.opendir(profileDir);
-  for await (const dirent of dir) {
-    if (dirent.isFile()) {
-      await rm(dir.path, dirent);
-    }
-  }
+  let keepProfile = new Set(["build", ".fingerprint", "deps"]);
+  await rmExcept(profileDir, keepProfile);
 
   const keepPkg = new Set(packages.map((p) => p.name));
-  await rmExcept(path.join(profileDir, "build"), keepPkg);
-  await rmExcept(path.join(profileDir, ".fingerprint"), keepPkg);
+  await rmExcept(path.join(profileDir, "build"), keepPkg, checkTimestamp);
+  await rmExcept(path.join(profileDir, ".fingerprint"), keepPkg, checkTimestamp);
 
   const keepDeps = new Set(
     packages.flatMap((p) => {
@@ -57,7 +52,7 @@ async function cleanProfileTarget(profileDir: string, packages: Packages) {
       return names;
     }),
   );
-  await rmExcept(path.join(profileDir, "deps"), keepDeps);
+  await rmExcept(path.join(profileDir, "deps"), keepDeps, checkTimestamp);
 }
 
 export async function getCargoBins(): Promise<Set<string>> {
@@ -89,6 +84,7 @@ export async function cleanBin() {
       await rm(dir.path, dirent);
     }
   }
+  await dir.close();
 }
 
 export async function cleanRegistry(packages: Packages) {
@@ -108,9 +104,11 @@ export async function cleanRegistry(packages: Packages) {
       if (await exists(path.join(dir.path, ".git"))) {
         await rmRF(path.join(dir.path, ".cache"));
       }
+      await dir.close();
       // TODO: else, clean `.cache` based on the `packages`
     }
   }
+  await indexDir.close();
 
   const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
 
@@ -127,8 +125,10 @@ export async function cleanRegistry(packages: Packages) {
           await rm(dir.path, dirent);
         }
       }
+      await dir.close();
     }
   }
+  await cacheDir.close();
 }
 
 export async function cleanGit(packages: Packages) {
@@ -151,52 +151,75 @@ export async function cleanGit(packages: Packages) {
   // we have to keep both the clone, and the checkout, removing either will
   // trigger a rebuild
 
-  let dir: fs.Dir;
   // clean the db
-  dir = await fs.promises.opendir(dbPath);
-  for await (const dirent of dir) {
-    if (!repos.has(dirent.name)) {
-      await rm(dir.path, dirent);
-    }
-  }
-
-  // clean the checkouts
-  dir = await fs.promises.opendir(coPath);
-  for await (const dirent of dir) {
-    const refs = repos.get(dirent.name);
-    if (!refs) {
-      await rm(dir.path, dirent);
-      continue;
-    }
-    if (!dirent.isDirectory()) {
-      continue;
-    }
-    const refsDir = await fs.promises.opendir(path.join(dir.path, dirent.name));
-    for await (const dirent of refsDir) {
-      if (!refs.has(dirent.name)) {
-        await rm(refsDir.path, dirent);
+  try {
+    let dir = await fs.promises.opendir(dbPath);
+    for await (const dirent of dir) {
+      if (!repos.has(dirent.name)) {
+        await rm(dir.path, dirent);
       }
     }
-  }
+    await dir.close();
+  } catch {}
+
+  // clean the checkouts
+  try {
+    let dir = await fs.promises.opendir(coPath);
+    for await (const dirent of dir) {
+      const refs = repos.get(dirent.name);
+      if (!refs) {
+        await rm(dir.path, dirent);
+        continue;
+      }
+      if (!dirent.isDirectory()) {
+        continue;
+      }
+      const refsDir = await fs.promises.opendir(path.join(dir.path, dirent.name));
+      for await (const dirent of refsDir) {
+        if (!refs.has(dirent.name)) {
+          await rm(refsDir.path, dirent);
+        }
+      }
+      await refsDir.close();
+    }
+    await dir.close();
+  } catch {}
 }
 
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
 
-async function rmExcept(dirName: string, keepPrefix: Set<string>) {
+/**
+ * Removes all files or directories in `dirName`, except the ones matching
+ * any string in the `keepPrefix` set.
+ *
+ * The matching strips and trailing `-$hash` suffix.
+ *
+ * When the `checkTimestamp` flag is set, this will also remove anything older
+ * than one week.
+ */
+async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp = false) {
   const dir = await fs.promises.opendir(dirName);
   for await (const dirent of dir) {
     let name = dirent.name;
+
+    // strip the trailing hash
     const idx = name.lastIndexOf("-");
     if (idx !== -1) {
       name = name.slice(0, idx);
     }
-    const fileName = path.join(dir.path, dirent.name);
-    const { mtime } = await fs.promises.stat(fileName);
-    // we don’t really know
-    if (!keepPrefix.has(name) || Date.now() - mtime.getTime() > ONE_WEEK) {
+
+    let isOutdated = false;
+    if (checkTimestamp) {
+      const fileName = path.join(dir.path, dirent.name);
+      const { mtime } = await fs.promises.stat(fileName);
+      isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
+    }
+
+    if (!keepPrefix.has(name) || isOutdated) {
       await rm(dir.path, dirent);
     }
   }
+  await dir.close();
 }
 
 async function rm(parent: string, dirent: fs.Dirent) {
