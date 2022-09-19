@@ -43,7 +43,7 @@ sensible defaults.
     cache-on-failure: ""
 ```
 
-Further examples are available in the [.github/workflows][] directory.
+Further examples are available in the [.github/workflows](./.github/workflows/) directory.
 
 ## Outputs
 
