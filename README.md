@@ -63,11 +63,6 @@ _always_ use the most up-to-date dependency versions, which may not be cached.
 Usage with Stable Rust is most effective, as a cache is tied to the Rust version.
 Using it with Nightly Rust is less effective as it will throw away the cache every day.
 
-## Versioning
-
-I use the `v1` branch similar to `master` development, so if you want to have
-a more stable experience, please use a fixed revision or tag.
-
 ## Cache Details
 
 This action currently caches the following files/directories:
