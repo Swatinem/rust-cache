@@ -27,6 +27,11 @@ export class CacheConfig {
   /** The workspace configurations */
   public workspaces: Array<Workspace> = [];
 
+  /** The max timeout for the networking operations */
+  public timeout: null | number = null;
+  /** The max retry attemtps for the networking operations */
+  public maxRetryAttempts: number = 0;
+
   /** The prefix portion of the cache key */
   private keyPrefix = "";
   /** The rust version considered for the cache key */
@@ -156,6 +161,12 @@ export class CacheConfig {
 
     self.cachePaths = [CARGO_HOME, ...workspaces.map((ws) => ws.target)];
 
+    const timeoutInput = core.getInput("timeout")
+    self.timeout = timeoutInput ? parseFloat(timeoutInput) : null;
+
+    const maxRetryAttemptsInput = core.getInput("maxRetryAttempts")
+    self.maxRetryAttempts =  maxRetryAttemptsInput ? parseFloat(maxRetryAttemptsInput) : 0;
+
     return self;
   }
 
@@ -184,6 +195,10 @@ export class CacheConfig {
     for (const file of this.keyFiles) {
       core.info(`  - ${file}`);
     }
+    core.info(`Network operations timeout:`);
+    core.info(`    ${this.timeout}`);
+    core.info(`Max retry attempts for the network operations:`);
+    core.info(`    ${this.maxRetryAttempts}`);
     core.endGroup();
   }
 }

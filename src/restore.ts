@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 
 import { cleanTargetDir, getCargoBins } from "./cleanup";
 import { CacheConfig, STATE_BINS, STATE_KEY } from "./config";
+import { withRetries, withTimeout } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.info(`[warning] ${e.message}`);
@@ -34,7 +35,16 @@ async function run() {
 
     core.info(`... Restoring cache ...`);
     const key = config.cacheKey;
-    const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
+    const restoreKey = await withRetries(
+      () =>
+        withTimeout(
+          () => cache.restoreCache(config.cachePaths, key, [config.restoreKey]),
+          config.timeout
+        ),
+      config.maxRetryAttempts,
+      () => true
+    );
+
     if (restoreKey) {
       core.info(`Restored from cache key "${restoreKey}".`);
       core.saveState(STATE_KEY, restoreKey);

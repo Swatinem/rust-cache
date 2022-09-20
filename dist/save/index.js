@@ -64390,6 +64390,40 @@ async function getCmdOutput(cmd, args = [], options = {}) {
     }
     return stdout;
 }
+async function withRetries(operation, maxRetryAttempts, isRetriable) {
+    let attemptsLeft = maxRetryAttempts;
+    while (true) {
+        try {
+            return await operation();
+        }
+        catch (e) {
+            attemptsLeft -= 1;
+            if (attemptsLeft <= 0) {
+                throw e;
+            }
+            if (!isRetriable(e)) {
+                throw e;
+            }
+            core.info(`[warning] Retrying after an error, ${attemptsLeft} attempts left, error: ${e}`);
+        }
+    }
+}
+class TimeoutError extends Error {
+}
+async function withTimeout(operation, timeoutMs) {
+    const timeout = timeoutMs
+        ? new Promise((resolve) => {
+            setTimeout(resolve, timeoutMs);
+        })
+        : new Promise(() => { });
+    const timeoutSym = Symbol("timeout");
+    const racingTimeout = timeout.then(() => timeoutSym);
+    const result = await Promise.race([racingTimeout, operation(timeout)]);
+    if (result === timeoutSym) {
+        throw new TimeoutError("operation timeout");
+    }
+    return result;
+}
 
 ;// CONCATENATED MODULE: ./src/workspace.ts
 
@@ -64444,6 +64478,10 @@ class CacheConfig {
         this.restoreKey = "";
         /** The workspace configurations */
         this.workspaces = [];
+        /** The max timeout for the networking operations */
+        this.timeout = null;
+        /** The max retry attemtps for the networking operations */
+        this.maxRetryAttempts = 0;
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -64549,6 +64587,10 @@ class CacheConfig {
         }
         self.workspaces = workspaces;
         self.cachePaths = [CARGO_HOME, ...workspaces.map((ws) => ws.target)];
+        const timeoutInput = core.getInput("timeout");
+        self.timeout = timeoutInput ? parseFloat(timeoutInput) : null;
+        const maxRetryAttemptsInput = core.getInput("maxRetryAttempts");
+        self.maxRetryAttempts = maxRetryAttemptsInput ? parseFloat(maxRetryAttemptsInput) : 0;
         return self;
     }
     printInfo() {
@@ -64576,6 +64618,10 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             core.info(`  - ${file}`);
         }
+        core.info(`Network operations timeout:`);
+        core.info(`    ${this.timeout}`);
+        core.info(`Max retry attempts for the network operations:`);
+        core.info(`    ${this.maxRetryAttempts}`);
         core.endGroup();
     }
 }
@@ -64811,6 +64857,7 @@ async function exists(path) {
 
 
 
+
 process.on("uncaughtException", (e) => {
     core.info(`[warning] ${e.message}`);
     if (e.stack) {
@@ -64865,7 +64912,7 @@ async function run() {
             core.info(`[warning] ${e.stack}`);
         }
         core.info(`... Saving cache ...`);
-        await cache.saveCache(config.cachePaths, config.cacheKey);
+        await withRetries(() => withTimeout(() => cache.saveCache(config.cachePaths, config.cacheKey), config.timeout), config.maxRetryAttempts, () => true);
     }
     catch (e) {
         core.info(`[warning] ${e.stack}`);
