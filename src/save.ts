@@ -49,11 +49,13 @@ async function run() {
       core.info(`[warning] ${(e as any).stack}`);
     }
 
-    try {
-      core.info(`... Cleaning cargo/bin ...`);
-      await cleanBin();
-    } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+    if (config.cacheBin) {
+      try {
+        core.info(`... Cleaning cargo/bin ...`);
+        await cleanBin();
+      } catch (e) {
+        core.info(`[warning] ${(e as any).stack}`);
+      }
     }
 
     try {

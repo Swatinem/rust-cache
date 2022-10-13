@@ -24,6 +24,9 @@ export class CacheConfig {
   /** The secondary (restore) key that only contains the prefix and environment */
   public restoreKey = "";
 
+  /** Whether to cache CARGO_HOME/.bin */
+  public cacheBin: boolean = true;
+
   /** The workspace configurations */
   public workspaces: Array<Workspace> = [];
 
@@ -141,6 +144,8 @@ export class CacheConfig {
     key += `-${lockHash}`;
     self.cacheKey = key;
 
+    self.cacheBin = core.getInput("cache-bin").toLowerCase() == "true";
+
     // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
 
@@ -154,7 +159,20 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    self.cachePaths = [CARGO_HOME, ...workspaces.map((ws) => ws.target)];
+    // The original action (https://github.com/Swatinem/rust-cache) cached the entire CARGO_HOME,
+    // but cleaned out CARGO_HOME/bin of all binaries that weren't built by the CI run itself.
+    // This had the unfortunate side-effect of nuking rustup/cargo/rustc etc from self-hosted runners.
+    // (This is usually not a problem on hosted runners, since you get a fresh container on each run).
+    // So we edit this action to not cache bin/, and to bypass cleaning that directory out.
+    // TODO: Create an upstream patch for this, controlled by an option.
+    self.cachePaths = [
+        path.join(CARGO_HOME, "registry"),
+        path.join(CARGO_HOME, "git"),
+        ...workspaces.map((ws) => ws.target)
+    ];
+    if (self.cacheBin) {
+      self.cachePaths = [path.join(CARGO_HOME, "bin"), ...self.cachePaths];
+    }
 
     return self;
   }
