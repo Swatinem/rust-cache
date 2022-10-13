@@ -17,7 +17,7 @@ sensible defaults.
     # An explicit cache key that is used instead of the automatic `job`-based
     # cache key and is thus stable across jobs.
     # Default: empty
-    shared-key: ""
+    sharedKey: ""
 
     # An additional cache key that is added alongside the automatic `job`-based
     # cache key and can be used to further differentiate jobs.
