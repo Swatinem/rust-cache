@@ -2494,7 +2494,6 @@ const file_command_1 = __nccwpck_require__(717);
 const utils_1 = __nccwpck_require__(5278);
 const os = __importStar(__nccwpck_require__(2037));
 const path = __importStar(__nccwpck_require__(1017));
-const uuid_1 = __nccwpck_require__(8974);
 const oidc_utils_1 = __nccwpck_require__(8041);
 /**
  * The code to exit an action
@@ -2524,20 +2523,9 @@ function exportVariable(name, val) {
     process.env[name] = convertedVal;
     const filePath = process.env['GITHUB_ENV'] || '';
     if (filePath) {
-        const delimiter = `ghadelimiter_${uuid_1.v4()}`;
-        // These should realistically never happen, but just in case someone finds a way to exploit uuid generation let's not allow keys or values that contain the delimiter.
-        if (name.includes(delimiter)) {
-            throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter}"`);
-        }
-        if (convertedVal.includes(delimiter)) {
-            throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
-        }
-        const commandValue = `${name}<<${delimiter}${os.EOL}${convertedVal}${os.EOL}${delimiter}`;
-        file_command_1.issueCommand('ENV', commandValue);
+        return file_command_1.issueFileCommand('ENV', file_command_1.prepareKeyValueMessage(name, val));
     }
-    else {
-        command_1.issueCommand('set-env', { name }, convertedVal);
-    }
+    command_1.issueCommand('set-env', { name }, convertedVal);
 }
 exports.exportVariable = exportVariable;
 /**
@@ -2555,7 +2543,7 @@ exports.setSecret = setSecret;
 function addPath(inputPath) {
     const filePath = process.env['GITHUB_PATH'] || '';
     if (filePath) {
-        file_command_1.issueCommand('PATH', inputPath);
+        file_command_1.issueFileCommand('PATH', inputPath);
     }
     else {
         command_1.issueCommand('add-path', {}, inputPath);
@@ -2595,7 +2583,10 @@ function getMultilineInput(name, options) {
     const inputs = getInput(name, options)
         .split('\n')
         .filter(x => x !== '');
-    return inputs;
+    if (options && options.trimWhitespace === false) {
+        return inputs;
+    }
+    return inputs.map(input => input.trim());
 }
 exports.getMultilineInput = getMultilineInput;
 /**
@@ -2628,8 +2619,12 @@ exports.getBooleanInput = getBooleanInput;
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function setOutput(name, value) {
+    const filePath = process.env['GITHUB_OUTPUT'] || '';
+    if (filePath) {
+        return file_command_1.issueFileCommand('OUTPUT', file_command_1.prepareKeyValueMessage(name, value));
+    }
     process.stdout.write(os.EOL);
-    command_1.issueCommand('set-output', { name }, value);
+    command_1.issueCommand('set-output', { name }, utils_1.toCommandValue(value));
 }
 exports.setOutput = setOutput;
 /**
@@ -2758,7 +2753,11 @@ exports.group = group;
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function saveState(name, value) {
-    command_1.issueCommand('save-state', { name }, value);
+    const filePath = process.env['GITHUB_STATE'] || '';
+    if (filePath) {
+        return file_command_1.issueFileCommand('STATE', file_command_1.prepareKeyValueMessage(name, value));
+    }
+    command_1.issueCommand('save-state', { name }, utils_1.toCommandValue(value));
 }
 exports.saveState = saveState;
 /**
@@ -2824,13 +2823,14 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.issueCommand = void 0;
+exports.prepareKeyValueMessage = exports.issueFileCommand = void 0;
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const fs = __importStar(__nccwpck_require__(7147));
 const os = __importStar(__nccwpck_require__(2037));
+const uuid_1 = __nccwpck_require__(8974);
 const utils_1 = __nccwpck_require__(5278);
-function issueCommand(command, message) {
+function issueFileCommand(command, message) {
     const filePath = process.env[`GITHUB_${command}`];
     if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
@@ -2842,7 +2842,22 @@ function issueCommand(command, message) {
         encoding: 'utf8'
     });
 }
-exports.issueCommand = issueCommand;
+exports.issueFileCommand = issueFileCommand;
+function prepareKeyValueMessage(key, value) {
+    const delimiter = `ghadelimiter_${uuid_1.v4()}`;
+    const convertedValue = utils_1.toCommandValue(value);
+    // These should realistically never happen, but just in case someone finds a
+    // way to exploit uuid generation let's not allow keys or values that contain
+    // the delimiter.
+    if (key.includes(delimiter)) {
+        throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter}"`);
+    }
+    if (convertedValue.includes(delimiter)) {
+        throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
+    }
+    return `${key}<<${delimiter}${os.EOL}${convertedValue}${os.EOL}${delimiter}`;
+}
+exports.prepareKeyValueMessage = prepareKeyValueMessage;
 //# sourceMappingURL=file-command.js.map
 
 /***/ }),
@@ -17230,8 +17245,7 @@ function setStateError(inputs) {
     };
 }
 function processOperationStatus(result) {
-    const { state, stateProxy, status } = result;
-    logger.verbose(`LRO: Status:\n\tPolling from: ${state.config.operationLocation}\n\tOperation status: ${status}\n\tPolling status: ${terminalStates.includes(status) ? "Stopped" : "Running"}`);
+    const { state, stateProxy, status, isDone, processResult, response, setErrorAsResult } = result;
     switch (status) {
         case "succeeded": {
             stateProxy.setSucceeded(state);
@@ -17247,6 +17261,15 @@ function processOperationStatus(result) {
             break;
         }
     }
+    if ((isDone === null || isDone === void 0 ? void 0 : isDone(response, state)) ||
+        (isDone === undefined &&
+            ["succeeded", "canceled"].concat(setErrorAsResult ? [] : ["failed"]).includes(status))) {
+        stateProxy.setResult(state, buildResult({
+            response,
+            state,
+            processResult,
+        }));
+    }
 }
 function buildResult(inputs) {
     const { processResult, response, state } = inputs;
@@ -17256,7 +17279,7 @@ function buildResult(inputs) {
  * Initiates the long-running operation.
  */
 async function initOperation(inputs) {
-    const { init, stateProxy, processResult, getOperationStatus, withOperationLocation } = inputs;
+    const { init, stateProxy, processResult, getOperationStatus, withOperationLocation, setErrorAsResult, } = inputs;
     const { operationLocation, resourceLocation, metadata, response } = await init();
     if (operationLocation)
         withOperationLocation === null || withOperationLocation === void 0 ? void 0 : withOperationLocation(operationLocation, false);
@@ -17267,41 +17290,33 @@ async function initOperation(inputs) {
     };
     logger.verbose(`LRO: Operation description:`, config);
     const state = stateProxy.initState(config);
-    const status = getOperationStatus(response, state);
-    if (status === "succeeded" || operationLocation === undefined) {
-        stateProxy.setSucceeded(state);
-        stateProxy.setResult(state, buildResult({
-            response,
-            state,
-            processResult,
-        }));
-    }
+    const status = getOperationStatus({ response, state, operationLocation });
+    processOperationStatus({ state, status, stateProxy, response, setErrorAsResult, processResult });
     return state;
 }
 async function pollOperationHelper(inputs) {
-    const { poll, state, stateProxy, operationLocation, resourceLocation, getOperationStatus, options, } = inputs;
+    const { poll, state, stateProxy, operationLocation, getOperationStatus, getResourceLocation, options, } = inputs;
     const response = await poll(operationLocation, options).catch(setStateError({
         state,
         stateProxy,
     }));
     const status = getOperationStatus(response, state);
-    processOperationStatus({
-        status,
-        state,
-        stateProxy,
-    });
-    if (status === "succeeded" && resourceLocation !== undefined) {
-        return {
-            response: await poll(resourceLocation).catch(setStateError({ state, stateProxy })),
-            status,
-        };
+    logger.verbose(`LRO: Status:\n\tPolling from: ${state.config.operationLocation}\n\tOperation status: ${status}\n\tPolling status: ${terminalStates.includes(status) ? "Stopped" : "Running"}`);
+    if (status === "succeeded") {
+        const resourceLocation = getResourceLocation(response, state);
+        if (resourceLocation !== undefined) {
+            return {
+                response: await poll(resourceLocation).catch(setStateError({ state, stateProxy })),
+                status,
+            };
+        }
     }
     return { response, status };
 }
 /** Polls the long-running operation. */
 async function pollOperation(inputs) {
-    const { poll, state, stateProxy, options, getOperationStatus, getOperationLocation, withOperationLocation, getPollingInterval, processResult, updateState, setDelay, isDone, } = inputs;
-    const { operationLocation, resourceLocation } = state.config;
+    const { poll, state, stateProxy, options, getOperationStatus, getResourceLocation, getOperationLocation, withOperationLocation, getPollingInterval, processResult, updateState, setDelay, isDone, setErrorAsResult, } = inputs;
+    const { operationLocation } = state.config;
     if (operationLocation !== undefined) {
         const { response, status } = await pollOperationHelper({
             poll,
@@ -17309,18 +17324,19 @@ async function pollOperation(inputs) {
             state,
             stateProxy,
             operationLocation,
-            resourceLocation,
+            getResourceLocation,
             options,
         });
-        if ((isDone === null || isDone === void 0 ? void 0 : isDone(response, state)) ||
-            (isDone === undefined && ["succeeded", "canceled"].includes(status))) {
-            stateProxy.setResult(state, buildResult({
-                response,
-                state,
-                processResult,
-            }));
-        }
-        else {
+        processOperationStatus({
+            status,
+            response,
+            state,
+            stateProxy,
+            isDone,
+            processResult,
+            setErrorAsResult,
+        });
+        if (!terminalStates.includes(status)) {
             const intervalInMs = getPollingInterval === null || getPollingInterval === void 0 ? void 0 : getPollingInterval(response);
             if (intervalInMs)
                 setDelay(intervalInMs);
@@ -17411,15 +17427,21 @@ function inferLroMode(inputs) {
         return undefined;
     }
 }
-function transformStatus(status) {
-    switch (status === null || status === void 0 ? void 0 : status.toLowerCase()) {
+function transformStatus(inputs) {
+    const { status, statusCode } = inputs;
+    if (typeof status !== "string" && status !== undefined) {
+        throw new Error(`Polling was unsuccessful. Expected status to have a string value or no value but it has instead: ${status}. This doesn't necessarily indicate the operation has failed. Check your Azure subscription or resource status for more information.`);
+    }
+    switch (status === null || status === void 0 ? void 0 : status.toLocaleLowerCase()) {
         case undefined:
+            return toOperationStatus(statusCode);
         case "succeeded":
             return "succeeded";
         case "failed":
             return "failed";
         case "running":
         case "accepted":
+        case "started":
         case "canceling":
         case "cancelling":
             return "running";
@@ -17435,13 +17457,13 @@ function transformStatus(status) {
 function getStatus(rawResponse) {
     var _a;
     const { status } = (_a = rawResponse.body) !== null && _a !== void 0 ? _a : {};
-    return transformStatus(status);
+    return transformStatus({ status, statusCode: rawResponse.statusCode });
 }
 function getProvisioningState(rawResponse) {
     var _a, _b;
     const { properties, provisioningState } = (_a = rawResponse.body) !== null && _a !== void 0 ? _a : {};
-    const state = (_b = properties === null || properties === void 0 ? void 0 : properties.provisioningState) !== null && _b !== void 0 ? _b : provisioningState;
-    return transformStatus(state);
+    const status = (_b = properties === null || properties === void 0 ? void 0 : properties.provisioningState) !== null && _b !== void 0 ? _b : provisioningState;
+    return transformStatus({ status, statusCode: rawResponse.statusCode });
 }
 function toOperationStatus(statusCode) {
     if (statusCode === 202) {
@@ -17473,11 +17495,28 @@ function calculatePollingIntervalFromDate(retryAfterDate) {
     }
     return undefined;
 }
+function getStatusFromInitialResponse(inputs) {
+    const { response, state, operationLocation } = inputs;
+    function helper() {
+        var _a;
+        const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
+        switch (mode) {
+            case undefined:
+                return toOperationStatus(response.rawResponse.statusCode);
+            case "Body":
+                return getOperationStatus(response, state);
+            default:
+                return "running";
+        }
+    }
+    const status = helper();
+    return status === "running" && operationLocation === undefined ? "succeeded" : status;
+}
 /**
  * Initiates the long-running operation.
  */
 async function initHttpOperation(inputs) {
-    const { stateProxy, resourceLocationConfig, processResult, lro } = inputs;
+    const { stateProxy, resourceLocationConfig, processResult, lro, setErrorAsResult } = inputs;
     return initOperation({
         init: async () => {
             const response = await lro.sendInitialRequest();
@@ -17493,14 +17532,8 @@ async function initHttpOperation(inputs) {
         processResult: processResult
             ? ({ flatResponse }, state) => processResult(flatResponse, state)
             : ({ flatResponse }) => flatResponse,
-        getOperationStatus: (response, state) => {
-            var _a;
-            const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
-            return mode === undefined ||
-                (mode === "Body" && getOperationStatus(response, state) === "succeeded")
-                ? "succeeded"
-                : "running";
-        },
+        getOperationStatus: getStatusFromInitialResponse,
+        setErrorAsResult,
     });
 }
 function getOperationLocation({ rawResponse }, state) {
@@ -17536,12 +17569,21 @@ function getOperationStatus({ rawResponse }, state) {
             return getProvisioningState(rawResponse);
         }
         default:
-            throw new Error(`Unexpected operation mode: ${mode}`);
+            throw new Error(`Internal error: Unexpected operation mode: ${mode}`);
     }
+}
+function getResourceLocation({ flatResponse }, state) {
+    if (typeof flatResponse === "object") {
+        const resourceLocation = flatResponse.resourceLocation;
+        if (resourceLocation !== undefined) {
+            state.config.resourceLocation = resourceLocation;
+        }
+    }
+    return state.config.resourceLocation;
 }
 /** Polls the long-running operation. */
 async function pollHttpOperation(inputs) {
-    const { lro, stateProxy, options, processResult, updateState, setDelay, state } = inputs;
+    const { lro, stateProxy, options, processResult, updateState, setDelay, state, setErrorAsResult, } = inputs;
     return pollOperation({
         state,
         stateProxy,
@@ -17553,12 +17595,14 @@ async function pollHttpOperation(inputs) {
         getPollingInterval: parseRetryAfter,
         getOperationLocation,
         getOperationStatus,
+        getResourceLocation,
         options,
         /**
          * The expansion here is intentional because `lro` could be an object that
          * references an inner this, so we need to preserve a reference to it.
          */
         poll: async (location, inputOptions) => lro.sendPollRequest(location, inputOptions),
+        setErrorAsResult,
     });
 }
 
@@ -17639,7 +17683,7 @@ const createStateProxy$1 = () => ({
  * Returns a poller factory.
  */
 function buildCreatePoller(inputs) {
-    const { getOperationLocation, getStatusFromInitialResponse, getStatusFromPollResponse, getPollingInterval, } = inputs;
+    const { getOperationLocation, getStatusFromInitialResponse, getStatusFromPollResponse, getResourceLocation, getPollingInterval, resolveOnUnsuccessful, } = inputs;
     return async ({ init, poll }, options) => {
         const { processResult, updateState, withOperationLocation: withOperationLocationCallback, intervalInMs = POLL_INTERVAL_IN_MS, restoreFrom, } = options || {};
         const stateProxy = createStateProxy$1();
@@ -17663,6 +17707,7 @@ function buildCreatePoller(inputs) {
                 processResult,
                 getOperationStatus: getStatusFromInitialResponse,
                 withOperationLocation,
+                setErrorAsResult: !resolveOnUnsuccessful,
             });
         let resultPromise;
         let cancelJob;
@@ -17706,10 +17751,14 @@ function buildCreatePoller(inputs) {
                         return poller.getResult();
                     }
                     case "canceled": {
-                        throw new Error("Operation was canceled");
+                        if (!resolveOnUnsuccessful)
+                            throw new Error("Operation was canceled");
+                        return poller.getResult();
                     }
                     case "failed": {
-                        throw state.error;
+                        if (!resolveOnUnsuccessful)
+                            throw state.error;
+                        return poller.getResult();
                     }
                     case "notStarted":
                     case "running": {
@@ -17729,18 +17778,20 @@ function buildCreatePoller(inputs) {
                     withOperationLocation,
                     getPollingInterval,
                     getOperationStatus: getStatusFromPollResponse,
+                    getResourceLocation,
                     processResult,
                     updateState,
                     options: pollOptions,
                     setDelay: (pollIntervalInMs) => {
                         currentPollIntervalInMs = pollIntervalInMs;
                     },
+                    setErrorAsResult: !resolveOnUnsuccessful,
                 });
                 await handleProgressEvents();
-                if (state.status === "canceled") {
+                if (state.status === "canceled" && !resolveOnUnsuccessful) {
                     throw new Error("Operation was canceled");
                 }
-                if (state.status === "failed") {
+                if (state.status === "failed" && !resolveOnUnsuccessful) {
                     throw state.error;
                 }
             },
@@ -17757,19 +17808,14 @@ function buildCreatePoller(inputs) {
  * @returns an initialized poller
  */
 async function createHttpPoller(lro, options) {
-    const { resourceLocationConfig, intervalInMs, processResult, restoreFrom, updateState, withOperationLocation, } = options || {};
+    const { resourceLocationConfig, intervalInMs, processResult, restoreFrom, updateState, withOperationLocation, resolveOnUnsuccessful = false, } = options || {};
     return buildCreatePoller({
-        getStatusFromInitialResponse: (response, state) => {
-            var _a;
-            const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
-            return mode === undefined ||
-                (mode === "Body" && getOperationStatus(response, state) === "succeeded")
-                ? "succeeded"
-                : "running";
-        },
+        getStatusFromInitialResponse,
         getStatusFromPollResponse: getOperationStatus,
         getOperationLocation,
+        getResourceLocation,
         getPollingInterval: parseRetryAfter,
+        resolveOnUnsuccessful,
     })({
         init: async () => {
             const response = await lro.sendInitialRequest();
@@ -17812,9 +17858,10 @@ const createStateProxy = () => ({
     isSucceeded: (state) => Boolean(state.isCompleted && !state.isCancelled && !state.error),
 });
 class GenericPollOperation {
-    constructor(state, lro, lroResourceLocationConfig, processResult, updateState, isDone) {
+    constructor(state, lro, setErrorAsResult, lroResourceLocationConfig, processResult, updateState, isDone) {
         this.state = state;
         this.lro = lro;
+        this.setErrorAsResult = setErrorAsResult;
         this.lroResourceLocationConfig = lroResourceLocationConfig;
         this.processResult = processResult;
         this.updateState = updateState;
@@ -17832,11 +17879,12 @@ class GenericPollOperation {
                 stateProxy,
                 resourceLocationConfig: this.lroResourceLocationConfig,
                 processResult: this.processResult,
+                setErrorAsResult: this.setErrorAsResult,
             })));
         }
         const updateState = this.updateState;
         const isDone = this.isDone;
-        if (!this.state.isCompleted) {
+        if (!this.state.isCompleted && this.state.error === undefined) {
             await pollHttpOperation({
                 lro: this.lro,
                 state: this.state,
@@ -17852,6 +17900,7 @@ class GenericPollOperation {
                 setDelay: (intervalInMs) => {
                     this.pollerConfig.intervalInMs = intervalInMs;
                 },
+                setErrorAsResult: this.setErrorAsResult,
             });
         }
         (_a = options === null || options === void 0 ? void 0 : options.fireProgress) === null || _a === void 0 ? void 0 : _a.call(options, this.state);
@@ -18024,6 +18073,8 @@ class Poller {
      * @param operation - Must contain the basic properties of `PollOperation<State, TResult>`.
      */
     constructor(operation) {
+        /** controls whether to throw an error if the operation failed or was canceled. */
+        this.resolveOnUnsuccessful = false;
         this.stopped = true;
         this.pollProgressCallbacks = [];
         this.operation = operation;
@@ -18061,15 +18112,10 @@ class Poller {
      */
     async pollOnce(options = {}) {
         if (!this.isDone()) {
-            try {
-                this.operation = await this.operation.update({
-                    abortSignal: options.abortSignal,
-                    fireProgress: this.fireProgress.bind(this),
-                });
-            }
-            catch (e) {
-                this.operation.state.error = e;
-            }
+            this.operation = await this.operation.update({
+                abortSignal: options.abortSignal,
+                fireProgress: this.fireProgress.bind(this),
+            });
         }
         this.processUpdatedState();
     }
@@ -18113,22 +18159,26 @@ class Poller {
     processUpdatedState() {
         if (this.operation.state.error) {
             this.stopped = true;
-            this.reject(this.operation.state.error);
-            throw this.operation.state.error;
+            if (!this.resolveOnUnsuccessful) {
+                this.reject(this.operation.state.error);
+                throw this.operation.state.error;
+            }
         }
         if (this.operation.state.isCancelled) {
             this.stopped = true;
-            const error = new PollerCancelledError("Operation was canceled");
-            this.reject(error);
-            throw error;
+            if (!this.resolveOnUnsuccessful) {
+                const error = new PollerCancelledError("Operation was canceled");
+                this.reject(error);
+                throw error;
+            }
         }
-        else if (this.isDone() && this.resolve) {
+        if (this.isDone() && this.resolve) {
             // If the poller has finished polling, this means we now have a result.
             // However, it can be the case that TResult is instantiated to void, so
             // we are not expecting a result anyway. To assert that we might not
             // have a result eventually after finishing polling, we cast the result
             // to TResult.
-            this.resolve(this.operation.state.result);
+            this.resolve(this.getResult());
         }
     }
     /**
@@ -18273,12 +18323,13 @@ class Poller {
  */
 class LroEngine extends Poller {
     constructor(lro, options) {
-        const { intervalInMs = POLL_INTERVAL_IN_MS, resumeFrom } = options || {};
+        const { intervalInMs = POLL_INTERVAL_IN_MS, resumeFrom, resolveOnUnsuccessful = false, isDone, lroResourceLocationConfig, processResult, updateState, } = options || {};
         const state = resumeFrom
             ? deserializeState(resumeFrom)
             : {};
-        const operation = new GenericPollOperation(state, lro, options === null || options === void 0 ? void 0 : options.lroResourceLocationConfig, options === null || options === void 0 ? void 0 : options.processResult, options === null || options === void 0 ? void 0 : options.updateState, options === null || options === void 0 ? void 0 : options.isDone);
+        const operation = new GenericPollOperation(state, lro, !resolveOnUnsuccessful, lroResourceLocationConfig, processResult, updateState, isDone);
         super(operation);
+        this.resolveOnUnsuccessful = resolveOnUnsuccessful;
         this.config = { intervalInMs: intervalInMs };
         operation.setPollerConfig(this.config);
     }
@@ -18945,6 +18996,7 @@ exports.setSpanContext = setSpanContext;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 
+var abortController = __nccwpck_require__(2557);
 var crypto = __nccwpck_require__(6113);
 
 // Copyright (c) Microsoft Corporation.
@@ -18958,12 +19010,76 @@ const isNode = typeof process !== "undefined" && Boolean(process.version) && Boo
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 /**
+ * Helper TypeGuard that checks if something is defined or not.
+ * @param thing - Anything
+ */
+function isDefined(thing) {
+    return typeof thing !== "undefined" && thing !== null;
+}
+/**
+ * Helper TypeGuard that checks if the input is an object with the specified properties.
+ * @param thing - Anything.
+ * @param properties - The name of the properties that should appear in the object.
+ */
+function isObjectWithProperties(thing, properties) {
+    if (!isDefined(thing) || typeof thing !== "object") {
+        return false;
+    }
+    for (const property of properties) {
+        if (!objectHasProperty(thing, property)) {
+            return false;
+        }
+    }
+    return true;
+}
+/**
+ * Helper TypeGuard that checks if the input is an object with the specified property.
+ * @param thing - Any object.
+ * @param property - The name of the property that should appear in the object.
+ */
+function objectHasProperty(thing, property) {
+    return (isDefined(thing) && typeof thing === "object" && property in thing);
+}
+
+// Copyright (c) Microsoft Corporation.
+const StandardAbortMessage = "The operation was aborted.";
+/**
  * A wrapper for setTimeout that resolves a promise after timeInMs milliseconds.
  * @param timeInMs - The number of milliseconds to be delayed.
+ * @param options - The options for delay - currently abort options
  * @returns Promise that is resolved after timeInMs
  */
-function delay(timeInMs) {
-    return new Promise((resolve) => setTimeout(() => resolve(), timeInMs));
+function delay(timeInMs, options) {
+    return new Promise((resolve, reject) => {
+        let timer = undefined;
+        let onAborted = undefined;
+        const rejectOnAbort = () => {
+            var _a;
+            return reject(new abortController.AbortError((_a = options === null || options === void 0 ? void 0 : options.abortErrorMsg) !== null && _a !== void 0 ? _a : StandardAbortMessage));
+        };
+        const removeListeners = () => {
+            if ((options === null || options === void 0 ? void 0 : options.abortSignal) && onAborted) {
+                options.abortSignal.removeEventListener("abort", onAborted);
+            }
+        };
+        onAborted = () => {
+            if (isDefined(timer)) {
+                clearTimeout(timer);
+            }
+            removeListeners();
+            return rejectOnAbort();
+        };
+        if ((options === null || options === void 0 ? void 0 : options.abortSignal) && options.abortSignal.aborted) {
+            return rejectOnAbort();
+        }
+        timer = setTimeout(() => {
+            removeListeners();
+            resolve();
+        }, timeInMs);
+        if (options === null || options === void 0 ? void 0 : options.abortSignal) {
+            options.abortSignal.addEventListener("abort", onAborted);
+        }
+    });
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -19059,40 +19175,6 @@ async function computeSha256Hmac(key, stringToSign, encoding) {
  */
 async function computeSha256Hash(content, encoding) {
     return crypto.createHash("sha256").update(content).digest(encoding);
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Helper TypeGuard that checks if something is defined or not.
- * @param thing - Anything
- */
-function isDefined(thing) {
-    return typeof thing !== "undefined" && thing !== null;
-}
-/**
- * Helper TypeGuard that checks if the input is an object with the specified properties.
- * @param thing - Anything.
- * @param properties - The name of the properties that should appear in the object.
- */
-function isObjectWithProperties(thing, properties) {
-    if (!isDefined(thing) || typeof thing !== "object") {
-        return false;
-    }
-    for (const property of properties) {
-        if (!objectHasProperty(thing, property)) {
-            return false;
-        }
-    }
-    return true;
-}
-/**
- * Helper TypeGuard that checks if the input is an object with the specified property.
- * @param thing - Any object.
- * @param property - The name of the property that should appear in the object.
- */
-function objectHasProperty(thing, property) {
-    return (isDefined(thing) && typeof thing === "object" && property in thing);
 }
 
 exports.computeSha256Hash = computeSha256Hash;
