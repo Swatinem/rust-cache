@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Primarily just updating dependencies to fix GitHub deprecation notices.
+
 ## 2.0.0
 
 - The action code was refactored to allow for caching multiple workspaces and
