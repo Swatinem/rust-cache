@@ -2,6 +2,10 @@ name: "Rust Cache"
 description: "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults."
 author: "Arpad Borsos <swatinem@swatinem.de>"
 inputs:
+  prefix-key:
+    description: "The prefix cache key, this can be changed to start a new cache manually"
+    required: false
+    default: "v0-rust"
   shared-key:
     description: "An additional cache key that is stable over multiple jobs"
     required: false
@@ -14,6 +18,13 @@ inputs:
   workspaces:
     description: "Paths to multiple Cargo workspaces and their target directories, separated by newlines"
     required: false
+  cache-directories:
+    description: "Additional non workspace directories, separated by newlines"
+    required: false
+  cache-targets:
+    description: "Determines whether workspace targets are cached"
+    required: false
+    default: "true"
   cache-on-failure:
     description: "Cache even if the build fails. Defaults to false"
     required: false
