@@ -14,29 +14,41 @@ sensible defaults.
 
 - uses: Swatinem/rust-cache@v2
   with:
-    # An explicit cache key that is used instead of the automatic `job`-based
+    # The prefix cache key, this can be changed to start a new cache manually
+    # default: "v0-rust"
+    prefix-key: ""
+
+    # An additional cache key that is stable over multiple jobs
+    # that is used instead of the automatic `job`-based
     # cache key and is thus stable across jobs.
-    # Default: empty
+    # default: empty
     shared-key: ""
 
     # An additional cache key that is added alongside the automatic `job`-based
     # cache key and can be used to further differentiate jobs.
-    # Default: empty
+    # default: empty
     key: ""
 
     # A whitespace separated list of env-var *prefixes* who's value contributes
     # to the environment cache key.
     # The env-vars are matched by *prefix*, so the default `RUST` var will
     # match all of `RUSTC`, `RUSTUP_*`, `RUSTFLAGS`, `RUSTDOC_*`, etc.
-    # Default: "CARGO CC CFLAGS CXX CMAKE RUST"
+    # default: "CARGO CC CFLAGS CXX CMAKE RUST"
     env-vars: ""
 
     # The cargo workspaces and target directory configuration.
     # These entries are separated by newlines and have the form
     # `$workspace -> $target`. The `$target` part is treated as a directory
     # relative to the `$workspace` and defaults to "target" if not explicitly given.
-    # Default: ". -> target"
+    # default: ". -> target"
     workspaces: ""
+
+    # Additional non workspace directories, separated by newlines
+    cache-directories: ""
+
+    # Determines whether workspace targets are cached
+    # default: "false"
+    cache-targets: ""
 
     # Determines if the cache should be saved even when the workflow has failed.
     # Default: "false"

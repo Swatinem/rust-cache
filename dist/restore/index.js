@@ -64545,7 +64545,7 @@ class CacheConfig {
         // Construct key prefix:
         // This uses either the `shared-key` input,
         // or the `key` input combined with the `job` key.
-        let key = `v0-rust`;
+        let key = lib_core.getInput("prefix-key");
         const sharedKey = lib_core.getInput("shared-key");
         if (sharedKey) {
             key += `-${sharedKey}`;
@@ -64630,7 +64630,15 @@ class CacheConfig {
             workspaces.push(new Workspace(root, target));
         }
         self.workspaces = workspaces;
-        self.cachePaths = [config_CARGO_HOME, ...workspaces.map((ws) => ws.target)];
+        self.cachePaths = [config_CARGO_HOME];
+        const cacheTargets = lib_core.getInput("cache-targets").toLowerCase();
+        if (cacheTargets === "true") {
+            self.cachePaths.push(...workspaces.map((ws) => ws.target));
+        }
+        const cacheDirectories = lib_core.getInput("cache-directories");
+        for (const dir of cacheDirectories.trim().split("\n")) {
+            self.cachePaths.push(dir);
+        }
         return self;
     }
     printInfo() {
