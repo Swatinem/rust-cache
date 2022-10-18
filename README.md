@@ -46,8 +46,8 @@ sensible defaults.
     # Additional non workspace directories, separated by newlines
     cache-directories: ""
 
-    # Determines whether workspace targets are cached
-    # default: "false"
+    # Determines whether workspace `target` directories are cached.
+    # default: "true"
     cache-targets: ""
 
     # Determines if the cache should be saved even when the workflow has failed.
