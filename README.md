@@ -19,8 +19,6 @@ sensible defaults.
     prefix-key: ""
 
     # An additional cache key that is stable over multiple jobs
-    # that is used instead of the automatic `job`-based
-    # cache key and is thus stable across jobs.
     # default: empty
     shared-key: ""
 
@@ -51,7 +49,7 @@ sensible defaults.
     cache-targets: ""
 
     # Determines if the cache should be saved even when the workflow has failed.
-    # Default: "false"
+    # default: "false"
     cache-on-failure: ""
 ```
 
