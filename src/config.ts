@@ -50,7 +50,7 @@ export class CacheConfig {
     // This uses either the `shared-key` input,
     // or the `key` input combined with the `job` key.
 
-    let key = `v0-rust`;
+    let key = core.getInput("prefix-key");
 
     const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
@@ -154,7 +154,16 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    self.cachePaths = [CARGO_HOME, ...workspaces.map((ws) => ws.target)];
+    self.cachePaths = [CARGO_HOME];
+    const cacheTargets = core.getInput("cache-targets").toLowerCase();
+    if (cacheTargets === "true") {
+      self.cachePaths.push(...workspaces.map((ws) => ws.target));
+    }
+
+    const cacheDirectories = core.getInput("cache-directories");
+    for (const dir of cacheDirectories.trim().split("\n")) {
+      self.cachePaths.push(dir);
+    }
 
     return self;
   }
