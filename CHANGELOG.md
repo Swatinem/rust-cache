@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2
+
+- Avoid calling `cargo metadata` on pre-cleanup.
+
 ## 2.0.1
 
 - Primarily just updating dependencies to fix GitHub deprecation notices.

@@ -1,3 +1,4 @@
+import * as core from "@actions/core";
 import path from "path";
 
 import { getCmdOutput } from "./utils";
@@ -10,11 +11,13 @@ export class Workspace {
   public async getPackages(): Promise<Packages> {
     let packages: Packages = [];
     try {
+      core.debug(`collecting metadata for "${this.root}"`);
       const meta: Meta = JSON.parse(
         await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
           cwd: this.root,
         }),
       );
+      core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
       for (const pkg of meta.packages) {
         if (pkg.manifest_path.startsWith(this.root)) {
           continue;

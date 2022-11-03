@@ -64476,6 +64476,7 @@ async function getCmdOutput(cmd, args = [], options = {}) {
 ;// CONCATENATED MODULE: ./src/workspace.ts
 
 
+
 const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
 class Workspace {
     constructor(root, target) {
@@ -64485,9 +64486,11 @@ class Workspace {
     async getPackages() {
         let packages = [];
         try {
+            core.debug(`collecting metadata for "${this.root}"`);
             const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
                 cwd: this.root,
             }));
+            core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
             for (const pkg of meta.packages) {
                 if (pkg.manifest_path.startsWith(this.root)) {
                     continue;
@@ -64840,30 +64843,34 @@ async function cleanGit(packages) {
 }
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
 /**
- * Removes all files or directories in `dirName`, except the ones matching
- * any string in the `keepPrefix` set.
- *
- * The matching strips and trailing `-$hash` suffix.
+ * Removes all files or directories in `dirName` matching some criteria.
  *
  * When the `checkTimestamp` flag is set, this will also remove anything older
  * than one week.
+ *
+ * Otherwise, it will remove everything that does not match any string in the
+ * `keepPrefix` set.
+ * The matching strips and trailing `-$hash` suffix.
  */
 async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
     const dir = await external_fs_default().promises.opendir(dirName);
     for await (const dirent of dir) {
+        if (checkTimestamp) {
+            const fileName = external_path_default().join(dir.path, dirent.name);
+            const { mtime } = await external_fs_default().promises.stat(fileName);
+            const isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
+            if (isOutdated) {
+                await rm(dir.path, dirent);
+            }
+            return;
+        }
         let name = dirent.name;
         // strip the trailing hash
         const idx = name.lastIndexOf("-");
         if (idx !== -1) {
             name = name.slice(0, idx);
         }
-        let isOutdated = false;
-        if (checkTimestamp) {
-            const fileName = external_path_default().join(dir.path, dirent.name);
-            const { mtime } = await external_fs_default().promises.stat(fileName);
-            isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
-        }
-        if (!keepPrefix.has(name) || isOutdated) {
+        if (!keepPrefix.has(name)) {
             await rm(dir.path, dirent);
         }
     }

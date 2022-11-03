@@ -43,9 +43,7 @@ async function run() {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
           try {
-            const packages = await workspace.getPackages();
-
-            await cleanTargetDir(workspace.target, packages, true);
+            await cleanTargetDir(workspace.target, [], true);
           } catch {}
         }
       }

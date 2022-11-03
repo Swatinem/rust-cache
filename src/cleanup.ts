@@ -180,17 +180,29 @@ export async function cleanGit(packages: Packages) {
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
 
 /**
- * Removes all files or directories in `dirName`, except the ones matching
- * any string in the `keepPrefix` set.
- *
- * The matching strips and trailing `-$hash` suffix.
- *
+ * Removes all files or directories in `dirName` matching some criteria.
+ * 
  * When the `checkTimestamp` flag is set, this will also remove anything older
  * than one week.
+ * 
+ * Otherwise, it will remove everything that does not match any string in the
+ * `keepPrefix` set.
+ * The matching strips and trailing `-$hash` suffix.
  */
 async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp = false) {
   const dir = await fs.promises.opendir(dirName);
   for await (const dirent of dir) {
+    if (checkTimestamp) {
+      const fileName = path.join(dir.path, dirent.name);
+      const { mtime } = await fs.promises.stat(fileName);
+      const isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
+
+      if (isOutdated) {
+        await rm(dir.path, dirent);
+      }
+      return;
+    }
+
     let name = dirent.name;
 
     // strip the trailing hash
@@ -199,14 +211,7 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp
       name = name.slice(0, idx);
     }
 
-    let isOutdated = false;
-    if (checkTimestamp) {
-      const fileName = path.join(dir.path, dirent.name);
-      const { mtime } = await fs.promises.stat(fileName);
-      isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
-    }
-
-    if (!keepPrefix.has(name) || isOutdated) {
+    if (!keepPrefix.has(name)) {
       await rm(dir.path, dirent);
     }
   }
