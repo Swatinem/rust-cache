@@ -36,7 +36,7 @@ export class CacheConfig {
   /** The files considered for the cache key */
   private keyFiles: Array<string> = [];
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Constructs a [`CacheConfig`] with all the paths and keys.
@@ -116,7 +116,6 @@ export class CacheConfig {
     // might create/overwrite lockfiles.
 
     let lockHash = core.getState(STATE_LOCKFILE_HASH);
-    let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
 
     // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
@@ -131,28 +130,32 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
+    let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
+
     if (!lockHash) {
       hasher = crypto.createHash("sha1");
 
-      async function globHash(pattern: string): Promise<void> {
+      async function globHash(pattern: string): Promise<string[]> {
         const globber = await glob.create(pattern, {
           followSymbolicLinks: false,
         });
-        keyFiles = keyFiles.concat(await globber.glob());
-        keyFiles.sort((a, b) => a.localeCompare(b));
+        return await globber.glob();
+      }
 
-        for (const file of keyFiles) {
-          for await (const chunk of fs.createReadStream(file)) {
-            hasher.update(chunk);
-          }
+      keyFiles = keyFiles.concat(await globHash("rust-toolchain\nrust-toolchain.toml"));
+      for (const workspace of workspaces) {
+        const root = workspace.root;
+        keyFiles = keyFiles.concat(await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock`));
+      }
+
+      keyFiles.sort((a, b) => a.localeCompare(b));
+
+      for (const file of keyFiles) {
+        for await (const chunk of fs.createReadStream(file)) {
+          hasher.update(chunk);
         }
       }
 
-      await globHash("rust-toolchain\nrust-toolchain.toml");
-      for (const workspace of workspaces) {
-        const root = workspace.root;
-        await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock`);
-      }
       lockHash = hasher.digest("hex");
 
       core.saveState(STATE_LOCKFILE_HASH, lockHash);
@@ -160,6 +163,7 @@ export class CacheConfig {
     }
 
     self.keyFiles = keyFiles;
+
     key += `-${lockHash}`;
     self.cacheKey = key;
 
