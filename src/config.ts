@@ -36,7 +36,7 @@ export class CacheConfig {
   /** The files considered for the cache key */
   private keyFiles: Array<string> = [];
 
-  private constructor() { }
+  private constructor() {}
 
   /**
    * Constructs a [`CacheConfig`] with all the paths and keys.
@@ -116,6 +116,7 @@ export class CacheConfig {
     // might create/overwrite lockfiles.
 
     let lockHash = core.getState(STATE_LOCKFILE_HASH);
+    let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
 
     // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
@@ -130,8 +131,6 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
-
     if (!lockHash) {
       hasher = crypto.createHash("sha1");
 
@@ -145,7 +144,7 @@ export class CacheConfig {
       keyFiles = keyFiles.concat(await globHash("rust-toolchain\nrust-toolchain.toml"));
       for (const workspace of workspaces) {
         const root = workspace.root;
-        keyFiles = keyFiles.concat(await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock`));
+        keyFiles = keyFiles.concat(await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`));
       }
 
       keyFiles.sort((a, b) => a.localeCompare(b));
