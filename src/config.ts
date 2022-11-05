@@ -118,29 +118,6 @@ export class CacheConfig {
     let lockHash = core.getState(STATE_LOCKFILE_HASH);
     let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
 
-    if (!lockHash) {
-      const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", {
-        followSymbolicLinks: false,
-      });
-      keyFiles = await globber.glob();
-      keyFiles.sort((a, b) => a.localeCompare(b));
-
-      hasher = crypto.createHash("sha1");
-      for (const file of keyFiles) {
-        for await (const chunk of fs.createReadStream(file)) {
-          hasher.update(chunk);
-        }
-      }
-      lockHash = hasher.digest("hex");
-
-      core.saveState(STATE_LOCKFILE_HASH, lockHash);
-      core.saveState(STATE_LOCKFILES, JSON.stringify(keyFiles));
-    }
-
-    self.keyFiles = keyFiles;
-    key += `-${lockHash}`;
-    self.cacheKey = key;
-
     // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
 
@@ -153,6 +130,38 @@ export class CacheConfig {
       workspaces.push(new Workspace(root, target));
     }
     self.workspaces = workspaces;
+
+    if (!lockHash) {
+      hasher = crypto.createHash("sha1");
+
+      async function globHash(pattern: string): Promise<void> {
+        const globber = await glob.create(pattern, {
+          followSymbolicLinks: false,
+        });
+        keyFiles = keyFiles.concat(await globber.glob());
+        keyFiles.sort((a, b) => a.localeCompare(b));
+
+        for (const file of keyFiles) {
+          for await (const chunk of fs.createReadStream(file)) {
+            hasher.update(chunk);
+          }
+        }
+      }
+
+      await globHash("rust-toolchain\nrust-toolchain.toml");
+      for (const workspace of workspaces) {
+        const root = workspace.root;
+        await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock`);
+      }
+      lockHash = hasher.digest("hex");
+
+      core.saveState(STATE_LOCKFILE_HASH, lockHash);
+      core.saveState(STATE_LOCKFILES, JSON.stringify(keyFiles));
+    }
+
+    self.keyFiles = keyFiles;
+    key += `-${lockHash}`;
+    self.cacheKey = key;
 
     self.cachePaths = [CARGO_HOME];
     const cacheTargets = core.getInput("cache-targets").toLowerCase();
