@@ -53,6 +53,12 @@ sensible defaults.
     # Determines if the cache should be saved even when the workflow has failed.
     # default: "false"
     cache-on-failure: ""
+
+    # Determiners whether the cache should be saved.
+    # If `false`, the cache is only restored.
+    # Useful for jobs where the matrix is additive e.g. additional Cargo features.
+    # default: "true"
+    save-if: ""
 ```
 
 Further examples are available in the [.github/workflows](./.github/workflows/) directory.
