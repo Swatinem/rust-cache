@@ -50,7 +50,7 @@ export class CacheConfig {
     // This uses either the `shared-key` input,
     // or the `key` input combined with the `job` key.
 
-    let key = core.getInput("prefix-key");
+    let key = core.getInput("prefix-key") || "v0-rust";
 
     const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
@@ -132,29 +132,23 @@ export class CacheConfig {
     self.workspaces = workspaces;
 
     if (!lockHash) {
-      hasher = crypto.createHash("sha1");
-
-      async function globHash(pattern: string): Promise<string[]> {
-        const globber = await glob.create(pattern, {
-          followSymbolicLinks: false,
-        });
-        return await globber.glob();
-      }
-
-      keyFiles = keyFiles.concat(await globHash("rust-toolchain\nrust-toolchain.toml"));
+      keyFiles = keyFiles.concat(await globFiles("rust-toolchain\nrust-toolchain.toml"));
       for (const workspace of workspaces) {
         const root = workspace.root;
-        keyFiles = keyFiles.concat(await globHash(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`));
+        keyFiles.push(
+          ...(await globFiles(
+            `${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
+          )),
+        );
       }
-
       keyFiles.sort((a, b) => a.localeCompare(b));
 
+      hasher = crypto.createHash("sha1");
       for (const file of keyFiles) {
         for await (const chunk of fs.createReadStream(file)) {
           hasher.update(chunk);
         }
       }
-
       lockHash = hasher.digest("hex");
 
       core.saveState(STATE_LOCKFILE_HASH, lockHash);
@@ -167,13 +161,13 @@ export class CacheConfig {
     self.cacheKey = key;
 
     self.cachePaths = [CARGO_HOME];
-    const cacheTargets = core.getInput("cache-targets").toLowerCase();
+    const cacheTargets = core.getInput("cache-targets").toLowerCase() || "true";
     if (cacheTargets === "true") {
       self.cachePaths.push(...workspaces.map((ws) => ws.target));
     }
 
     const cacheDirectories = core.getInput("cache-directories");
-    for (const dir of cacheDirectories.trim().split("\n")) {
+    for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
       self.cachePaths.push(dir);
     }
 
@@ -223,4 +217,11 @@ async function getRustVersion(): Promise<RustVersion> {
     .map((s) => s.split(":").map((s) => s.trim()))
     .filter((s) => s.length === 2);
   return Object.fromEntries(splits);
+}
+
+async function globFiles(pattern: string): Promise<string[]> {
+  const globber = await glob.create(pattern, {
+    followSymbolicLinks: false,
+  });
+  return await globber.glob();
 }

@@ -14,11 +14,12 @@ sensible defaults.
 
 - uses: Swatinem/rust-cache@v2
   with:
-    # The prefix cache key, this can be changed to start a new cache manually
+    # The prefix cache key, this can be changed to start a new cache manually.
     # default: "v0-rust"
     prefix-key: ""
 
-    # An additional cache key that is stable over multiple jobs
+    # A cache key that is used instead of the automatic `job`-based key,
+    # and is stable over multiple jobs.
     # default: empty
     shared-key: ""
 
@@ -41,10 +42,11 @@ sensible defaults.
     # default: ". -> target"
     workspaces: ""
 
-    # Additional non workspace directories, separated by newlines
+    # Additional non workspace directories to be cached, separated by newlines.
     cache-directories: ""
 
     # Determines whether workspace `target` directories are cached.
+    # If `false`, only the cargo registry will be cached.
     # default: "true"
     cache-targets: ""
 

@@ -64548,7 +64548,7 @@ class CacheConfig {
         // Construct key prefix:
         // This uses either the `shared-key` input,
         // or the `key` input combined with the `job` key.
-        let key = lib_core.getInput("prefix-key");
+        let key = lib_core.getInput("prefix-key") || "v0-rust";
         const sharedKey = lib_core.getInput("shared-key");
         if (sharedKey) {
             key += `-${sharedKey}`;
@@ -64603,11 +64603,23 @@ class CacheConfig {
         // might create/overwrite lockfiles.
         let lockHash = lib_core.getState(STATE_LOCKFILE_HASH);
         let keyFiles = JSON.parse(lib_core.getState(STATE_LOCKFILES) || "[]");
+        // Constructs the workspace config and paths to restore:
+        // The workspaces are given using a `$workspace -> $target` syntax.
+        const workspaces = [];
+        const workspacesInput = lib_core.getInput("workspaces") || ".";
+        for (const workspace of workspacesInput.trim().split("\n")) {
+            let [root, target = "target"] = workspace.split("->").map((s) => s.trim());
+            root = external_path_default().resolve(root);
+            target = external_path_default().join(root, target);
+            workspaces.push(new Workspace(root, target));
+        }
+        self.workspaces = workspaces;
         if (!lockHash) {
-            const globber = await glob.create("**/Cargo.toml\n**/Cargo.lock\nrust-toolchain\nrust-toolchain.toml", {
-                followSymbolicLinks: false,
-            });
-            keyFiles = await globber.glob();
+            keyFiles = keyFiles.concat(await globFiles("rust-toolchain\nrust-toolchain.toml"));
+            for (const workspace of workspaces) {
+                const root = workspace.root;
+                keyFiles.push(...(await globFiles(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
+            }
             keyFiles.sort((a, b) => a.localeCompare(b));
             hasher = external_crypto_default().createHash("sha1");
             for (const file of keyFiles) {
@@ -64622,24 +64634,13 @@ class CacheConfig {
         self.keyFiles = keyFiles;
         key += `-${lockHash}`;
         self.cacheKey = key;
-        // Constructs the workspace config and paths to restore:
-        // The workspaces are given using a `$workspace -> $target` syntax.
-        const workspaces = [];
-        const workspacesInput = lib_core.getInput("workspaces") || ".";
-        for (const workspace of workspacesInput.trim().split("\n")) {
-            let [root, target = "target"] = workspace.split("->").map((s) => s.trim());
-            root = external_path_default().resolve(root);
-            target = external_path_default().join(root, target);
-            workspaces.push(new Workspace(root, target));
-        }
-        self.workspaces = workspaces;
         self.cachePaths = [config_CARGO_HOME];
-        const cacheTargets = lib_core.getInput("cache-targets").toLowerCase();
+        const cacheTargets = lib_core.getInput("cache-targets").toLowerCase() || "true";
         if (cacheTargets === "true") {
             self.cachePaths.push(...workspaces.map((ws) => ws.target));
         }
         const cacheDirectories = lib_core.getInput("cache-directories");
-        for (const dir of cacheDirectories.trim().split("\n")) {
+        for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
             self.cachePaths.push(dir);
         }
         return self;
@@ -64680,6 +64681,12 @@ async function getRustVersion() {
         .map((s) => s.split(":").map((s) => s.trim()))
         .filter((s) => s.length === 2);
     return Object.fromEntries(splits);
+}
+async function globFiles(pattern) {
+    const globber = await glob.create(pattern, {
+        followSymbolicLinks: false,
+    });
+    return await globber.glob();
 }
 
 ;// CONCATENATED MODULE: ./src/cleanup.ts

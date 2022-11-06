@@ -1,8 +1,13 @@
 # Changelog
 
+## 2.1.0
+
+- Only hash `Cargo.{lock,toml}` files in the configured workspace directories.
+
 ## 2.0.2
 
 - Avoid calling `cargo metadata` on pre-cleanup.
+- Added `prefix-key`, `cache-directories` and `cache-targets` options.
 
 ## 2.0.1
 
