@@ -64922,7 +64922,8 @@ process.on("uncaughtException", (e) => {
     }
 });
 async function run() {
-    if (!cache.isFeatureAvailable()) {
+    const save = core.getInput("save-if").toLowerCase() || "true";
+    if (!(cache.isFeatureAvailable() && save === "true")) {
         return;
     }
     try {

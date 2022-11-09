@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.0
+
+- Add new `save-if` option to always restore, but only conditionally save the cache.
+
 ## 2.1.0
 
 - Only hash `Cargo.{lock,toml}` files in the configured workspace directories.
