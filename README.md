@@ -36,10 +36,8 @@ sensible defaults.
     env-vars: ""
 
     # The cargo workspaces and target directory configuration.
-    # These entries are separated by newlines and have the form
-    # `$workspace -> $target`. The `$target` part is treated as a directory
-    # relative to the `$workspace` and defaults to "target" if not explicitly given.
-    # default: ". -> target"
+    # These entries are separated by newlines and specify the paths to the workspace roots.
+    # default: "."
     workspaces: ""
 
     # Additional non workspace directories to be cached, separated by newlines.
