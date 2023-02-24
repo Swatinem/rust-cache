@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1
+
+- Update `@actions/cache` dependency to fix usage of `zstd` compression.
+
 ## 2.2.0
 
 - Add new `save-if` option to always restore, but only conditionally save the cache.
