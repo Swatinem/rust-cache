@@ -141,6 +141,7 @@ export class CacheConfig {
           )),
         );
       }
+      keyFiles = keyFiles.filter(file => !fs.statSync(file).isDirectory());
       keyFiles.sort((a, b) => a.localeCompare(b));
 
       hasher = crypto.createHash("sha1");

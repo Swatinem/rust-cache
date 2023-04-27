@@ -1,0 +1,23 @@
+name: globbed-directories
+
+on: [push, pull_request]
+
+jobs:
+  simple:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+
+    name: Test `cargo check/test` on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Create folder that will be globbed
+        run: |
+          mkdir -p folder/rust-toolchain
+      - uses: ./
