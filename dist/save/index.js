@@ -60434,7 +60434,10 @@ async function run() {
             core.info(`[warning] ${e.stack}`);
         }
         core.info(`... Saving cache ...`);
-        await cache.saveCache(config.cachePaths, config.cacheKey);
+        // Pass a copy of cachePaths to avoid mutating the original array as reported by:
+        // https://github.com/actions/toolkit/pull/1378
+        // TODO: remove this once the underlying bug is fixed.
+        await cache.saveCache(config.cachePaths.slice(), config.cacheKey);
     }
     catch (e) {
         core.info(`[warning] ${e.stack}`);

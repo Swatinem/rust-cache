@@ -34,7 +34,10 @@ async function run() {
 
     core.info(`... Restoring cache ...`);
     const key = config.cacheKey;
-    const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
+    // Pass a copy of cachePaths to avoid mutating the original array as reported by:
+    // https://github.com/actions/toolkit/pull/1378
+    // TODO: remove this once the underlying bug is fixed.
+    const restoreKey = await cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
     if (restoreKey) {
       core.info(`Restored from cache key "${restoreKey}".`);
       core.saveState(STATE_KEY, restoreKey);
