@@ -28,6 +28,10 @@ inputs:
   cache-on-failure:
     description: "Cache even if the build fails. Defaults to false."
     required: false
+  cache-all-crates:
+    description: "Determines which crates are cached. If `true` all crates will be cached, otherwise only dependent crates will be cached."
+    required: false
+    default: "false"
   save-if:
     description: "Determiners whether the cache should be saved. If `false`, the cache is only restored."
     required: false

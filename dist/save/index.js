@@ -60226,7 +60226,7 @@ async function cleanBin() {
         }
     }
 }
-async function cleanRegistry(packages) {
+async function cleanRegistry(packages, crates = true) {
     // `.cargo/registry/src`
     // we can remove this completely, as cargo will recreate this from `cache`
     await rmRF(external_path_default().join(CARGO_HOME, "registry", "src"));
@@ -60243,6 +60243,10 @@ async function cleanRegistry(packages) {
             }
             // TODO: else, clean `.cache` based on the `packages`
         }
+    }
+    if (!crates) {
+        core.debug(`skipping crate cleanup`);
+        return;
     }
     const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     // `.cargo/registry/cache`
@@ -60409,35 +60413,36 @@ async function run() {
                 await cleanTargetDir(workspace.target, packages);
             }
             catch (e) {
-                core.info(`[warning] ${e.stack}`);
+                core.error(`${e.stack}`);
             }
         }
         try {
-            core.info(`... Cleaning cargo registry ...`);
-            await cleanRegistry(allPackages);
+            const creates = core.getInput("cache-all-crates").toLowerCase() || "false";
+            core.info(`... Cleaning cargo registry cache-all-crates: ${creates} ...`);
+            await cleanRegistry(allPackages, creates === "true");
         }
         catch (e) {
-            core.info(`[warning] ${e.stack}`);
+            core.error(`${e.stack}`);
         }
         try {
             core.info(`... Cleaning cargo/bin ...`);
             await cleanBin();
         }
         catch (e) {
-            core.info(`[warning] ${e.stack}`);
+            core.error(`${e.stack}`);
         }
         try {
             core.info(`... Cleaning cargo git cache ...`);
             await cleanGit(allPackages);
         }
         catch (e) {
-            core.info(`[warning] ${e.stack}`);
+            core.error(`${e.stack}`);
         }
         core.info(`... Saving cache ...`);
         await cache.saveCache(config.cachePaths, config.cacheKey);
     }
     catch (e) {
-        core.info(`[warning] ${e.stack}`);
+        core.error(`${e.stack}`);
     }
 }
 run();

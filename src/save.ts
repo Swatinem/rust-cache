@@ -40,35 +40,36 @@ async function run() {
         core.info(`... Cleaning ${workspace.target} ...`);
         await cleanTargetDir(workspace.target, packages);
       } catch (e) {
-        core.info(`[warning] ${(e as any).stack}`);
+        core.error(`${(e as any).stack}`);
       }
     }
 
     try {
-      core.info(`... Cleaning cargo registry ...`);
-      await cleanRegistry(allPackages);
+      const creates = core.getInput("cache-all-crates").toLowerCase() || "false";
+      core.info(`... Cleaning cargo registry cache-all-crates: ${creates} ...`);
+      await cleanRegistry(allPackages, creates === "true");
     } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+      core.error(`${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo/bin ...`);
       await cleanBin();
     } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+      core.error(`${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo git cache ...`);
       await cleanGit(allPackages);
     } catch (e) {
-      core.info(`[warning] ${(e as any).stack}`);
+      core.error(`${(e as any).stack}`);
     }
 
     core.info(`... Saving cache ...`);
     await cache.saveCache(config.cachePaths, config.cacheKey);
   } catch (e) {
-    core.info(`[warning] ${(e as any).stack}`);
+    core.error(`${(e as any).stack}`);
   }
 }
 
