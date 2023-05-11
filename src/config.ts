@@ -103,6 +103,11 @@ export class CacheConfig {
     }
 
     self.keyEnvs = keyEnvs;
+
+    // Installed packages and their versions are also considered for the key.
+    const packages = await getPackages();
+    hasher.update(packages);
+
     key += `-${hasher.digest("hex")}`;
 
     self.restoreKey = key;
@@ -218,6 +223,12 @@ async function getRustVersion(): Promise<RustVersion> {
     .map((s) => s.split(":").map((s) => s.trim()))
     .filter((s) => s.length === 2);
   return Object.fromEntries(splits);
+}
+
+async function getPackages(): Promise<string> {
+  let stdout = await getCmdOutput("cargo", ["install", "--list"]);
+  // Make OS independent.
+  return stdout.split(/[\n\r]+/).join("\n");
 }
 
 async function globFiles(pattern: string): Promise<string[]> {
