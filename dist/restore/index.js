@@ -60403,7 +60403,10 @@ async function run() {
         lib_core.saveState(config_STATE_BINS, JSON.stringify([...bins]));
         lib_core.info(`... Restoring cache ...`);
         const key = config.cacheKey;
-        const restoreKey = await cache.restoreCache(config.cachePaths, key, [config.restoreKey]);
+        // Pass a copy of cachePaths to avoid mutating the original array as reported by:
+        // https://github.com/actions/toolkit/pull/1378
+        // TODO: remove this once the underlying bug is fixed.
+        const restoreKey = await cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
         if (restoreKey) {
             lib_core.info(`Restored from cache key "${restoreKey}".`);
             lib_core.saveState(STATE_KEY, restoreKey);
