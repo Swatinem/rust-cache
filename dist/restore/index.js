@@ -60055,6 +60055,9 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
+        // Installed packages and their versions are also considered for the key.
+        const packages = await getPackages();
+        hasher.update(packages);
         key += `-${hasher.digest("hex")}`;
         self.restoreKey = key;
         // Construct the lockfiles portion of the key:
@@ -60145,6 +60148,11 @@ async function getRustVersion() {
         .map((s) => s.split(":").map((s) => s.trim()))
         .filter((s) => s.length === 2);
     return Object.fromEntries(splits);
+}
+async function getPackages() {
+    let stdout = await getCmdOutput("cargo", ["install", "--list"]);
+    // Make OS independent.
+    return stdout.split(/[\n\r]+/).join("\n");
 }
 async function globFiles(pattern) {
     const globber = await glob.create(pattern, {
