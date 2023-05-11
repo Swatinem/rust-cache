@@ -30,10 +30,10 @@
   },
   "devDependencies": {
     "@vercel/ncc": "^0.36.1",
-    "lec": "^1.0.1",
+    "linefix": "^0.1.1",
     "typescript": "5.0.4"
   },
   "scripts": {
-    "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && lec -v -c LF -d dist"
+    "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && linefix dist"
   }
 }
