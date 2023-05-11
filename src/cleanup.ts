@@ -85,7 +85,7 @@ export async function cleanBin() {
   }
 }
 
-export async function cleanRegistry(packages: Packages) {
+export async function cleanRegistry(packages: Packages, crates = true) {
   // `.cargo/registry/src`
   // we can remove this completely, as cargo will recreate this from `cache`
   await rmRF(path.join(CARGO_HOME, "registry", "src"));
@@ -104,6 +104,11 @@ export async function cleanRegistry(packages: Packages) {
       }
       // TODO: else, clean `.cache` based on the `packages`
     }
+  }
+
+  if (!crates) {
+    core.debug(`skipping crate cleanup`);
+    return;
   }
 
   const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));

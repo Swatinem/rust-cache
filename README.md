@@ -54,6 +54,12 @@ sensible defaults.
     # default: "false"
     cache-on-failure: ""
 
+    # Determines which crates are cached.
+    # If `true` all crates will be cached, otherwise only dependent crates will be cached.
+    # Useful if additional crates are used for CI tooling.
+    # default: "false"
+    cache-all-crates: ""
+
     # Determiners whether the cache should be saved.
     # If `false`, the cache is only restored.
     # Useful for jobs where the matrix is additive e.g. additional Cargo features.
