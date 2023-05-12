@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.2
+
+- Add `cache-all-crates` option, which is enables caching of creates installed by workflows.
+- Add installed packages to cache key, so changes to workflows that install rust tools are detected and cached properly.
+- Fix cache restore failures due to upstream bug.
+- Fix `EISDIR` error due to globed directories.
+- Update runtime `@actions/cache`, `@actions/io` and dev `typescript` dependencies.
+- Update `npm run prepare` so it creates distribution files with the right line endings.
+
 ## 2.2.1
 
 - Update `@actions/cache` dependency to fix usage of `zstd` compression.
