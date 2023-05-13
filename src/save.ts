@@ -3,12 +3,12 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
-import { CacheConfig, STATE_KEY } from "./config";
+import { CacheConfig, isCacheUpToDate } from "./config";
 
 process.on("uncaughtException", (e) => {
-  core.info(`[warning] ${e.message}`);
+  core.error(e.message);
   if (e.stack) {
-    core.info(e.stack);
+    core.error(e.stack);
   }
 });
 
@@ -20,14 +20,14 @@ async function run() {
   }
 
   try {
-    const config = await CacheConfig.new();
-    config.printInfo();
-    core.info("");
-
-    if (core.getState(STATE_KEY) === config.cacheKey) {
+    if (isCacheUpToDate()) {
       core.info(`Cache up-to-date.`);
       return;
     }
+
+    const config = await CacheConfig.new();
+    config.printInfo();
+    core.info("");
 
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     await macOsWorkaround();
@@ -45,16 +45,16 @@ async function run() {
     }
 
     try {
-      const creates = core.getInput("cache-all-crates").toLowerCase() || "false";
-      core.info(`... Cleaning cargo registry cache-all-crates: ${creates} ...`);
-      await cleanRegistry(allPackages, creates === "true");
+      const crates = core.getInput("cache-all-crates").toLowerCase() || "false"
+      core.info(`... Cleaning cargo registry cache-all-crates: ${crates} ...`);
+      await cleanRegistry(allPackages, crates !== "true");
     } catch (e) {
       core.error(`${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo/bin ...`);
-      await cleanBin();
+      await cleanBin(config.cargoBins);
     } catch (e) {
       core.error(`${(e as any).stack}`);
     }

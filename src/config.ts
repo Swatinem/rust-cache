@@ -7,14 +7,12 @@ import path from "path";
 
 import { getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
+import { getCargoBins } from "./cleanup";
 
 const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
 
-const STATE_LOCKFILE_HASH = "RUST_CACHE_LOCKFILE_HASH";
-const STATE_LOCKFILES = "RUST_CACHE_LOCKFILES";
-export const STATE_BINS = "RUST_CACHE_BINS";
-export const STATE_KEY = "RUST_CACHE_KEY";
+const STATE_CONFIG = "RUST_CACHE_CONFIG";
 
 export class CacheConfig {
   /** All the paths we want to cache */
@@ -26,6 +24,9 @@ export class CacheConfig {
 
   /** The workspace configurations */
   public workspaces: Array<Workspace> = [];
+
+  /** The cargo binaries present during main step */
+  public cargoBins: Array<string> = [];
 
   /** The prefix portion of the cache key */
   private keyPrefix = "";
@@ -45,6 +46,15 @@ export class CacheConfig {
    */
   static async new(): Promise<CacheConfig> {
     const self = new CacheConfig();
+    const source = core.getState(STATE_CONFIG);
+    if (source !== "") {
+      // Post action, use what we calculated in the main action ensuring consistency.
+      Object.assign(self, JSON.parse(source));
+      self.workspaces = self.workspaces
+        .map((w: any) => new Workspace(w.root, w.target));
+
+      return self;
+    }
 
     // Construct key prefix:
     // This uses either the `shared-key` input,
@@ -104,10 +114,6 @@ export class CacheConfig {
 
     self.keyEnvs = keyEnvs;
 
-    // Installed packages and their versions are also considered for the key.
-    const packages = await getPackages();
-    hasher.update(packages);
-
     key += `-${hasher.digest("hex")}`;
 
     self.restoreKey = key;
@@ -115,13 +121,6 @@ export class CacheConfig {
     // Construct the lockfiles portion of the key:
     // This considers all the files found via globbing for various manifests
     // and lockfiles.
-    // This part is computed in the "pre"/"restore" part of the job and persisted
-    // into the `state`. That state is loaded in the "post"/"save" part of the
-    // job so we have consistent values even though the "main" actions run
-    // might create/overwrite lockfiles.
-
-    let lockHash = core.getState(STATE_LOCKFILE_HASH);
-    let keyFiles: Array<string> = JSON.parse(core.getState(STATE_LOCKFILES) || "[]");
 
     // Constructs the workspace config and paths to restore:
     // The workspaces are given using a `$workspace -> $target` syntax.
@@ -136,30 +135,25 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    if (!lockHash) {
-      keyFiles = keyFiles.concat(await globFiles("rust-toolchain\nrust-toolchain.toml"));
-      for (const workspace of workspaces) {
-        const root = workspace.root;
-        keyFiles.push(
-          ...(await globFiles(
-            `${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
-          )),
-        );
-      }
-      keyFiles = keyFiles.filter(file => !fs.statSync(file).isDirectory());
-      keyFiles.sort((a, b) => a.localeCompare(b));
-
-      hasher = crypto.createHash("sha1");
-      for (const file of keyFiles) {
-        for await (const chunk of fs.createReadStream(file)) {
-          hasher.update(chunk);
-        }
-      }
-      lockHash = hasher.digest("hex");
-
-      core.saveState(STATE_LOCKFILE_HASH, lockHash);
-      core.saveState(STATE_LOCKFILES, JSON.stringify(keyFiles));
+    let keyFiles = await globFiles("rust-toolchain\nrust-toolchain.toml");
+    for (const workspace of workspaces) {
+      const root = workspace.root;
+      keyFiles.push(
+        ...(await globFiles(
+          `${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
+        )),
+      );
     }
+    keyFiles = keyFiles.filter(file => !fs.statSync(file).isDirectory());
+    keyFiles.sort((a, b) => a.localeCompare(b));
+
+    hasher = crypto.createHash("sha1");
+    for (const file of keyFiles) {
+      for await (const chunk of fs.createReadStream(file)) {
+        hasher.update(chunk);
+      }
+    }
+    let lockHash = hasher.digest("hex");
 
     self.keyFiles = keyFiles;
 
@@ -177,9 +171,15 @@ export class CacheConfig {
       self.cachePaths.push(dir);
     }
 
+    const bins = await getCargoBins();
+    self.cargoBins = Array.from(bins.values());
+
     return self;
   }
 
+  /**
+   * Prints the configuration to the action log.
+   */
   printInfo() {
     core.startGroup("Cache Configuration");
     core.info(`Workspaces:`);
@@ -207,6 +207,23 @@ export class CacheConfig {
     }
     core.endGroup();
   }
+
+  /**
+   * Saves the configuration to the state store.
+   * This is used to restore the configuration in the post action.
+   */
+  saveState() {
+    core.saveState(STATE_CONFIG, this);
+  }
+}
+
+/**
+ * Checks if the cache is up to date.
+ *
+ * @returns `true` if the cache is up to date, `false` otherwise.
+ */
+export function isCacheUpToDate(): boolean {
+  return core.getState(STATE_CONFIG) === "";
 }
 
 interface RustVersion {
@@ -223,12 +240,6 @@ async function getRustVersion(): Promise<RustVersion> {
     .map((s) => s.split(":").map((s) => s.trim()))
     .filter((s) => s.length === 2);
   return Object.fromEntries(splits);
-}
-
-async function getPackages(): Promise<string> {
-  let stdout = await getCmdOutput("cargo", ["install", "--list"]);
-  // Make OS independent.
-  return stdout.split(/[\n\r]+/).join("\n");
 }
 
 async function globFiles(pattern: string): Promise<string[]> {

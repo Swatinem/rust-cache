@@ -59977,8 +59977,8 @@ async function getCmdOutput(cmd, args = [], options = {}) {
         });
     }
     catch (e) {
-        lib_core.info(`[warning] Command failed: ${cmd} ${args.join(" ")}`);
-        lib_core.info(`[warning] ${stderr}`);
+        lib_core.error(`Command failed: ${cmd} ${args.join(" ")}`);
+        lib_core.error(stderr);
         throw e;
     }
     return stdout;
@@ -60024,12 +60024,10 @@ class Workspace {
 
 
 
+
 const HOME = external_os_default().homedir();
 const config_CARGO_HOME = process.env.CARGO_HOME || external_path_default().join(HOME, ".cargo");
-const STATE_LOCKFILE_HASH = "RUST_CACHE_LOCKFILE_HASH";
-const STATE_LOCKFILES = "RUST_CACHE_LOCKFILES";
-const config_STATE_BINS = "RUST_CACHE_BINS";
-const STATE_KEY = "RUST_CACHE_KEY";
+const STATE_CONFIG = "RUST_CACHE_CONFIG";
 class CacheConfig {
     constructor() {
         /** All the paths we want to cache */
@@ -60040,6 +60038,8 @@ class CacheConfig {
         this.restoreKey = "";
         /** The workspace configurations */
         this.workspaces = [];
+        /** The cargo binaries present during main step */
+        this.cargoBins = [];
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -60056,6 +60056,14 @@ class CacheConfig {
      */
     static async new() {
         const self = new CacheConfig();
+        const source = lib_core.getState(STATE_CONFIG);
+        if (source !== "") {
+            // Post action, use what we calculated in the main action ensuring consistency.
+            Object.assign(self, JSON.parse(source));
+            self.workspaces = self.workspaces
+                .map((w) => new Workspace(w.root, w.target));
+            return self;
+        }
         // Construct key prefix:
         // This uses either the `shared-key` input,
         // or the `key` input combined with the `job` key.
@@ -60103,20 +60111,11 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
-        // Installed packages and their versions are also considered for the key.
-        const packages = await getPackages();
-        hasher.update(packages);
         key += `-${hasher.digest("hex")}`;
         self.restoreKey = key;
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
         // and lockfiles.
-        // This part is computed in the "pre"/"restore" part of the job and persisted
-        // into the `state`. That state is loaded in the "post"/"save" part of the
-        // job so we have consistent values even though the "main" actions run
-        // might create/overwrite lockfiles.
-        let lockHash = lib_core.getState(STATE_LOCKFILE_HASH);
-        let keyFiles = JSON.parse(lib_core.getState(STATE_LOCKFILES) || "[]");
         // Constructs the workspace config and paths to restore:
         // The workspaces are given using a `$workspace -> $target` syntax.
         const workspaces = [];
@@ -60128,24 +60127,20 @@ class CacheConfig {
             workspaces.push(new Workspace(root, target));
         }
         self.workspaces = workspaces;
-        if (!lockHash) {
-            keyFiles = keyFiles.concat(await globFiles("rust-toolchain\nrust-toolchain.toml"));
-            for (const workspace of workspaces) {
-                const root = workspace.root;
-                keyFiles.push(...(await globFiles(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
-            }
-            keyFiles = keyFiles.filter(file => !external_fs_default().statSync(file).isDirectory());
-            keyFiles.sort((a, b) => a.localeCompare(b));
-            hasher = external_crypto_default().createHash("sha1");
-            for (const file of keyFiles) {
-                for await (const chunk of external_fs_default().createReadStream(file)) {
-                    hasher.update(chunk);
-                }
-            }
-            lockHash = hasher.digest("hex");
-            lib_core.saveState(STATE_LOCKFILE_HASH, lockHash);
-            lib_core.saveState(STATE_LOCKFILES, JSON.stringify(keyFiles));
+        let keyFiles = await globFiles("rust-toolchain\nrust-toolchain.toml");
+        for (const workspace of workspaces) {
+            const root = workspace.root;
+            keyFiles.push(...(await globFiles(`${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
         }
+        keyFiles = keyFiles.filter(file => !external_fs_default().statSync(file).isDirectory());
+        keyFiles.sort((a, b) => a.localeCompare(b));
+        hasher = external_crypto_default().createHash("sha1");
+        for (const file of keyFiles) {
+            for await (const chunk of external_fs_default().createReadStream(file)) {
+                hasher.update(chunk);
+            }
+        }
+        let lockHash = hasher.digest("hex");
         self.keyFiles = keyFiles;
         key += `-${lockHash}`;
         self.cacheKey = key;
@@ -60158,8 +60153,13 @@ class CacheConfig {
         for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
             self.cachePaths.push(dir);
         }
+        const bins = await getCargoBins();
+        self.cargoBins = Array.from(bins.values());
         return self;
     }
+    /**
+     * Prints the configuration to the action log.
+     */
     printInfo() {
         lib_core.startGroup("Cache Configuration");
         lib_core.info(`Workspaces:`);
@@ -60187,6 +60187,21 @@ class CacheConfig {
         }
         lib_core.endGroup();
     }
+    /**
+     * Saves the configuration to the state store.
+     * This is used to restore the configuration in the post action.
+     */
+    saveState() {
+        lib_core.saveState(STATE_CONFIG, this);
+    }
+}
+/**
+ * Checks if the cache is up to date.
+ *
+ * @returns `true` if the cache is up to date, `false` otherwise.
+ */
+function isCacheUpToDate() {
+    return core.getState(STATE_CONFIG) === "";
 }
 async function getRustVersion() {
     const stdout = await getCmdOutput("rustc", ["-vV"]);
@@ -60196,11 +60211,6 @@ async function getRustVersion() {
         .map((s) => s.split(":").map((s) => s.trim()))
         .filter((s) => s.length === 2);
     return Object.fromEntries(splits);
-}
-async function getPackages() {
-    let stdout = await getCmdOutput("cargo", ["install", "--list"]);
-    // Make OS independent.
-    return stdout.split(/[\n\r]+/).join("\n");
 }
 async function globFiles(pattern) {
     const globber = await glob.create(pattern, {
@@ -60269,9 +60279,14 @@ async function getCargoBins() {
     catch { }
     return bins;
 }
-async function cleanBin() {
+/**
+ * Clean the cargo bin directory, removing the binaries that existed
+ * when the action started, as they were not created by the build.
+ *
+ * @param oldBins The binaries that existed when the action started.
+ */
+async function cleanBin(oldBins) {
     const bins = await getCargoBins();
-    const oldBins = JSON.parse(core.getState(STATE_BINS));
     for (const bin of oldBins) {
         bins.delete(bin);
     }
@@ -60439,9 +60454,9 @@ async function exists(path) {
 
 
 process.on("uncaughtException", (e) => {
-    lib_core.info(`[warning] ${e.message}`);
+    lib_core.error(e.message);
     if (e.stack) {
-        lib_core.info(e.stack);
+        lib_core.error(e.stack);
     }
 });
 async function run() {
@@ -60459,8 +60474,6 @@ async function run() {
         const config = await CacheConfig["new"]();
         config.printInfo();
         lib_core.info("");
-        const bins = await getCargoBins();
-        lib_core.saveState(config_STATE_BINS, JSON.stringify([...bins]));
         lib_core.info(`... Restoring cache ...`);
         const key = config.cacheKey;
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
@@ -60468,9 +60481,9 @@ async function run() {
         // TODO: remove this once the underlying bug is fixed.
         const restoreKey = await cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
         if (restoreKey) {
-            lib_core.info(`Restored from cache key "${restoreKey}".`);
-            lib_core.saveState(STATE_KEY, restoreKey);
-            if (restoreKey !== key) {
+            const match = restoreKey === key;
+            lib_core.info(`Restored from cache key "${restoreKey}" full match: ${match}.`);
+            if (!match) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
                     try {
@@ -60478,17 +60491,20 @@ async function run() {
                     }
                     catch { }
                 }
+                // We restored the cache but it is not a full match.
+                config.saveState();
             }
-            setCacheHitOutput(restoreKey === key);
+            setCacheHitOutput(match);
         }
         else {
             lib_core.info("No cache found.");
+            config.saveState();
             setCacheHitOutput(false);
         }
     }
     catch (e) {
         setCacheHitOutput(false);
-        lib_core.info(`[warning] ${e.stack}`);
+        lib_core.error(`${e.stack}`);
     }
 }
 function setCacheHitOutput(cacheHit) {
