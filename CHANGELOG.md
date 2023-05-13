@@ -1,8 +1,8 @@
 # Changelog
 
-## 2.2.2
+## 2.3.0
 
-- Add `cache-all-crates` option, which is enables caching of creates installed by workflows.
+- Add `cache-all-crates` option, which enables caching of crates installed by workflows.
 - Add installed packages to cache key, so changes to workflows that install rust tools are detected and cached properly.
 - Fix cache restore failures due to upstream bug.
 - Fix `EISDIR` error due to globed directories.
