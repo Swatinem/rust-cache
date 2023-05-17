@@ -25,7 +25,7 @@ async function run() {
       return;
     }
 
-    const config = await CacheConfig.new();
+    const config = CacheConfig.fromState();
     config.printInfo();
     core.info("");
 

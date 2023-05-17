@@ -46,15 +46,6 @@ export class CacheConfig {
    */
   static async new(): Promise<CacheConfig> {
     const self = new CacheConfig();
-    const source = core.getState(STATE_CONFIG);
-    if (source !== "") {
-      // Post action, use what we calculated in the main action ensuring consistency.
-      Object.assign(self, JSON.parse(source));
-      self.workspaces = self.workspaces
-        .map((w: any) => new Workspace(w.root, w.target));
-
-      return self;
-    }
 
     // Construct key prefix:
     // This uses either the `shared-key` input,
@@ -173,6 +164,28 @@ export class CacheConfig {
 
     const bins = await getCargoBins();
     self.cargoBins = Array.from(bins.values());
+
+    return self;
+  }
+
+  /**
+   * Reads and returns the cache config from the action `state`.
+   *
+   * @throws {Error} if the state is not present.
+   * @returns {CacheConfig} the configuration.
+   * @see {@link CacheConfig#saveState}
+   * @see {@link CacheConfig#new}
+   */
+  static fromState(): CacheConfig {
+    const source = core.getState(STATE_CONFIG);
+    if (!source) {
+      throw new Error("Cache configuration not found in state");
+    }
+
+    const self = new CacheConfig();
+    Object.assign(self, JSON.parse(source));
+    self.workspaces = self.workspaces
+      .map((w: any) => new Workspace(w.root, w.target));
 
     return self;
   }
