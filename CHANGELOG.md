@@ -3,6 +3,7 @@
 ## 2.3.1
 
 - Fix cache key stability.
+- Use 8 character hash components to reduce the key length, making it more readable.
 
 ## 2.3.0
 
