@@ -1,13 +1,13 @@
 import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 
-import { cleanTargetDir, getCargoBins } from "./cleanup";
-import { CacheConfig, STATE_BINS, STATE_KEY } from "./config";
+import { cleanTargetDir } from "./cleanup";
+import { CacheConfig } from "./config";
 
 process.on("uncaughtException", (e) => {
-  core.info(`[warning] ${e.message}`);
+  core.error(e.message);
   if (e.stack) {
-    core.info(e.stack);
+    core.error(e.stack);
   }
 });
 
@@ -29,9 +29,6 @@ async function run() {
     config.printInfo();
     core.info("");
 
-    const bins = await getCargoBins();
-    core.saveState(STATE_BINS, JSON.stringify([...bins]));
-
     core.info(`... Restoring cache ...`);
     const key = config.cacheKey;
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
@@ -39,28 +36,31 @@ async function run() {
     // TODO: remove this once the underlying bug is fixed.
     const restoreKey = await cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
     if (restoreKey) {
-      core.info(`Restored from cache key "${restoreKey}".`);
-      core.saveState(STATE_KEY, restoreKey);
-
-      if (restoreKey !== key) {
+      const match = restoreKey === key;
+      core.info(`Restored from cache key "${restoreKey}" full match: ${match}.`);
+      if (!match) {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
           try {
             await cleanTargetDir(workspace.target, [], true);
           } catch {}
         }
+
+        // We restored the cache but it is not a full match.
+        config.saveState();
       }
 
-      setCacheHitOutput(restoreKey === key);
+      setCacheHitOutput(match);
     } else {
       core.info("No cache found.");
+      config.saveState();
 
       setCacheHitOutput(false);
     }
   } catch (e) {
     setCacheHitOutput(false);
 
-    core.info(`[warning] ${(e as any).stack}`);
+    core.error(`${(e as any).stack}`);
   }
 }
 

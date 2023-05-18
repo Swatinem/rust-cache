@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.1
+
+- Fix cache key stability.
+
 ## 2.3.0
 
 - Add `cache-all-crates` option, which enables caching of crates installed by workflows.

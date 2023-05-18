@@ -22,8 +22,8 @@ export async function getCmdOutput(
       ...options,
     });
   } catch (e) {
-    core.info(`[warning] Command failed: ${cmd} ${args.join(" ")}`);
-    core.info(`[warning] ${stderr}`);
+    core.error(`Command failed: ${cmd} ${args.join(" ")}`);
+    core.error(stderr);
     throw e;
   }
   return stdout;

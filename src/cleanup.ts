@@ -3,7 +3,7 @@ import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
 
-import { CARGO_HOME, STATE_BINS } from "./config";
+import { CARGO_HOME } from "./config";
 import { Packages } from "./workspace";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
@@ -69,9 +69,14 @@ export async function getCargoBins(): Promise<Set<string>> {
   return bins;
 }
 
-export async function cleanBin() {
+/**
+ * Clean the cargo bin directory, removing the binaries that existed
+ * when the action started, as they were not created by the build.
+ *
+ * @param oldBins The binaries that existed when the action started.
+ */
+export async function cleanBin(oldBins: Array<string>) {
   const bins = await getCargoBins();
-  const oldBins = JSON.parse(core.getState(STATE_BINS));
 
   for (const bin of oldBins) {
     bins.delete(bin);
@@ -186,10 +191,10 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
 
 /**
  * Removes all files or directories in `dirName` matching some criteria.
- * 
+ *
  * When the `checkTimestamp` flag is set, this will also remove anything older
  * than one week.
- * 
+ *
  * Otherwise, it will remove everything that does not match any string in the
  * `keepPrefix` set.
  * The matching strips and trailing `-$hash` suffix.
