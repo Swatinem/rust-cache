@@ -60028,6 +60028,7 @@ class Workspace {
 const HOME = external_os_default().homedir();
 const config_CARGO_HOME = process.env.CARGO_HOME || external_path_default().join(HOME, ".cargo");
 const STATE_CONFIG = "RUST_CACHE_CONFIG";
+const HASH_LENGTH = 8;
 class CacheConfig {
     constructor() {
         /** All the paths we want to cache */
@@ -60103,7 +60104,7 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
-        key += `-${hasher.digest("hex")}`;
+        key += `-${digest(hasher)}`;
         self.restoreKey = key;
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
@@ -60132,7 +60133,7 @@ class CacheConfig {
                 hasher.update(chunk);
             }
         }
-        let lockHash = hasher.digest("hex");
+        let lockHash = digest(hasher);
         self.keyFiles = keyFiles;
         key += `-${lockHash}`;
         self.cacheKey = key;
@@ -60213,6 +60214,15 @@ class CacheConfig {
  */
 function isCacheUpToDate() {
     return core.getState(STATE_CONFIG) === "";
+}
+/**
+ * Returns a hex digest of the given hasher truncated to `HASH_LENGTH`.
+ *
+ * @param hasher The hasher to digest.
+ * @returns The hex digest.
+ */
+function digest(hasher) {
+    return hasher.digest("hex").substring(0, HASH_LENGTH);
 }
 async function getRustVersion() {
     const stdout = await getCmdOutput("rustc", ["-vV"]);

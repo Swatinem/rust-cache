@@ -13,6 +13,7 @@ const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
 
 const STATE_CONFIG = "RUST_CACHE_CONFIG";
+const HASH_LENGTH = 8;
 
 export class CacheConfig {
   /** All the paths we want to cache */
@@ -105,7 +106,7 @@ export class CacheConfig {
 
     self.keyEnvs = keyEnvs;
 
-    key += `-${hasher.digest("hex")}`;
+    key += `-${digest(hasher)}`;
 
     self.restoreKey = key;
 
@@ -144,7 +145,7 @@ export class CacheConfig {
         hasher.update(chunk);
       }
     }
-    let lockHash = hasher.digest("hex");
+    let lockHash = digest(hasher);
 
     self.keyFiles = keyFiles;
 
@@ -237,6 +238,16 @@ export class CacheConfig {
  */
 export function isCacheUpToDate(): boolean {
   return core.getState(STATE_CONFIG) === "";
+}
+
+/**
+ * Returns a hex digest of the given hasher truncated to `HASH_LENGTH`.
+ *
+ * @param hasher The hasher to digest.
+ * @returns The hex digest.
+ */
+function digest(hasher: crypto.Hash): string {
+  return hasher.digest("hex").substring(0, HASH_LENGTH);
 }
 
 interface RustVersion {
