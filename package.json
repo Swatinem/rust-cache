@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "rust-cache",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "A GitHub Action that implements smart caching for rust/cargo projects with sensible defaults.",
   "keywords": [
     "actions",

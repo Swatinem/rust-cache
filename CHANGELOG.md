@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.3.1
+## 2.4.0
 
 - Fix cache key stability.
 - Use 8 character hash components to reduce the key length, making it more readable.
