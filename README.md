@@ -104,7 +104,7 @@ This cache is automatically keyed by:
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 
-Before being persisted, the cache is cleaned of:
+Before being persisted, the cache is cleaned if:
 
 - Any files in `~/.cargo/bin` that were present before the action ran (for example `rustc`).
 - Dependencies that are no longer used.
