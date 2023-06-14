@@ -1,7 +1,9 @@
 import * as core from "@actions/core";
 import * as glob from "@actions/glob";
+import * as toml from "toml";
 import crypto from "crypto";
 import fs from "fs";
+import fs_promises from "fs/promises";
 import os from "os";
 import path from "path";
 
@@ -128,25 +130,101 @@ export class CacheConfig {
     self.workspaces = workspaces;
 
     let keyFiles = await globFiles("rust-toolchain\nrust-toolchain.toml");
+    const parsedKeyFiles = []; // keyFiles that are parsed, pre-processed and hashed
+
+    hasher = crypto.createHash("sha1");
+
     for (const workspace of workspaces) {
       const root = workspace.root;
       keyFiles.push(
         ...(await globFiles(
-          `${root}/**/Cargo.toml\n${root}/**/Cargo.lock\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
+          `${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
         )),
       );
+
+      const cargo_manifests = (await globFiles(`${root}/**/Cargo.toml`))
+        .filter(file => !fs.statSync(file).isDirectory());
+      cargo_manifests.sort((a, b) => a.localeCompare(b));
+
+      for (const cargo_manifest of cargo_manifests) {
+        try {
+          const content = await fs_promises.readFile(cargo_manifest, { encoding: 'utf8' });
+          const parsed = toml.parse(content);
+
+          if ("package" in parsed) {
+            const pack = parsed.package;
+            if ("version" in pack) {
+              pack.version = "0.0.0";
+            }
+          }
+
+          for (const prefix of ["", "build-", "dev-"]) {
+            const section_name = `${prefix}dependencies`;
+            if (!(section_name in parsed)) {
+              continue;
+            }
+            const deps = parsed[section_name];
+
+            for (const key of Object.keys(deps)) {
+              const dep = deps[key];
+
+              if ("path" in dep) {
+                dep.version = '0.0.0'
+              }
+            }
+          }
+
+          hasher.update(JSON.stringify(sort_object(parsed)));
+
+          parsedKeyFiles.push(cargo_manifest);
+        } catch (_e) { // Fallback to caching them as regular file
+          keyFiles.push(cargo_manifest);
+        }
+      }
+
+      const cargo_locks = (await globFiles(`${root}/**/Cargo.lock`))
+        .filter(file => !fs.statSync(file).isDirectory());
+      cargo_locks.sort((a, b) => a.localeCompare(b));
+
+      for (const cargo_lock of cargo_locks) {
+        try {
+          const content = await fs_promises.readFile(cargo_lock, { encoding: 'utf8' });
+          const parsed = toml.parse(content);
+
+          if (parsed.version !== 3 || !("package" in parsed)) {
+            // Fallback to caching them as regular file since this action
+            // can only handle Cargo.lock format version 3
+            keyFiles.push(cargo_lock);
+            continue;
+          }
+
+          // Package without `[[package]].source` and `[[package]].checksum`
+          // are the one with `path = "..."` to crates within the workspace.
+          const packages = parsed.package.filter((p: any) => {
+            "source" in p || "checksum" in p
+          });
+
+          hasher.update(JSON.stringify(sort_object(packages)));
+
+          parsedKeyFiles.push(cargo_lock);
+        } catch (_e) { // Fallback to caching them as regular file
+          keyFiles.push(cargo_lock);
+        }
+      }
     }
     keyFiles = keyFiles.filter(file => !fs.statSync(file).isDirectory());
     keyFiles.sort((a, b) => a.localeCompare(b));
 
-    hasher = crypto.createHash("sha1");
     for (const file of keyFiles) {
       for await (const chunk of fs.createReadStream(file)) {
         hasher.update(chunk);
       }
     }
+
     let lockHash = digest(hasher);
 
+    keyFiles.push(...parsedKeyFiles);
+    keyFiles.sort((a, b) => a.localeCompare(b));
     self.keyFiles = keyFiles;
 
     key += `-${lockHash}`;
@@ -271,4 +349,21 @@ async function globFiles(pattern: string): Promise<string[]> {
     followSymbolicLinks: false,
   });
   return await globber.glob();
+}
+
+function sort_object(o: any): any {
+  if (Array.isArray(o)) {
+    return o.sort().map(sort_object);
+  } else if (typeof o === 'object' && o != null) {
+    return Object
+      .keys(o)
+      .sort()
+      .reduce(function(a: any, k) {
+        a[k] = sort_object(o[k]);
+  
+        return a;
+      }, {});
+  } else {
+    return o;
+  }
 }
