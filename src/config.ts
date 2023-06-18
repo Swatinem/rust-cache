@@ -129,7 +129,7 @@ export class CacheConfig {
     }
     self.workspaces = workspaces;
 
-    let keyFiles = await globFiles("rust-toolchain\nrust-toolchain.toml");
+    let keyFiles = await globFiles(".cargo/config.toml\nrust-toolchain\nrust-toolchain.toml");
     const parsedKeyFiles = []; // keyFiles that are parsed, pre-processed and hashed
 
     hasher = crypto.createHash("sha1");
@@ -138,13 +138,11 @@ export class CacheConfig {
       const root = workspace.root;
       keyFiles.push(
         ...(await globFiles(
-          `${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
+          `${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
         )),
       );
 
-      const cargo_manifests = (await globFiles(`${root}/**/Cargo.toml`))
-        .filter(file => !fs.statSync(file).isDirectory());
-      cargo_manifests.sort((a, b) => a.localeCompare(b));
+      const cargo_manifests = sort_and_uniq(await globFiles(`${root}/**/Cargo.toml`));
 
       for (const cargo_manifest of cargo_manifests) {
         try {
@@ -182,9 +180,7 @@ export class CacheConfig {
         }
       }
 
-      const cargo_locks = (await globFiles(`${root}/**/Cargo.lock`))
-        .filter(file => !fs.statSync(file).isDirectory());
-      cargo_locks.sort((a, b) => a.localeCompare(b));
+      const cargo_locks = sort_and_uniq(await globFiles(`${root}/**/Cargo.lock`));
 
       for (const cargo_lock of cargo_locks) {
         try {
@@ -212,8 +208,7 @@ export class CacheConfig {
         }
       }
     }
-    keyFiles = keyFiles.filter(file => !fs.statSync(file).isDirectory());
-    keyFiles.sort((a, b) => a.localeCompare(b));
+    keyFiles = sort_and_uniq(keyFiles);
 
     for (const file of keyFiles) {
       for await (const chunk of fs.createReadStream(file)) {
@@ -224,8 +219,7 @@ export class CacheConfig {
     let lockHash = digest(hasher);
 
     keyFiles.push(...parsedKeyFiles);
-    keyFiles.sort((a, b) => a.localeCompare(b));
-    self.keyFiles = keyFiles;
+    self.keyFiles = sort_and_uniq(keyFiles);
 
     key += `-${lockHash}`;
     self.cacheKey = key;
@@ -348,7 +342,30 @@ async function globFiles(pattern: string): Promise<string[]> {
   const globber = await glob.create(pattern, {
     followSymbolicLinks: false,
   });
-  return await globber.glob();
+  // fs.statSync resolve the symbolic link and returns stat for the
+  // file it pointed to, so isFile would make sure the resolved
+  // file is actually a regular file.
+  return (await globber.glob()).filter(file => fs.statSync(file).isFile());
+}
+
+function sort_and_uniq(a: string[]) {
+    return a
+      .sort((a, b) => a.localeCompare(b))
+      .reduce(
+        (accumulator: string[], currentValue: string) => {
+          const len = accumulator.length;
+          // If accumulator is empty or its last element != currentValue
+          // Since array is already sorted, elements with the same value
+          // are grouped together to be continugous in space.
+          //
+          // If currentValue != last element, then it must be unique.
+          if (len == 0 || accumulator[len - 1].localeCompare(currentValue) != 0) {
+            accumulator.push(currentValue);
+          }
+          return accumulator;
+        },
+        []
+      );
 }
 
 function sort_object(o: any): any {
