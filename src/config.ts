@@ -172,7 +172,7 @@ export class CacheConfig {
             }
           }
 
-          hasher.update(JSON.stringify(sort_object(parsed)));
+          hasher.update(JSON.stringify(parsed));
 
           parsedKeyFiles.push(cargo_manifest);
         } catch (_e) { // Fallback to caching them as regular file
@@ -200,7 +200,7 @@ export class CacheConfig {
             "source" in p || "checksum" in p
           });
 
-          hasher.update(JSON.stringify(sort_object(packages)));
+          hasher.update(JSON.stringify(packages));
 
           parsedKeyFiles.push(cargo_lock);
         } catch (_e) { // Fallback to caching them as regular file
@@ -366,21 +366,4 @@ function sort_and_uniq(a: string[]) {
         },
         []
       );
-}
-
-function sort_object(o: any): any {
-  if (Array.isArray(o)) {
-    return o.sort().map(sort_object);
-  } else if (typeof o === 'object' && o != null) {
-    return Object
-      .keys(o)
-      .sort()
-      .reduce(function(a: any, k) {
-        a[k] = sort_object(o[k]);
-  
-        return a;
-      }, {});
-  } else {
-    return o;
-  }
 }
