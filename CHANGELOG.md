@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.1
+
+- Fix hash contribution of `Cargo.lock`.
+
+## 2.5.0
+
+- feat: Rm workspace crates version before caching.
+- feat: Add hash of `.cargo/config.toml` to key.
+
 ## 2.4.0
 
 - Fix cache key stability.
