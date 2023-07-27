@@ -1,9 +1,9 @@
-import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, isCacheUpToDate } from "./config";
+import { getCacheHandler } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -13,6 +13,8 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
+  const cache = getCacheHandler();
+
   const save = core.getInput("save-if").toLowerCase() || "true";
 
   if (!(cache.isFeatureAvailable() && save === "true")) {

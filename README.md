@@ -65,6 +65,11 @@ sensible defaults.
     # Useful for jobs where the matrix is additive e.g. additional Cargo features.
     # default: "true"
     save-if: ""
+
+    # Specifies what to use as the backend providing cache
+    # Can be set to either "github" or "buildjet"
+    # default: "github"
+    cache-provider: ""
 ```
 
 Further examples are available in the [.github/workflows](./.github/workflows/) directory.
