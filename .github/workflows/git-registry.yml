@@ -14,17 +14,12 @@ jobs:
 
     env:
       CARGO_TERM_COLOR: always
-      CARGO_UNSTABLE_SPARSE_REGISTRY: true
+      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
 
     steps:
       - uses: actions/checkout@v3
 
-      # When rustup is updated, it tries to replace its binary, which on Windows is somehow locked.
-      # This can result in the CI failure, see: https://github.com/rust-lang/rustup/issues/3029
-      - run: |
-          rustup set auto-self-update disable
-          rustup toolchain install nightly --profile minimal
-          rustup default nightly
+      - run: rustup toolchain install stable --profile minimal --no-self-update
 
       - uses: ./
         with:
