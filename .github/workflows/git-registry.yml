@@ -1,9 +1,9 @@
-name: sparse-registry
+name: git-registry
 
 on: [push, pull_request]
 
 jobs:
-  sparse-registry:
+  git-registry:
     strategy:
       fail-fast: false
       matrix:
