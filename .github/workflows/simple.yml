@@ -9,7 +9,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    name: Test `cargo check/test` on ${{ matrix.os }}
+    name: Test `cargo check/test/build` on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     env:
@@ -27,4 +27,5 @@ jobs:
       - run: |
           cargo check
           cargo test
+          cargo build --release
         working-directory: tests
