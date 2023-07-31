@@ -32,7 +32,7 @@
   "devDependencies": {
     "@vercel/ncc": "^0.36.1",
     "linefix": "^0.1.1",
-    "typescript": "5.0.4"
+    "typescript": "5.1.6"
   },
   "scripts": {
     "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && linefix dist"
