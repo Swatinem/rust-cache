@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
   "dependencies": {
+    "@actions/buildjet-cache": "npm:github-actions.cache-buildjet@0.1.2",
     "@actions/cache": "^3.2.1",
     "@actions/core": "^1.10.0",
     "@actions/exec": "^1.1.1",

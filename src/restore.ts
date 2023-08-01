@@ -1,8 +1,8 @@
-import * as cache from "@actions/cache";
 import * as core from "@actions/core";
 
 import { cleanTargetDir } from "./cleanup";
 import { CacheConfig } from "./config";
+import { getCacheHandler } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -12,6 +12,8 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
+  const cache = getCacheHandler();
+
   if (!cache.isFeatureAvailable()) {
     setCacheHitOutput(false);
     return;
