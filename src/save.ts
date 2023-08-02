@@ -3,7 +3,7 @@ import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, isCacheUpToDate } from "./config";
-import { getCacheHandler } from "./utils";
+import { getCacheHandler, reportError } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -42,30 +42,30 @@ async function run() {
         core.info(`... Cleaning ${workspace.target} ...`);
         await cleanTargetDir(workspace.target, packages);
       } catch (e) {
-        core.error(`${(e as any).stack}`);
+        core.debug(`${(e as any).stack}`);
       }
     }
 
     try {
-      const crates = core.getInput("cache-all-crates").toLowerCase() || "false"
+      const crates = core.getInput("cache-all-crates").toLowerCase() || "false";
       core.info(`... Cleaning cargo registry cache-all-crates: ${crates} ...`);
       await cleanRegistry(allPackages, crates !== "true");
     } catch (e) {
-      core.error(`${(e as any).stack}`);
+      core.debug(`${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo/bin ...`);
       await cleanBin(config.cargoBins);
     } catch (e) {
-      core.error(`${(e as any).stack}`);
+      core.debug(`${(e as any).stack}`);
     }
 
     try {
       core.info(`... Cleaning cargo git cache ...`);
       await cleanGit(allPackages);
     } catch (e) {
-      core.error(`${(e as any).stack}`);
+      core.debug(`${(e as any).stack}`);
     }
 
     core.info(`... Saving cache ...`);
@@ -74,7 +74,7 @@ async function run() {
     // TODO: remove this once the underlying bug is fixed.
     await cache.saveCache(config.cachePaths.slice(), config.cacheKey);
   } catch (e) {
-    core.error(`${(e as any).stack}`);
+    reportError(e);
   }
 }
 

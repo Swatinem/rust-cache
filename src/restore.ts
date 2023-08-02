@@ -2,7 +2,7 @@ import * as core from "@actions/core";
 
 import { cleanTargetDir } from "./cleanup";
 import { CacheConfig } from "./config";
-import { getCacheHandler } from "./utils";
+import { getCacheHandler, reportError } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -62,7 +62,7 @@ async function run() {
   } catch (e) {
     setCacheHitOutput(false);
 
-    core.error(`${(e as any).stack}`);
+    reportError(e);
   }
 }
 

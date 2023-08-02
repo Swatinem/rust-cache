@@ -66810,6 +66810,16 @@ var lib_cache = __nccwpck_require__(7799);
 
 
 
+function reportError(e) {
+    const { commandFailed } = e;
+    if (commandFailed) {
+        core.error(`Command failed: ${commandFailed.command}`);
+        core.error(commandFailed.stderr);
+    }
+    else {
+        core.error(`${e.stack}`);
+    }
+}
 async function getCmdOutput(cmd, args = [], options = {}) {
     let stdout = "";
     let stderr = "";
@@ -66828,8 +66838,10 @@ async function getCmdOutput(cmd, args = [], options = {}) {
         });
     }
     catch (e) {
-        core.error(`Command failed: ${cmd} ${args.join(" ")}`);
-        core.error(stderr);
+        e.commandFailed = {
+            command: `${cmd} ${args.join(" ")}`,
+            stderr,
+        };
         throw e;
     }
     return stdout;
@@ -66837,10 +66849,10 @@ async function getCmdOutput(cmd, args = [], options = {}) {
 function getCacheHandler() {
     const cacheProvider = core.getInput("cache-provider");
     switch (cacheProvider) {
-        case 'github':
+        case "github":
             core.info("Using Github Cache.");
             return lib_cache;
-        case 'buildjet':
+        case "buildjet":
             core.info("Using Buildjet Cache.");
             return cache;
         default:
@@ -67259,10 +67271,8 @@ async function cleanBin(oldBins) {
     }
 }
 async function cleanRegistry(packages, crates = true) {
-    // `.cargo/registry/src`
-    // we can remove this completely, as cargo will recreate this from `cache`
-    await rmRF(external_path_default().join(CARGO_HOME, "registry", "src"));
     // `.cargo/registry/index`
+    let pkgSet = new Set(packages.map((p) => p.name));
     const indexDir = await external_fs_default().promises.opendir(external_path_default().join(CARGO_HOME, "registry", "index"));
     for await (const dirent of indexDir) {
         if (dirent.isDirectory()) {
@@ -67273,15 +67283,35 @@ async function cleanRegistry(packages, crates = true) {
             if (await exists(external_path_default().join(dirPath, ".git"))) {
                 await rmRF(external_path_default().join(dirPath, ".cache"));
             }
-            // TODO: else, clean `.cache` based on the `packages`
+            else {
+                await cleanRegistryIndexCache(dirPath, pkgSet);
+            }
         }
     }
     if (!crates) {
-        core.debug(`skipping crate cleanup`);
+        core.debug("skipping registry cache and src cleanup");
         return;
     }
-    const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
+    // `.cargo/registry/src`
+    // Cargo usually re-creates these from the `.crate` cache below,
+    // but for some reason that does not work for `-sys` crates that check timestamps
+    // to decide if rebuilds are necessary.
+    pkgSet = new Set(packages.filter((p) => p.name.endsWith("-sys")).map((p) => `${p.name}-${p.version}`));
+    const srcDir = await external_fs_default().promises.opendir(external_path_default().join(CARGO_HOME, "registry", "src"));
+    for await (const dirent of srcDir) {
+        if (dirent.isDirectory()) {
+            // eg `.cargo/registry/src/github.com-1ecc6299db9ec823`
+            // or `.cargo/registry/src/index.crates.io-e139d0d48fed7772`
+            const dir = await external_fs_default().promises.opendir(external_path_default().join(srcDir.path, dirent.name));
+            for await (const dirent of dir) {
+                if (dirent.isDirectory() && !pkgSet.has(dirent.name)) {
+                    await rmRF(external_path_default().join(dir.path, dirent.name));
+                }
+            }
+        }
+    }
     // `.cargo/registry/cache`
+    pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
     const cacheDir = await external_fs_default().promises.opendir(external_path_default().join(CARGO_HOME, "registry", "cache"));
     for await (const dirent of cacheDir) {
         if (dirent.isDirectory()) {
@@ -67296,6 +67326,30 @@ async function cleanRegistry(packages, crates = true) {
             }
         }
     }
+}
+/// Recursively walks and cleans the index `.cache`
+async function cleanRegistryIndexCache(dirName, keepPkg) {
+    let dirIsEmpty = true;
+    const cacheDir = await external_fs_default().promises.opendir(dirName);
+    for await (const dirent of cacheDir) {
+        if (dirent.isDirectory()) {
+            if (await cleanRegistryIndexCache(external_path_default().join(dirName, dirent.name), keepPkg)) {
+                await rm(dirName, dirent);
+            }
+            else {
+                dirIsEmpty && (dirIsEmpty = false);
+            }
+        }
+        else {
+            if (keepPkg.has(dirent.name)) {
+                dirIsEmpty && (dirIsEmpty = false);
+            }
+            else {
+                await rm(dirName, dirent);
+            }
+        }
+    }
+    return dirIsEmpty;
 }
 async function cleanGit(packages) {
     const coPath = external_path_default().join(CARGO_HOME, "git", "checkouts");
@@ -67446,7 +67500,7 @@ async function run() {
                 await cleanTargetDir(workspace.target, packages);
             }
             catch (e) {
-                core.error(`${e.stack}`);
+                core.debug(`${e.stack}`);
             }
         }
         try {
@@ -67455,21 +67509,21 @@ async function run() {
             await cleanRegistry(allPackages, crates !== "true");
         }
         catch (e) {
-            core.error(`${e.stack}`);
+            core.debug(`${e.stack}`);
         }
         try {
             core.info(`... Cleaning cargo/bin ...`);
             await cleanBin(config.cargoBins);
         }
         catch (e) {
-            core.error(`${e.stack}`);
+            core.debug(`${e.stack}`);
         }
         try {
             core.info(`... Cleaning cargo git cache ...`);
             await cleanGit(allPackages);
         }
         catch (e) {
-            core.error(`${e.stack}`);
+            core.debug(`${e.stack}`);
         }
         core.info(`... Saving cache ...`);
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
@@ -67478,7 +67532,7 @@ async function run() {
         await cache.saveCache(config.cachePaths.slice(), config.cacheKey);
     }
     catch (e) {
-        core.error(`${e.stack}`);
+        reportError(e);
     }
 }
 run();

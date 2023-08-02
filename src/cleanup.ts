@@ -91,11 +91,8 @@ export async function cleanBin(oldBins: Array<string>) {
 }
 
 export async function cleanRegistry(packages: Packages, crates = true) {
-  // `.cargo/registry/src`
-  // we can remove this completely, as cargo will recreate this from `cache`
-  await rmRF(path.join(CARGO_HOME, "registry", "src"));
-
   // `.cargo/registry/index`
+  let pkgSet = new Set(packages.map((p) => p.name));
   const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));
   for await (const dirent of indexDir) {
     if (dirent.isDirectory()) {
@@ -106,19 +103,38 @@ export async function cleanRegistry(packages: Packages, crates = true) {
       // for a git registry, we can remove `.cache`, as cargo will recreate it from git
       if (await exists(path.join(dirPath, ".git"))) {
         await rmRF(path.join(dirPath, ".cache"));
+      } else {
+        await cleanRegistryIndexCache(dirPath, pkgSet);
       }
-      // TODO: else, clean `.cache` based on the `packages`
     }
   }
 
   if (!crates) {
-    core.debug(`skipping crate cleanup`);
+    core.debug("skipping registry cache and src cleanup");
     return;
   }
 
-  const pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
+  // `.cargo/registry/src`
+  // Cargo usually re-creates these from the `.crate` cache below,
+  // but for some reason that does not work for `-sys` crates that check timestamps
+  // to decide if rebuilds are necessary.
+  pkgSet = new Set(packages.filter((p) => p.name.endsWith("-sys")).map((p) => `${p.name}-${p.version}`));
+  const srcDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "src"));
+  for await (const dirent of srcDir) {
+    if (dirent.isDirectory()) {
+      // eg `.cargo/registry/src/github.com-1ecc6299db9ec823`
+      // or `.cargo/registry/src/index.crates.io-e139d0d48fed7772`
+      const dir = await fs.promises.opendir(path.join(srcDir.path, dirent.name));
+      for await (const dirent of dir) {
+        if (dirent.isDirectory() && !pkgSet.has(dirent.name)) {
+          await rmRF(path.join(dir.path, dirent.name));
+        }
+      }
+    }
+  }
 
   // `.cargo/registry/cache`
+  pkgSet = new Set(packages.map((p) => `${p.name}-${p.version}.crate`));
   const cacheDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "cache"));
   for await (const dirent of cacheDir) {
     if (dirent.isDirectory()) {
@@ -133,6 +149,28 @@ export async function cleanRegistry(packages: Packages, crates = true) {
       }
     }
   }
+}
+
+/// Recursively walks and cleans the index `.cache`
+async function cleanRegistryIndexCache(dirName: string, keepPkg: Set<string>) {
+  let dirIsEmpty = true;
+  const cacheDir = await fs.promises.opendir(dirName);
+  for await (const dirent of cacheDir) {
+    if (dirent.isDirectory()) {
+      if (await cleanRegistryIndexCache(path.join(dirName, dirent.name), keepPkg)) {
+        await rm(dirName, dirent);
+      } else {
+        dirIsEmpty &&= false;
+      }
+    } else {
+      if (keepPkg.has(dirent.name)) {
+        dirIsEmpty &&= false;
+      } else {
+        await rm(dirName, dirent);
+      }
+    }
+  }
+  return dirIsEmpty;
 }
 
 export async function cleanGit(packages: Packages) {
