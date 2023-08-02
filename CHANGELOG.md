@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.0
+
+- Add "buildjet" as a second `cache-provider` backend.
+- Clean up sparse registry index.
+- Do not clean up src of `-sys` crates.
+- Remove `.cargo/credentials.toml` before saving.
+
 ## 2.5.1
 
 - Fix hash contribution of `Cargo.lock`.
