@@ -91,6 +91,13 @@ export async function cleanBin(oldBins: Array<string>) {
 }
 
 export async function cleanRegistry(packages: Packages, crates = true) {
+  // remove `.cargo/credentials.toml`
+  try {
+    const credentials = path.join(CARGO_HOME, ".cargo", "credentials.toml");
+    core.debug(`deleting "${credentials}"`);
+    await fs.promises.unlink(credentials);
+  } catch {}
+
   // `.cargo/registry/index`
   let pkgSet = new Set(packages.map((p) => p.name));
   const indexDir = await fs.promises.opendir(path.join(CARGO_HOME, "registry", "index"));

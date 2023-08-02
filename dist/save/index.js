@@ -67272,6 +67272,13 @@ async function cleanBin(oldBins) {
     }
 }
 async function cleanRegistry(packages, crates = true) {
+    // remove `.cargo/credentials.toml`
+    try {
+        const credentials = external_path_default().join(CARGO_HOME, ".cargo", "credentials.toml");
+        core.debug(`deleting "${credentials}"`);
+        await external_fs_default().promises.unlink(credentials);
+    }
+    catch { }
     // `.cargo/registry/index`
     let pkgSet = new Set(packages.map((p) => p.name));
     const indexDir = await external_fs_default().promises.opendir(external_path_default().join(CARGO_HOME, "registry", "index"));
