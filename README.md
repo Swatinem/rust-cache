@@ -62,9 +62,12 @@ sensible defaults.
 
     # Determiners whether the cache should be saved.
     # If `false`, the cache is only restored.
-    # Useful for jobs where the matrix is additive e.g. additional Cargo features.
+    # Useful for jobs where the matrix is additive e.g. additional Cargo features,
+    # or when only runs from `master` should be saved to the cache.
     # default: "true"
     save-if: ""
+    # To only cache runs from `master`:
+    save-if: ${{ github.ref == 'refs/head/master' }}
 
     # Specifies what to use as the backend providing cache
     # Can be set to either "github" or "buildjet"
@@ -90,7 +93,8 @@ repositories with only a `Cargo.toml` file have limited benefits, as cargo will
 _always_ use the most up-to-date dependency versions, which may not be cached.
 
 Usage with Stable Rust is most effective, as a cache is tied to the Rust version.
-Using it with Nightly Rust is less effective as it will throw away the cache every day.
+Using it with Nightly Rust is less effective as it will throw away the cache every day,
+unless a specific nightly build is being pinned.
 
 ## Cache Details
 
@@ -106,6 +110,7 @@ This cache is automatically keyed by:
 - the value of some compiler-specific environment variables (eg. RUSTFLAGS, etc), and
 - a hash of all `Cargo.lock` / `Cargo.toml` files found anywhere in the repository (if present).
 - a hash of all `rust-toolchain` / `rust-toolchain.toml` files in the root of the repository (if present).
+- a hash of all `.cargo/config.toml` files in the root of the repository (if present).
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 

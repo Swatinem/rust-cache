@@ -2,7 +2,7 @@ import * as core from "@actions/core";
 
 import { cleanTargetDir } from "./cleanup";
 import { CacheConfig } from "./config";
-import { getCacheHandler, reportError } from "./utils";
+import { getCacheProvider, reportError } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -12,9 +12,9 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
-  const cache = getCacheHandler();
+  const cacheProvider = getCacheProvider();
 
-  if (!cache.isFeatureAvailable()) {
+  if (!cacheProvider.cache.isFeatureAvailable()) {
     setCacheHitOutput(false);
     return;
   }
@@ -28,7 +28,7 @@ async function run() {
     core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const config = await CacheConfig.new();
-    config.printInfo();
+    config.printInfo(cacheProvider);
     core.info("");
 
     core.info(`... Restoring cache ...`);
@@ -36,7 +36,7 @@ async function run() {
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
-    const restoreKey = await cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
+    const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
     if (restoreKey) {
       const match = restoreKey === key;
       core.info(`Restored from cache key "${restoreKey}" full match: ${match}.`);

@@ -1,7 +1,7 @@
-import * as buildjetCache from "@actions/buildjet-cache";
-import * as ghCache from "@actions/cache";
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
+import * as buildjetCache from "@actions/buildjet-cache";
+import * as ghCache from "@actions/cache";
 
 export function reportError(e: any) {
   const { commandFailed } = e;
@@ -43,16 +43,21 @@ export async function getCmdOutput(
   return stdout;
 }
 
-export function getCacheHandler() {
+export interface CacheProvider {
+  name: string;
+  cache: typeof ghCache;
+}
+
+export function getCacheProvider(): CacheProvider {
   const cacheProvider = core.getInput("cache-provider");
-  switch (cacheProvider) {
-    case "github":
-      core.info("Using Github Cache.");
-      return ghCache;
-    case "buildjet":
-      core.info("Using Buildjet Cache.");
-      return buildjetCache;
-    default:
-      throw new Error("Only currently support github and buildjet caches");
+  const cache = cacheProvider === "github" ? ghCache : cacheProvider === "buildjet" ? buildjetCache : undefined;
+
+  if (!cache) {
+    throw new Error(`The \`cache-provider\` \`{cacheProvider}\` is not valid.`);
   }
+
+  return {
+    name: cacheProvider,
+    cache: cache,
+  };
 }

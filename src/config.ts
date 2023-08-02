@@ -1,15 +1,15 @@
 import * as core from "@actions/core";
 import * as glob from "@actions/glob";
-import * as toml from "toml";
 import crypto from "crypto";
 import fs from "fs";
 import fs_promises from "fs/promises";
 import os from "os";
 import path from "path";
+import * as toml from "toml";
 
-import { getCmdOutput } from "./utils";
-import { Workspace } from "./workspace";
 import { getCargoBins } from "./cleanup";
+import { CacheProvider, getCmdOutput } from "./utils";
+import { Workspace } from "./workspace";
 
 const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
@@ -146,7 +146,7 @@ export class CacheConfig {
 
       for (const cargo_manifest of cargo_manifests) {
         try {
-          const content = await fs_promises.readFile(cargo_manifest, { encoding: 'utf8' });
+          const content = await fs_promises.readFile(cargo_manifest, { encoding: "utf8" });
           const parsed = toml.parse(content);
 
           if ("package" in parsed) {
@@ -167,7 +167,7 @@ export class CacheConfig {
               const dep = deps[key];
 
               if ("path" in dep) {
-                dep.version = '0.0.0'
+                dep.version = "0.0.0";
               }
             }
           }
@@ -175,7 +175,8 @@ export class CacheConfig {
           hasher.update(JSON.stringify(parsed));
 
           parsedKeyFiles.push(cargo_manifest);
-        } catch (_e) { // Fallback to caching them as regular file
+        } catch (_e) {
+          // Fallback to caching them as regular file
           keyFiles.push(cargo_manifest);
         }
       }
@@ -184,7 +185,7 @@ export class CacheConfig {
 
       for (const cargo_lock of cargo_locks) {
         try {
-          const content = await fs_promises.readFile(cargo_lock, { encoding: 'utf8' });
+          const content = await fs_promises.readFile(cargo_lock, { encoding: "utf8" });
           const parsed = toml.parse(content);
 
           if (parsed.version !== 3 || !("package" in parsed)) {
@@ -197,13 +198,14 @@ export class CacheConfig {
           // Package without `[[package]].source` and `[[package]].checksum`
           // are the one with `path = "..."` to crates within the workspace.
           const packages = parsed.package.filter((p: any) => {
-            "source" in p || "checksum" in p
+            "source" in p || "checksum" in p;
           });
 
           hasher.update(JSON.stringify(packages));
 
           parsedKeyFiles.push(cargo_lock);
-        } catch (_e) { // Fallback to caching them as regular file
+        } catch (_e) {
+          // Fallback to caching them as regular file
           keyFiles.push(cargo_lock);
         }
       }
@@ -257,8 +259,7 @@ export class CacheConfig {
 
     const self = new CacheConfig();
     Object.assign(self, JSON.parse(source));
-    self.workspaces = self.workspaces
-      .map((w: any) => new Workspace(w.root, w.target));
+    self.workspaces = self.workspaces.map((w: any) => new Workspace(w.root, w.target));
 
     return self;
   }
@@ -266,8 +267,10 @@ export class CacheConfig {
   /**
    * Prints the configuration to the action log.
    */
-  printInfo() {
+  printInfo(cacheProvider: CacheProvider) {
     core.startGroup("Cache Configuration");
+    core.info(`Cache Provider:`);
+    core.info(`    ${cacheProvider.name}`);
     core.info(`Workspaces:`);
     for (const workspace of this.workspaces) {
       core.info(`    ${workspace.root}`);
@@ -345,25 +348,22 @@ async function globFiles(pattern: string): Promise<string[]> {
   // fs.statSync resolve the symbolic link and returns stat for the
   // file it pointed to, so isFile would make sure the resolved
   // file is actually a regular file.
-  return (await globber.glob()).filter(file => fs.statSync(file).isFile());
+  return (await globber.glob()).filter((file) => fs.statSync(file).isFile());
 }
 
 function sort_and_uniq(a: string[]) {
-    return a
-      .sort((a, b) => a.localeCompare(b))
-      .reduce(
-        (accumulator: string[], currentValue: string) => {
-          const len = accumulator.length;
-          // If accumulator is empty or its last element != currentValue
-          // Since array is already sorted, elements with the same value
-          // are grouped together to be continugous in space.
-          //
-          // If currentValue != last element, then it must be unique.
-          if (len == 0 || accumulator[len - 1].localeCompare(currentValue) != 0) {
-            accumulator.push(currentValue);
-          }
-          return accumulator;
-        },
-        []
-      );
+  return a
+    .sort((a, b) => a.localeCompare(b))
+    .reduce((accumulator: string[], currentValue: string) => {
+      const len = accumulator.length;
+      // If accumulator is empty or its last element != currentValue
+      // Since array is already sorted, elements with the same value
+      // are grouped together to be continugous in space.
+      //
+      // If currentValue != last element, then it must be unique.
+      if (len == 0 || accumulator[len - 1].localeCompare(currentValue) != 0) {
+        accumulator.push(currentValue);
+      }
+      return accumulator;
+    }, []);
 }

@@ -3,7 +3,7 @@ import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, isCacheUpToDate } from "./config";
-import { getCacheHandler, reportError } from "./utils";
+import { getCacheProvider, reportError } from "./utils";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -13,11 +13,11 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
-  const cache = getCacheHandler();
+  const cacheProvider = getCacheProvider();
 
   const save = core.getInput("save-if").toLowerCase() || "true";
 
-  if (!(cache.isFeatureAvailable() && save === "true")) {
+  if (!(cacheProvider.cache.isFeatureAvailable() && save === "true")) {
     return;
   }
 
@@ -28,7 +28,7 @@ async function run() {
     }
 
     const config = CacheConfig.fromState();
-    config.printInfo();
+    config.printInfo(cacheProvider);
     core.info("");
 
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
@@ -48,7 +48,7 @@ async function run() {
 
     try {
       const crates = core.getInput("cache-all-crates").toLowerCase() || "false";
-      core.info(`... Cleaning cargo registry cache-all-crates: ${crates} ...`);
+      core.info(`... Cleaning cargo registry (cache-all-crates: ${crates}) ...`);
       await cleanRegistry(allPackages, crates !== "true");
     } catch (e) {
       core.debug(`${(e as any).stack}`);
@@ -72,7 +72,7 @@ async function run() {
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
-    await cache.saveCache(config.cachePaths.slice(), config.cacheKey);
+    await cacheProvider.cache.saveCache(config.cachePaths.slice(), config.cacheKey);
   } catch (e) {
     reportError(e);
   }
