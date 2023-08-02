@@ -1,15 +1,15 @@
-name: simple
+name: buildjet
 
 on: [push, pull_request]
 
 jobs:
-  simple:
+  buildjet:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    name: Test `cargo check/test/build` on ${{ matrix.os }}
+    name: Test buildjet provider on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     env:
@@ -23,6 +23,7 @@ jobs:
       - uses: ./
         with:
           workspaces: tests
+          cache-provider: buildjet
 
       - run: |
           cargo check
