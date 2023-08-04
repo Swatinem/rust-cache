@@ -67029,8 +67029,8 @@ class CacheConfig {
                     hasher.update(JSON.stringify(parsed));
                     parsedKeyFiles.push(cargo_manifest);
                 }
-                catch (_e) {
-                    // Fallback to caching them as regular file
+                catch (e) { // Fallback to caching them as regular file
+                    lib_core.warning(`Error parsing Cargo.toml manifest, fallback to caching entire file: ${e}`);
                     keyFiles.push(cargo_manifest);
                 }
             }
@@ -67042,6 +67042,7 @@ class CacheConfig {
                     if (parsed.version !== 3 || !("package" in parsed)) {
                         // Fallback to caching them as regular file since this action
                         // can only handle Cargo.lock format version 3
+                        lib_core.warning('Unsupported Cargo.lock format, fallback to caching entire file');
                         keyFiles.push(cargo_lock);
                         continue;
                     }
@@ -67053,8 +67054,8 @@ class CacheConfig {
                     hasher.update(JSON.stringify(packages));
                     parsedKeyFiles.push(cargo_lock);
                 }
-                catch (_e) {
-                    // Fallback to caching them as regular file
+                catch (e) { // Fallback to caching them as regular file
+                    lib_core.warning(`Error parsing Cargo.lock manifest, fallback to caching entire file: ${e}`);
                     keyFiles.push(cargo_lock);
                 }
             }
