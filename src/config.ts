@@ -198,9 +198,7 @@ export class CacheConfig {
 
           // Package without `[[package]].source` and `[[package]].checksum`
           // are the one with `path = "..."` to crates within the workspace.
-          const packages = parsed.package.filter((p: any) => {
-            "source" in p || "checksum" in p;
-          });
+          const packages = parsed.package.filter((p: any) => "source" in p || "checksum" in p);
 
           hasher.update(JSON.stringify(packages));
 
