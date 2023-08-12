@@ -166,8 +166,15 @@ export class CacheConfig {
             for (const key of Object.keys(deps)) {
               const dep = deps[key];
 
-              if ("path" in dep) {
-                dep.version = "0.0.0";
+              try {
+                if ("path" in dep) {
+                  dep.version = "0.0.0";
+                  dep.path = "";
+                }
+              } catch (_e) {
+                // Not an object, probably a string (version),
+                // continue.
+                continue;
               }
             }
           }
