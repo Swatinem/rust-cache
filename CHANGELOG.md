@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.6.1
+
+- Fix hash contributions of `Cargo.lock`/`Cargo.toml` files.
+
 ## 2.6.0
 
 - Add "buildjet" as a second `cache-provider` backend.
