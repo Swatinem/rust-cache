@@ -5,7 +5,7 @@ import fs from "fs";
 import fs_promises from "fs/promises";
 import os from "os";
 import path from "path";
-import * as toml from "toml";
+import * as toml from "smol-toml";
 
 import { getCargoBins } from "./cleanup";
 import { CacheProvider, getCmdOutput } from "./utils";
@@ -147,12 +147,13 @@ export class CacheConfig {
       for (const cargo_manifest of cargo_manifests) {
         try {
           const content = await fs_promises.readFile(cargo_manifest, { encoding: "utf8" });
-          const parsed = toml.parse(content);
+          // Use any since TomlPrimitive is not exposed
+          const parsed = toml.parse(content) as { [key: string]: any };
 
           if ("package" in parsed) {
             const pack = parsed.package;
             if ("version" in pack) {
-              pack.version = "0.0.0";
+              pack["version"] = "0.0.0";
             }
           }
 
@@ -205,7 +206,7 @@ export class CacheConfig {
 
           // Package without `[[package]].source` and `[[package]].checksum`
           // are the one with `path = "..."` to crates within the workspace.
-          const packages = parsed.package.filter((p: any) => "source" in p || "checksum" in p);
+          const packages = (parsed.package as any[]).filter((p: any) => "source" in p || "checksum" in p);
 
           hasher.update(JSON.stringify(packages));
 
