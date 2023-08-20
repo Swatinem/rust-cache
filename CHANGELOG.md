@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.6.2
+
+- Fix `toml` parsing.
+
 ## 2.6.1
 
 - Fix hash contributions of `Cargo.lock`/`Cargo.toml` files.
