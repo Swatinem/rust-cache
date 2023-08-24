@@ -67,7 +67,7 @@ sensible defaults.
     # default: "true"
     save-if: ""
     # To only cache runs from `master`:
-    save-if: ${{ github.ref == 'refs/head/master' }}
+    save-if: ${{ github.ref == 'refs/heads/master' }}
 
     # Specifies what to use as the backend providing cache
     # Can be set to either "github" or "buildjet"
