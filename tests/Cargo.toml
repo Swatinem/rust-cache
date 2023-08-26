@@ -9,5 +9,8 @@ edition = "2021"
 reqwest = "0.11.18"
 watto = { git = "https://github.com/getsentry/watto", rev = "d71c8218506bddba102a124a460d64da25e303dc", features = ["strings"] }
 
+[dev-dependencies]
+trybuild = "1"
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.5.4"
