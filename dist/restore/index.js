@@ -64354,6 +64354,25 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
 }
 async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
     lib_core.debug(`cleaning profile directory "${profileDir}"`);
+    // Quite a few testing utility crates store compilation artifacts as nested
+    // workspaces under `target/tests`. Notably, `target/tests/target` and
+    // `target/tests/trybuild`.
+    if (external_path_default().basename(profileDir) === "tests") {
+        try {
+            // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
+            // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
+            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp);
+        }
+        catch { }
+        try {
+            // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
+            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp);
+        }
+        catch { }
+        // Delete everything else.
+        await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+        return;
+    }
     let keepProfile = new Set(["build", ".fingerprint", "deps"]);
     await rmExcept(profileDir, keepProfile);
     const keepPkg = new Set(packages.map((p) => p.name));
