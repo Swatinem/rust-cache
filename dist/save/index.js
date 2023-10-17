@@ -5994,7 +5994,7 @@ class OidcClient {
                 .catch(error => {
                 throw new Error(`Failed to get ID Token. \n 
         Error Code : ${error.statusCode}\n 
-        Error Message: ${error.result.message}`);
+        Error Message: ${error.message}`);
             });
             const id_token = (_a = res.result) === null || _a === void 0 ? void 0 : _a.value;
             if (!id_token) {
@@ -62973,7 +62973,7 @@ var promises_default = /*#__PURE__*/__nccwpck_require__.n(promises_);
 // EXTERNAL MODULE: external "os"
 var external_os_ = __nccwpck_require__(2037);
 var external_os_default = /*#__PURE__*/__nccwpck_require__.n(external_os_);
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/error.js
+;// CONCATENATED MODULE: ../smol-toml/dist/error.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63038,7 +63038,7 @@ class TomlError extends Error {
     }
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/date.js
+;// CONCATENATED MODULE: ../smol-toml/dist/date.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63165,7 +63165,7 @@ class TomlDate extends Date {
     }
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/util.js
+;// CONCATENATED MODULE: ../smol-toml/dist/util.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63224,7 +63224,7 @@ function skipVoid(str, ptr, banNewLines, banComments) {
         ? ptr
         : skipVoid(str, skipComment(str, ptr), banNewLines);
 }
-function skipUntil(str, ptr, sep, end) {
+function skipUntil(str, ptr, sep, end, banNewLines = false) {
     if (!end) {
         ptr = indexOfNewline(str, ptr);
         return ptr < 0 ? str.length : ptr;
@@ -63238,6 +63238,9 @@ function skipUntil(str, ptr, sep, end) {
             return i + 1;
         }
         else if (c === end) {
+            return i;
+        }
+        else if (banNewLines && (c === '\n' || c === '\r' && str[i + 1] === '\n')) {
             return i;
         }
     }
@@ -63267,7 +63270,7 @@ function getStringEnd(str, seek) {
     return seek;
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/primitive.js
+;// CONCATENATED MODULE: ../smol-toml/dist/primitive.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63441,7 +63444,7 @@ function parseValue(value, toml, ptr) {
     return date;
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/extract.js
+;// CONCATENATED MODULE: ../smol-toml/dist/extract.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63515,7 +63518,10 @@ function extractValue(str, ptr, end) {
     let endPtr;
     if (c === '"' || c === "'") {
         endPtr = getStringEnd(str, ptr);
-        return [parseString(str, ptr, endPtr), endPtr + +(!!end && str[endPtr] === ',')];
+        let parsed = parseString(str, ptr, endPtr);
+        if (end)
+            endPtr = skipUntil(str, endPtr, ',', end, end !== ']');
+        return [parsed, endPtr];
     }
     endPtr = skipUntil(str, ptr, ',', end);
     let slice = sliceAndTrimEndOf(str, ptr, endPtr - (+(str[endPtr - 1] === ',')), end === ']');
@@ -63535,7 +63541,7 @@ function extractValue(str, ptr, end) {
     ];
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/struct.js
+;// CONCATENATED MODULE: ../smol-toml/dist/struct.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63739,7 +63745,7 @@ function parseArray(str, ptr) {
     return [res, ptr];
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/parse.js
+;// CONCATENATED MODULE: ../smol-toml/dist/parse.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63889,7 +63895,7 @@ function parse(toml) {
     return res;
 }
 
-;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/index.js
+;// CONCATENATED MODULE: ../smol-toml/dist/index.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
