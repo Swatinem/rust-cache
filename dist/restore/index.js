@@ -62971,7 +62971,7 @@ var promises_default = /*#__PURE__*/__nccwpck_require__.n(promises_);
 // EXTERNAL MODULE: external "os"
 var external_os_ = __nccwpck_require__(2037);
 var external_os_default = /*#__PURE__*/__nccwpck_require__.n(external_os_);
-;// CONCATENATED MODULE: ../smol-toml/dist/error.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/error.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63036,7 +63036,7 @@ class TomlError extends Error {
     }
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/date.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/date.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63163,7 +63163,7 @@ class TomlDate extends Date {
     }
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/util.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/util.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63268,7 +63268,7 @@ function getStringEnd(str, seek) {
     return seek;
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/primitive.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/primitive.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63442,7 +63442,7 @@ function parseValue(value, toml, ptr) {
     return date;
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/extract.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/extract.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63517,8 +63517,16 @@ function extractValue(str, ptr, end) {
     if (c === '"' || c === "'") {
         endPtr = getStringEnd(str, ptr);
         let parsed = parseString(str, ptr, endPtr);
-        if (end)
-            endPtr = skipUntil(str, endPtr, ',', end, end !== ']');
+        if (end) {
+            endPtr = skipVoid(str, endPtr, end !== ']');
+            if (str[endPtr] && str[endPtr] !== ',' && str[endPtr] !== end && str[endPtr] !== '\n' && str[endPtr] !== '\r') {
+                throw new TomlError('unexpected character encountered', {
+                    toml: str,
+                    ptr: endPtr,
+                });
+            }
+            endPtr += (+(str[endPtr] === ','));
+        }
         return [parsed, endPtr];
     }
     endPtr = skipUntil(str, ptr, ',', end);
@@ -63539,7 +63547,7 @@ function extractValue(str, ptr, end) {
     ];
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/struct.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/struct.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63743,7 +63751,7 @@ function parseArray(str, ptr) {
     return [res, ptr];
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/parse.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/parse.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -63785,7 +63793,7 @@ function peekTable(key, table, meta, type) {
         if (i) {
             t = hasOwn ? t[k] : (t[k] = {});
             m = (state = m[k]).c;
-            if (type === 0 /* Type.DOTTED */ && state.t === 1 /* Type.EXPLICIT */) {
+            if (type === 0 /* Type.DOTTED */ && (state.t === 1 /* Type.EXPLICIT */ || state.t === 2 /* Type.ARRAY */)) {
                 return null;
             }
             if (state.t === 2 /* Type.ARRAY */) {
@@ -63805,7 +63813,7 @@ function peekTable(key, table, meta, type) {
             }
             m[k] = {
                 t: i < key.length - 1 && type === 2 /* Type.ARRAY */
-                    ? 0 /* Type.DOTTED */
+                    ? 3 /* Type.ARRAY_DOTTED */
                     : type,
                 d: false,
                 i: 0,
@@ -63814,7 +63822,7 @@ function peekTable(key, table, meta, type) {
         }
     }
     state = m[k];
-    if (state.t !== type) {
+    if (state.t !== type && !(type === 1 /* Type.EXPLICIT */ && state.t === 3 /* Type.ARRAY_DOTTED */)) {
         // Bad key type!
         return null;
     }
@@ -63893,7 +63901,7 @@ function parse(toml) {
     return res;
 }
 
-;// CONCATENATED MODULE: ../smol-toml/dist/index.js
+;// CONCATENATED MODULE: ./node_modules/smol-toml/dist/index.js
 /*!
  * Copyright (c) Squirrel Chat et al., All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
