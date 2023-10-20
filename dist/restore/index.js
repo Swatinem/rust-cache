@@ -5994,7 +5994,7 @@ class OidcClient {
                 .catch(error => {
                 throw new Error(`Failed to get ID Token. \n 
         Error Code : ${error.statusCode}\n 
-        Error Message: ${error.result.message}`);
+        Error Message: ${error.message}`);
             });
             const id_token = (_a = res.result) === null || _a === void 0 ? void 0 : _a.value;
             if (!id_token) {
@@ -63222,7 +63222,7 @@ function skipVoid(str, ptr, banNewLines, banComments) {
         ? ptr
         : skipVoid(str, skipComment(str, ptr), banNewLines);
 }
-function skipUntil(str, ptr, sep, end) {
+function skipUntil(str, ptr, sep, end, banNewLines = false) {
     if (!end) {
         ptr = indexOfNewline(str, ptr);
         return ptr < 0 ? str.length : ptr;
@@ -63236,6 +63236,9 @@ function skipUntil(str, ptr, sep, end) {
             return i + 1;
         }
         else if (c === end) {
+            return i;
+        }
+        else if (banNewLines && (c === '\n' || c === '\r' && str[i + 1] === '\n')) {
             return i;
         }
     }
@@ -63513,7 +63516,18 @@ function extractValue(str, ptr, end) {
     let endPtr;
     if (c === '"' || c === "'") {
         endPtr = getStringEnd(str, ptr);
-        return [parseString(str, ptr, endPtr), endPtr + +(!!end && str[endPtr] === ',')];
+        let parsed = parseString(str, ptr, endPtr);
+        if (end) {
+            endPtr = skipVoid(str, endPtr, end !== ']');
+            if (str[endPtr] && str[endPtr] !== ',' && str[endPtr] !== end && str[endPtr] !== '\n' && str[endPtr] !== '\r') {
+                throw new TomlError('unexpected character encountered', {
+                    toml: str,
+                    ptr: endPtr,
+                });
+            }
+            endPtr += (+(str[endPtr] === ','));
+        }
+        return [parsed, endPtr];
     }
     endPtr = skipUntil(str, ptr, ',', end);
     let slice = sliceAndTrimEndOf(str, ptr, endPtr - (+(str[endPtr - 1] === ',')), end === ']');
@@ -63779,7 +63793,7 @@ function peekTable(key, table, meta, type) {
         if (i) {
             t = hasOwn ? t[k] : (t[k] = {});
             m = (state = m[k]).c;
-            if (type === 0 /* Type.DOTTED */ && state.t === 1 /* Type.EXPLICIT */) {
+            if (type === 0 /* Type.DOTTED */ && (state.t === 1 /* Type.EXPLICIT */ || state.t === 2 /* Type.ARRAY */)) {
                 return null;
             }
             if (state.t === 2 /* Type.ARRAY */) {
@@ -63799,7 +63813,7 @@ function peekTable(key, table, meta, type) {
             }
             m[k] = {
                 t: i < key.length - 1 && type === 2 /* Type.ARRAY */
-                    ? 0 /* Type.DOTTED */
+                    ? 3 /* Type.ARRAY_DOTTED */
                     : type,
                 d: false,
                 i: 0,
@@ -63808,7 +63822,7 @@ function peekTable(key, table, meta, type) {
         }
     }
     state = m[k];
-    if (state.t !== type) {
+    if (state.t !== type && !(type === 1 /* Type.EXPLICIT */ && state.t === 3 /* Type.ARRAY_DOTTED */)) {
         // Bad key type!
         return null;
     }
