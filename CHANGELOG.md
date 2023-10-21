@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.7.1
+
+- Update toml parser to fix parsing errors.
+
 ## 2.7.0
 
 - Properly cache `trybuild` tests.
