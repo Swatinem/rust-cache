@@ -36,7 +36,7 @@ async function run() {
 
     const allPackages = [];
     for (const workspace of config.workspaces) {
-      const packages = await workspace.getPackages();
+      const packages = await workspace.getPackagesOutsideWorkspaceRoot();
       allPackages.push(...packages);
       try {
         core.info(`... Cleaning ${workspace.target} ...`);

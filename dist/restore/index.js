@@ -87018,24 +87018,29 @@ class Workspace {
         this.root = root;
         this.target = target;
     }
-    async getPackages() {
+    async getPackages(filter, ...extraArgs) {
         let packages = [];
         try {
             lib_core.debug(`collecting metadata for "${this.root}"`);
-            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1", ...extraArgs], {
                 cwd: this.root,
             }));
             lib_core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
-            for (const pkg of meta.packages) {
-                if (pkg.manifest_path.startsWith(this.root)) {
-                    continue;
-                }
+            for (const pkg of meta.packages.filter(filter)) {
                 const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
                 packages.push({ name: pkg.name, version: pkg.version, targets, path: external_path_default().dirname(pkg.manifest_path) });
             }
         }
-        catch { }
+        catch (err) {
+            console.error(err);
+        }
         return packages;
+    }
+    async getPackagesOutsideWorkspaceRoot() {
+        return await this.getPackages(pkg => !pkg.manifest_path.startsWith(this.root));
+    }
+    async getWorkspaceMembers() {
+        return await this.getPackages(_ => true, "--no-deps");
     }
 }
 
@@ -87152,7 +87157,8 @@ class CacheConfig {
         for (const workspace of workspaces) {
             const root = workspace.root;
             keyFiles.push(...(await globFiles(`${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
-            const cargo_manifests = sort_and_uniq(await globFiles(`${root}/**/Cargo.toml`));
+            const workspaceMembers = await workspace.getWorkspaceMembers();
+            const cargo_manifests = sort_and_uniq(workspaceMembers.map(member => external_path_default().join(member.path, "Cargo.toml")));
             for (const cargo_manifest of cargo_manifests) {
                 try {
                     const content = await promises_default().readFile(cargo_manifest, { encoding: "utf8" });
@@ -87193,7 +87199,9 @@ class CacheConfig {
                     keyFiles.push(cargo_manifest);
                 }
             }
-            const cargo_locks = sort_and_uniq(await globFiles(`${root}/**/Cargo.lock`));
+            const cargo_locks = sort_and_uniq(workspaceMembers
+                .map(member => external_path_default().join(member.path, "Cargo.lock"))
+                .filter((external_fs_default()).existsSync));
             for (const cargo_lock of cargo_locks) {
                 try {
                     const content = await promises_default().readFile(cargo_lock, { encoding: "utf8" });

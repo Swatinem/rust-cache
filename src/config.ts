@@ -142,7 +142,9 @@ export class CacheConfig {
         )),
       );
 
-      const cargo_manifests = sort_and_uniq(await globFiles(`${root}/**/Cargo.toml`));
+      const workspaceMembers = await workspace.getWorkspaceMembers();
+
+      const cargo_manifests = sort_and_uniq(workspaceMembers.map(member => path.join(member.path, "Cargo.toml")));
 
       for (const cargo_manifest of cargo_manifests) {
         try {
@@ -189,7 +191,10 @@ export class CacheConfig {
         }
       }
 
-      const cargo_locks = sort_and_uniq(await globFiles(`${root}/**/Cargo.lock`));
+      const cargo_locks = sort_and_uniq(workspaceMembers
+        .map(member => path.join(member.path, "Cargo.lock"))
+        .filter(fs.existsSync)
+      );
 
       for (const cargo_lock of cargo_locks) {
         try {
