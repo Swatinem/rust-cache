@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import * as buildjetCache from "@actions/buildjet-cache";
 import * as ghCache from "@actions/cache";
+import fs from "fs";
 
 export function reportError(e: any) {
   const { commandFailed } = e;
@@ -60,4 +61,13 @@ export function getCacheProvider(): CacheProvider {
     name: cacheProvider,
     cache: cache,
   };
+}
+
+export async function exists(path: string) {
+  try {
+    await fs.promises.access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

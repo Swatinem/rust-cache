@@ -8,7 +8,7 @@ import path from "path";
 import * as toml from "smol-toml";
 
 import { getCargoBins } from "./cleanup";
-import { CacheProvider, getCmdOutput } from "./utils";
+import { CacheProvider, exists, getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
 
 const HOME = os.homedir();
@@ -191,12 +191,8 @@ export class CacheConfig {
         }
       }
 
-      const cargo_locks = sort_and_uniq(workspaceMembers
-        .map(member => path.join(member.path, "Cargo.lock"))
-        .filter(fs.existsSync)
-      );
-
-      for (const cargo_lock of cargo_locks) {
+      const cargo_lock = path.join(workspace.root, "Cargo.lock");
+      if (await exists(cargo_lock)) {
         try {
           const content = await fs_promises.readFile(cargo_lock, { encoding: "utf8" });
           const parsed = toml.parse(content);

@@ -86960,6 +86960,7 @@ var cache_lib_cache = __nccwpck_require__(7799);
 
 
 
+
 function reportError(e) {
     const { commandFailed } = e;
     if (commandFailed) {
@@ -87006,6 +87007,15 @@ function getCacheProvider() {
         name: cacheProvider,
         cache: cache,
     };
+}
+async function exists(path) {
+    try {
+        await external_fs_default().promises.access(path);
+        return true;
+    }
+    catch {
+        return false;
+    }
 }
 
 ;// CONCATENATED MODULE: ./src/workspace.ts
@@ -87199,10 +87209,8 @@ class CacheConfig {
                     keyFiles.push(cargo_manifest);
                 }
             }
-            const cargo_locks = sort_and_uniq(workspaceMembers
-                .map(member => external_path_default().join(member.path, "Cargo.lock"))
-                .filter((external_fs_default()).existsSync));
-            for (const cargo_lock of cargo_locks) {
+            const cargo_lock = external_path_default().join(workspace.root, "Cargo.lock");
+            if (await exists(cargo_lock)) {
                 try {
                     const content = await promises_default().readFile(cargo_lock, { encoding: "utf8" });
                     const parsed = parse(content);
@@ -87360,6 +87368,7 @@ function sort_and_uniq(a) {
 }
 
 ;// CONCATENATED MODULE: ./src/cleanup.ts
+
 
 
 
@@ -87645,15 +87654,6 @@ async function rm(parent, dirent) {
 async function rmRF(dirName) {
     core.debug(`deleting "${dirName}"`);
     await io.rmRF(dirName);
-}
-async function exists(path) {
-    try {
-        await external_fs_default().promises.access(path);
-        return true;
-    }
-    catch {
-        return false;
-    }
 }
 
 ;// CONCATENATED MODULE: ./src/save.ts

@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 
 import { CARGO_HOME } from "./config";
+import { exists } from "./utils";
 import { Packages } from "./workspace";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
@@ -307,13 +308,4 @@ async function rm(parent: string, dirent: fs.Dirent) {
 async function rmRF(dirName: string) {
   core.debug(`deleting "${dirName}"`);
   await io.rmRF(dirName);
-}
-
-async function exists(path: string) {
-  try {
-    await fs.promises.access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
