@@ -8,25 +8,32 @@ const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
 export class Workspace {
   constructor(public root: string, public target: string) {}
 
-  public async getPackages(): Promise<Packages> {
+  async getPackages(filter: ((p: Meta['packages'][0]) => boolean), ...extraArgs: string[]): Promise<Packages> {
     let packages: Packages = [];
     try {
       core.debug(`collecting metadata for "${this.root}"`);
       const meta: Meta = JSON.parse(
-        await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+        await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1", ...extraArgs], {
           cwd: this.root,
         }),
       );
       core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
-      for (const pkg of meta.packages) {
-        if (pkg.manifest_path.startsWith(this.root)) {
-          continue;
-        }
+      for (const pkg of meta.packages.filter(filter)) {
         const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
         packages.push({ name: pkg.name, version: pkg.version, targets, path: path.dirname(pkg.manifest_path) });
       }
-    } catch {}
+    } catch (err) {
+      console.error(err);
+    }
     return packages;
+  }
+
+  public async getPackagesOutsideWorkspaceRoot(): Promise<Packages> {
+    return await this.getPackages(pkg => !pkg.manifest_path.startsWith(this.root));
+  }
+
+  public async getWorkspaceMembers(): Promise<Packages> {
+    return await this.getPackages(_ => true, "--no-deps");
   }
 }
 

@@ -86960,6 +86960,7 @@ var cache_lib_cache = __nccwpck_require__(7799);
 
 
 
+
 function reportError(e) {
     const { commandFailed } = e;
     if (commandFailed) {
@@ -87007,6 +87008,15 @@ function getCacheProvider() {
         cache: cache,
     };
 }
+async function utils_exists(path) {
+    try {
+        await external_fs_default().promises.access(path);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
 
 ;// CONCATENATED MODULE: ./src/workspace.ts
 
@@ -87018,24 +87028,29 @@ class Workspace {
         this.root = root;
         this.target = target;
     }
-    async getPackages() {
+    async getPackages(filter, ...extraArgs) {
         let packages = [];
         try {
             lib_core.debug(`collecting metadata for "${this.root}"`);
-            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1"], {
+            const meta = JSON.parse(await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1", ...extraArgs], {
                 cwd: this.root,
             }));
             lib_core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
-            for (const pkg of meta.packages) {
-                if (pkg.manifest_path.startsWith(this.root)) {
-                    continue;
-                }
+            for (const pkg of meta.packages.filter(filter)) {
                 const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
                 packages.push({ name: pkg.name, version: pkg.version, targets, path: external_path_default().dirname(pkg.manifest_path) });
             }
         }
-        catch { }
+        catch (err) {
+            console.error(err);
+        }
         return packages;
+    }
+    async getPackagesOutsideWorkspaceRoot() {
+        return await this.getPackages(pkg => !pkg.manifest_path.startsWith(this.root));
+    }
+    async getWorkspaceMembers() {
+        return await this.getPackages(_ => true, "--no-deps");
     }
 }
 
@@ -87152,7 +87167,8 @@ class CacheConfig {
         for (const workspace of workspaces) {
             const root = workspace.root;
             keyFiles.push(...(await globFiles(`${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
-            const cargo_manifests = sort_and_uniq(await globFiles(`${root}/**/Cargo.toml`));
+            const workspaceMembers = await workspace.getWorkspaceMembers();
+            const cargo_manifests = sort_and_uniq(workspaceMembers.map(member => external_path_default().join(member.path, "Cargo.toml")));
             for (const cargo_manifest of cargo_manifests) {
                 try {
                     const content = await promises_default().readFile(cargo_manifest, { encoding: "utf8" });
@@ -87193,8 +87209,8 @@ class CacheConfig {
                     keyFiles.push(cargo_manifest);
                 }
             }
-            const cargo_locks = sort_and_uniq(await globFiles(`${root}/**/Cargo.lock`));
-            for (const cargo_lock of cargo_locks) {
+            const cargo_lock = external_path_default().join(workspace.root, "Cargo.lock");
+            if (await utils_exists(cargo_lock)) {
                 try {
                     const content = await promises_default().readFile(cargo_lock, { encoding: "utf8" });
                     const parsed = parse(content);
@@ -87357,6 +87373,7 @@ function sort_and_uniq(a) {
 
 
 
+
 async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
     lib_core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
@@ -87365,7 +87382,7 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
         if (dirent.isDirectory()) {
             let dirName = external_path_default().join(dir.path, dirent.name);
             // is it a profile dir, or a nested target dir?
-            let isNestedTarget = (await exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await exists(external_path_default().join(dirName, ".rustc_info.json")));
+            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
                     await cleanTargetDir(dirName, packages, checkTimestamp);
@@ -87637,15 +87654,6 @@ async function rm(parent, dirent) {
 async function rmRF(dirName) {
     core.debug(`deleting "${dirName}"`);
     await io.rmRF(dirName);
-}
-async function exists(path) {
-    try {
-        await external_fs_default().promises.access(path);
-        return true;
-    }
-    catch {
-        return false;
-    }
 }
 
 ;// CONCATENATED MODULE: ./src/restore.ts
