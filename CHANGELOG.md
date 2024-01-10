@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.7.2
+
+- Only key by `Cargo.toml` and `Cargo.lock` files of workspace members.
+
 ## 2.7.1
 
 - Update toml parser to fix parsing errors.
