@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.7.3
+
+- Work around upstream problem that causes cache saving to hang for minutes.
+
 ## 2.7.2
 
 - Only key by `Cargo.toml` and `Cargo.lock` files of workspace members.

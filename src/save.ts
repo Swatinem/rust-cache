@@ -76,6 +76,7 @@ async function run() {
   } catch (e) {
     reportError(e);
   }
+  process.exit();
 }
 
 run();
