@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import * as buildjetCache from "@actions/buildjet-cache";
 import * as ghCache from "@actions/cache";
+import * as bsCache from "@actions/blacksmith-cache"
 import fs from "fs";
 
 export function reportError(e: any) {
@@ -51,7 +52,7 @@ export interface CacheProvider {
 
 export function getCacheProvider(): CacheProvider {
   const cacheProvider = core.getInput("cache-provider");
-  const cache = cacheProvider === "github" ? ghCache : cacheProvider === "buildjet" ? buildjetCache : undefined;
+  const cache = cacheProvider === "github" ? ghCache : cacheProvider === "buildjet" ? buildjetCache : cacheProvider === "blacksmith" ? bsCache : undefined;
 
   if (!cache) {
     throw new Error(`The \`cache-provider\` \`{cacheProvider}\` is not valid.`);
