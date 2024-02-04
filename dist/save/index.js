@@ -3405,7 +3405,10 @@ function assertDefined(name, value) {
 exports.assertDefined = assertDefined;
 function isGhes() {
     const ghUrl = new URL(process.env['GITHUB_SERVER_URL'] || 'https://github.com');
-    return ghUrl.hostname.toUpperCase() !== 'GITHUB.COM';
+    const hostname = ghUrl.hostname.trimEnd().toUpperCase();
+    const isGitHubHost = hostname === 'GITHUB.COM';
+    const isGheHost = hostname.endsWith('.GHE.COM') || hostname.endsWith('.GHE.LOCALHOST');
+    return !isGitHubHost && !isGheHost;
 }
 exports.isGhes = isGhes;
 //# sourceMappingURL=cacheUtils.js.map
@@ -10631,6 +10634,18 @@ class AzureKeyCredential {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+/**
+ * Tests an object to determine whether it implements KeyCredential.
+ *
+ * @param credential - The assumed KeyCredential to be tested.
+ */
+function isKeyCredential(credential) {
+    return coreUtil.isObjectWithProperties(credential, ["key"]) && typeof credential.key === "string";
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * A static name/key-based credential that supports updating
  * the underlying name and key values.
@@ -10691,6 +10706,7 @@ function isNamedKeyCredential(credential) {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * A static-signature-based credential that supports updating
  * the underlying signature value.
@@ -10760,6 +10776,7 @@ function isTokenCredential(credential) {
 exports.AzureKeyCredential = AzureKeyCredential;
 exports.AzureNamedKeyCredential = AzureNamedKeyCredential;
 exports.AzureSASCredential = AzureSASCredential;
+exports.isKeyCredential = isKeyCredential;
 exports.isNamedKeyCredential = isNamedKeyCredential;
 exports.isSASCredential = isSASCredential;
 exports.isTokenCredential = isTokenCredential;
@@ -17421,10 +17438,10 @@ exports["default"] = _default;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 
 var logger$1 = __nccwpck_require__(3233);
-var abortController = __nccwpck_require__(978);
 var coreUtil = __nccwpck_require__(1333);
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * The `@azure/logger` configuration for this package.
  * @internal
@@ -17443,6 +17460,7 @@ const POLL_INTERVAL_IN_MS = 2000;
 const terminalStates = ["succeeded", "canceled", "failed"];
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * Deserializes the state
  */
@@ -17606,6 +17624,7 @@ async function pollOperation(inputs) {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 function getOperationLocationPollingUrl(inputs) {
     const { azureAsyncOperation, operationLocation } = inputs;
     return operationLocation !== null && operationLocation !== void 0 ? operationLocation : azureAsyncOperation;
@@ -17747,7 +17766,7 @@ function parseRetryAfter({ rawResponse }) {
     return undefined;
 }
 function getErrorFromResponse(response) {
-    const error = response.flatResponse.error;
+    const error = accessBodyProperty(response, "error");
     if (!error) {
         logger.warning(`The long-running operation failed but there is no error property in the response's body`);
         return;
@@ -17843,12 +17862,14 @@ function getOperationStatus({ rawResponse }, state) {
             throw new Error(`Internal error: Unexpected operation mode: ${mode}`);
     }
 }
-function getResourceLocation({ flatResponse }, state) {
-    if (typeof flatResponse === "object") {
-        const resourceLocation = flatResponse.resourceLocation;
-        if (resourceLocation !== undefined) {
-            state.config.resourceLocation = resourceLocation;
-        }
+function accessBodyProperty({ flatResponse, rawResponse }, prop) {
+    var _a, _b;
+    return (_a = flatResponse === null || flatResponse === void 0 ? void 0 : flatResponse[prop]) !== null && _a !== void 0 ? _a : (_b = rawResponse.body) === null || _b === void 0 ? void 0 : _b[prop];
+}
+function getResourceLocation(res, state) {
+    const loc = accessBodyProperty(res, "resourceLocation");
+    if (loc && typeof loc === "string") {
+        state.config.resourceLocation = loc;
     }
     return state.config.resourceLocation;
 }
@@ -17883,6 +17904,7 @@ async function pollHttpOperation(inputs) {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 const createStateProxy$1 = () => ({
     /**
      * The state at this point is created to be of type OperationState<TResult>.
@@ -17934,7 +17956,7 @@ function buildCreatePoller(inputs) {
                 setErrorAsResult: !resolveOnUnsuccessful,
             });
         let resultPromise;
-        const abortController$1 = new abortController.AbortController();
+        const abortController = new AbortController();
         const handlers = new Map();
         const handleProgressEvents = async () => handlers.forEach((h) => h(state));
         const cancelErrMsg = "Operation was canceled";
@@ -17945,7 +17967,7 @@ function buildCreatePoller(inputs) {
             isDone: () => ["succeeded", "failed", "canceled"].includes(state.status),
             isStopped: () => resultPromise === undefined,
             stopPolling: () => {
-                abortController$1.abort();
+                abortController.abort();
             },
             toString: () => JSON.stringify({
                 state,
@@ -17957,15 +17979,28 @@ function buildCreatePoller(inputs) {
             },
             pollUntilDone: (pollOptions) => (resultPromise !== null && resultPromise !== void 0 ? resultPromise : (resultPromise = (async () => {
                 const { abortSignal: inputAbortSignal } = pollOptions || {};
-                const { signal: abortSignal } = inputAbortSignal
-                    ? new abortController.AbortController([inputAbortSignal, abortController$1.signal])
-                    : abortController$1;
-                if (!poller.isDone()) {
-                    await poller.poll({ abortSignal });
-                    while (!poller.isDone()) {
-                        await coreUtil.delay(currentPollIntervalInMs, { abortSignal });
+                // In the future we can use AbortSignal.any() instead
+                function abortListener() {
+                    abortController.abort();
+                }
+                const abortSignal = abortController.signal;
+                if (inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.aborted) {
+                    abortController.abort();
+                }
+                else if (!abortSignal.aborted) {
+                    inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.addEventListener("abort", abortListener, { once: true });
+                }
+                try {
+                    if (!poller.isDone()) {
                         await poller.poll({ abortSignal });
+                        while (!poller.isDone()) {
+                            await coreUtil.delay(currentPollIntervalInMs, { abortSignal });
+                            await poller.poll({ abortSignal });
+                        }
                     }
+                }
+                finally {
+                    inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.removeEventListener("abort", abortListener);
                 }
                 if (resolveOnUnsuccessful) {
                     return poller.getResult();
@@ -18036,6 +18071,7 @@ function buildCreatePoller(inputs) {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * Creates a poller that can be used to poll a long-running operation.
  * @param lro - Description of the long-running operation
@@ -18077,6 +18113,7 @@ async function createHttpPoller(lro, options) {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 const createStateProxy = () => ({
     initState: (config) => ({ config, isStarted: true }),
     setCanceled: (state) => (state.isCancelled = true),
@@ -18555,6 +18592,7 @@ class Poller {
 }
 
 // Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * The LRO Engine, a class that performs polling.
  */
@@ -18933,7 +18971,9 @@ exports.setSpanContext = setSpanContext;
 "use strict";
 
 
-var abortController = __nccwpck_require__(978);
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+var abortController = __nccwpck_require__(4200);
 var crypto = __nccwpck_require__(6113);
 
 // Copyright (c) Microsoft Corporation.
@@ -19005,7 +19045,7 @@ function delay(timeInMs, options) {
  */
 async function cancelablePromiseRace(abortablePromiseBuilders, options) {
     var _a, _b;
-    const aborter = new abortController.AbortController();
+    const aborter = new AbortController();
     function abortHandler() {
         aborter.abort();
     }
@@ -19287,6 +19327,47 @@ exports.objectHasProperty = objectHasProperty;
 exports.randomUUID = randomUUID;
 exports.stringToUint8Array = stringToUint8Array;
 exports.uint8ArrayToString = uint8ArrayToString;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 4200:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+/**
+ * This error is thrown when an asynchronous operation has been aborted.
+ * Check for this error by testing the `name` that the name property of the
+ * error matches `"AbortError"`.
+ *
+ * @example
+ * ```ts
+ * const controller = new AbortController();
+ * controller.abort();
+ * try {
+ *   doAsyncWork(controller.signal)
+ * } catch (e) {
+ *   if (e.name === 'AbortError') {
+ *     // handle abort error here.
+ *   }
+ * }
+ * ```
+ */
+class AbortError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "AbortError";
+    }
+}
+
+exports.AbortError = AbortError;
 //# sourceMappingURL=index.js.map
 
 
