@@ -12,7 +12,7 @@ sensible defaults.
 # before the plugin, as the cache uses the current rustc version as its cache key
 - run: rustup toolchain install stable --profile minimal
 
-- uses: Swatinem/rust-cache@v2
+- uses: useblacksmith/rust-cache@v3
   with:
     # The prefix cache key, this can be changed to start a new cache manually.
     # default: "v0-rust"
