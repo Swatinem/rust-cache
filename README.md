@@ -6,7 +6,7 @@ sensible defaults.
 ## Example usage
 
 ```yaml
-- uses: actions/checkout@v3
+- uses: actions/checkout@v4
 
 # selecting a toolchain either by action or manual `rustup` calls should happen
 # before the plugin, as the cache uses the current rustc version as its cache key
