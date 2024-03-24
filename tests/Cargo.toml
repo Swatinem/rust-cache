@@ -6,7 +6,8 @@ authors = ["Arpad Borsos <arpad.borsos@googlemail.com>"]
 edition = "2021"
 
 [dependencies]
-reqwest = "0.11.18"
+reqwest = "0.12.1"
+jsonpath_lib_polars_vendor = "0.0.1"
 watto = { git = "https://github.com/getsentry/watto", rev = "d71c8218506bddba102a124a460d64da25e303dc", features = ["strings"] }
 
 [dev-dependencies]
