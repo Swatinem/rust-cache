@@ -9598,7 +9598,7 @@ class HttpClient {
         if (this._keepAlive && useProxy) {
             agent = this._proxyAgent;
         }
-        if (this._keepAlive && !useProxy) {
+        if (!useProxy) {
             agent = this._agent;
         }
         // if agent is already assigned use that agent.
@@ -9630,15 +9630,11 @@ class HttpClient {
             agent = tunnelAgent(agentOptions);
             this._proxyAgent = agent;
         }
-        // if reusing agent across request and tunneling agent isn't assigned create a new agent
-        if (this._keepAlive && !agent) {
+        // if tunneling agent isn't assigned create a new agent
+        if (!agent) {
             const options = { keepAlive: this._keepAlive, maxSockets };
             agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
             this._agent = agent;
-        }
-        // if not using private agent and tunnel agent isn't setup then use global agent
-        if (!agent) {
-            agent = usingSsl ? https.globalAgent : http.globalAgent;
         }
         if (usingSsl && this._ignoreSslError) {
             // we don't want to set NODE_TLS_REJECT_UNAUTHORIZED=0 since that will affect request for entire process
@@ -10585,206 +10581,6 @@ exports.AbortSignal = AbortSignal;
 
 /***/ }),
 
-/***/ 9645:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var coreUtil = __nccwpck_require__(1333);
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * A static-key-based credential that supports updating
- * the underlying key value.
- */
-class AzureKeyCredential {
-    /**
-     * The value of the key to be used in authentication
-     */
-    get key() {
-        return this._key;
-    }
-    /**
-     * Create an instance of an AzureKeyCredential for use
-     * with a service client.
-     *
-     * @param key - The initial value of the key to use in authentication
-     */
-    constructor(key) {
-        if (!key) {
-            throw new Error("key must be a non-empty string");
-        }
-        this._key = key;
-    }
-    /**
-     * Change the value of the key.
-     *
-     * Updates will take effect upon the next request after
-     * updating the key value.
-     *
-     * @param newKey - The new key value to be used
-     */
-    update(newKey) {
-        this._key = newKey;
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Tests an object to determine whether it implements KeyCredential.
- *
- * @param credential - The assumed KeyCredential to be tested.
- */
-function isKeyCredential(credential) {
-    return coreUtil.isObjectWithProperties(credential, ["key"]) && typeof credential.key === "string";
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * A static name/key-based credential that supports updating
- * the underlying name and key values.
- */
-class AzureNamedKeyCredential {
-    /**
-     * The value of the key to be used in authentication.
-     */
-    get key() {
-        return this._key;
-    }
-    /**
-     * The value of the name to be used in authentication.
-     */
-    get name() {
-        return this._name;
-    }
-    /**
-     * Create an instance of an AzureNamedKeyCredential for use
-     * with a service client.
-     *
-     * @param name - The initial value of the name to use in authentication.
-     * @param key - The initial value of the key to use in authentication.
-     */
-    constructor(name, key) {
-        if (!name || !key) {
-            throw new TypeError("name and key must be non-empty strings");
-        }
-        this._name = name;
-        this._key = key;
-    }
-    /**
-     * Change the value of the key.
-     *
-     * Updates will take effect upon the next request after
-     * updating the key value.
-     *
-     * @param newName - The new name value to be used.
-     * @param newKey - The new key value to be used.
-     */
-    update(newName, newKey) {
-        if (!newName || !newKey) {
-            throw new TypeError("newName and newKey must be non-empty strings");
-        }
-        this._name = newName;
-        this._key = newKey;
-    }
-}
-/**
- * Tests an object to determine whether it implements NamedKeyCredential.
- *
- * @param credential - The assumed NamedKeyCredential to be tested.
- */
-function isNamedKeyCredential(credential) {
-    return (coreUtil.isObjectWithProperties(credential, ["name", "key"]) &&
-        typeof credential.key === "string" &&
-        typeof credential.name === "string");
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * A static-signature-based credential that supports updating
- * the underlying signature value.
- */
-class AzureSASCredential {
-    /**
-     * The value of the shared access signature to be used in authentication
-     */
-    get signature() {
-        return this._signature;
-    }
-    /**
-     * Create an instance of an AzureSASCredential for use
-     * with a service client.
-     *
-     * @param signature - The initial value of the shared access signature to use in authentication
-     */
-    constructor(signature) {
-        if (!signature) {
-            throw new Error("shared access signature must be a non-empty string");
-        }
-        this._signature = signature;
-    }
-    /**
-     * Change the value of the signature.
-     *
-     * Updates will take effect upon the next request after
-     * updating the signature value.
-     *
-     * @param newSignature - The new shared access signature value to be used
-     */
-    update(newSignature) {
-        if (!newSignature) {
-            throw new Error("shared access signature must be a non-empty string");
-        }
-        this._signature = newSignature;
-    }
-}
-/**
- * Tests an object to determine whether it implements SASCredential.
- *
- * @param credential - The assumed SASCredential to be tested.
- */
-function isSASCredential(credential) {
-    return (coreUtil.isObjectWithProperties(credential, ["signature"]) && typeof credential.signature === "string");
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Tests an object to determine whether it implements TokenCredential.
- *
- * @param credential - The assumed TokenCredential to be tested.
- */
-function isTokenCredential(credential) {
-    // Check for an object with a 'getToken' function and possibly with
-    // a 'signRequest' function.  We do this check to make sure that
-    // a ServiceClientCredentials implementor (like TokenClientCredentials
-    // in ms-rest-nodeauth) doesn't get mistaken for a TokenCredential if
-    // it doesn't actually implement TokenCredential also.
-    const castCredential = credential;
-    return (castCredential &&
-        typeof castCredential.getToken === "function" &&
-        (castCredential.signRequest === undefined || castCredential.getToken.length > 0));
-}
-
-exports.AzureKeyCredential = AzureKeyCredential;
-exports.AzureNamedKeyCredential = AzureNamedKeyCredential;
-exports.AzureSASCredential = AzureSASCredential;
-exports.isKeyCredential = isKeyCredential;
-exports.isNamedKeyCredential = isNamedKeyCredential;
-exports.isSASCredential = isSASCredential;
-exports.isTokenCredential = isTokenCredential;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
 /***/ 4607:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -10797,9 +10593,9 @@ var uuid = __nccwpck_require__(3415);
 var util = __nccwpck_require__(3837);
 var tslib = __nccwpck_require__(4351);
 var xml2js = __nccwpck_require__(6189);
-var coreUtil = __nccwpck_require__(1333);
-var logger$1 = __nccwpck_require__(3233);
-var coreAuth = __nccwpck_require__(9645);
+var coreUtil = __nccwpck_require__(637);
+var logger$1 = __nccwpck_require__(9497);
+var coreAuth = __nccwpck_require__(8834);
 var os = __nccwpck_require__(2037);
 var http = __nccwpck_require__(3685);
 var https = __nccwpck_require__(5687);
@@ -16270,7 +16066,7 @@ var parseUrl = (__nccwpck_require__(7310).parse);
 var fs = __nccwpck_require__(7147);
 var Stream = (__nccwpck_require__(2781).Stream);
 var mime = __nccwpck_require__(3583);
-var asynckit = __nccwpck_require__(4812);
+var asynckit = __nccwpck_require__(6284);
 var populate = __nccwpck_require__(3971);
 
 // Public API
@@ -17429,1315 +17225,6 @@ exports["default"] = _default;
 
 /***/ }),
 
-/***/ 7094:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var logger$1 = __nccwpck_require__(3233);
-var coreUtil = __nccwpck_require__(1333);
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * The `@azure/logger` configuration for this package.
- * @internal
- */
-const logger = logger$1.createClientLogger("core-lro");
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * The default time interval to wait before sending the next polling request.
- */
-const POLL_INTERVAL_IN_MS = 2000;
-/**
- * The closed set of terminal states.
- */
-const terminalStates = ["succeeded", "canceled", "failed"];
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Deserializes the state
- */
-function deserializeState(serializedState) {
-    try {
-        return JSON.parse(serializedState).state;
-    }
-    catch (e) {
-        throw new Error(`Unable to deserialize input state: ${serializedState}`);
-    }
-}
-function setStateError(inputs) {
-    const { state, stateProxy, isOperationError } = inputs;
-    return (error) => {
-        if (isOperationError(error)) {
-            stateProxy.setError(state, error);
-            stateProxy.setFailed(state);
-        }
-        throw error;
-    };
-}
-function appendReadableErrorMessage(currentMessage, innerMessage) {
-    let message = currentMessage;
-    if (message.slice(-1) !== ".") {
-        message = message + ".";
-    }
-    return message + " " + innerMessage;
-}
-function simplifyError(err) {
-    let message = err.message;
-    let code = err.code;
-    let curErr = err;
-    while (curErr.innererror) {
-        curErr = curErr.innererror;
-        code = curErr.code;
-        message = appendReadableErrorMessage(message, curErr.message);
-    }
-    return {
-        code,
-        message,
-    };
-}
-function processOperationStatus(result) {
-    const { state, stateProxy, status, isDone, processResult, getError, response, setErrorAsResult } = result;
-    switch (status) {
-        case "succeeded": {
-            stateProxy.setSucceeded(state);
-            break;
-        }
-        case "failed": {
-            const err = getError === null || getError === void 0 ? void 0 : getError(response);
-            let postfix = "";
-            if (err) {
-                const { code, message } = simplifyError(err);
-                postfix = `. ${code}. ${message}`;
-            }
-            const errStr = `The long-running operation has failed${postfix}`;
-            stateProxy.setError(state, new Error(errStr));
-            stateProxy.setFailed(state);
-            logger.warning(errStr);
-            break;
-        }
-        case "canceled": {
-            stateProxy.setCanceled(state);
-            break;
-        }
-    }
-    if ((isDone === null || isDone === void 0 ? void 0 : isDone(response, state)) ||
-        (isDone === undefined &&
-            ["succeeded", "canceled"].concat(setErrorAsResult ? [] : ["failed"]).includes(status))) {
-        stateProxy.setResult(state, buildResult({
-            response,
-            state,
-            processResult,
-        }));
-    }
-}
-function buildResult(inputs) {
-    const { processResult, response, state } = inputs;
-    return processResult ? processResult(response, state) : response;
-}
-/**
- * Initiates the long-running operation.
- */
-async function initOperation(inputs) {
-    const { init, stateProxy, processResult, getOperationStatus, withOperationLocation, setErrorAsResult, } = inputs;
-    const { operationLocation, resourceLocation, metadata, response } = await init();
-    if (operationLocation)
-        withOperationLocation === null || withOperationLocation === void 0 ? void 0 : withOperationLocation(operationLocation, false);
-    const config = {
-        metadata,
-        operationLocation,
-        resourceLocation,
-    };
-    logger.verbose(`LRO: Operation description:`, config);
-    const state = stateProxy.initState(config);
-    const status = getOperationStatus({ response, state, operationLocation });
-    processOperationStatus({ state, status, stateProxy, response, setErrorAsResult, processResult });
-    return state;
-}
-async function pollOperationHelper(inputs) {
-    const { poll, state, stateProxy, operationLocation, getOperationStatus, getResourceLocation, isOperationError, options, } = inputs;
-    const response = await poll(operationLocation, options).catch(setStateError({
-        state,
-        stateProxy,
-        isOperationError,
-    }));
-    const status = getOperationStatus(response, state);
-    logger.verbose(`LRO: Status:\n\tPolling from: ${state.config.operationLocation}\n\tOperation status: ${status}\n\tPolling status: ${terminalStates.includes(status) ? "Stopped" : "Running"}`);
-    if (status === "succeeded") {
-        const resourceLocation = getResourceLocation(response, state);
-        if (resourceLocation !== undefined) {
-            return {
-                response: await poll(resourceLocation).catch(setStateError({ state, stateProxy, isOperationError })),
-                status,
-            };
-        }
-    }
-    return { response, status };
-}
-/** Polls the long-running operation. */
-async function pollOperation(inputs) {
-    const { poll, state, stateProxy, options, getOperationStatus, getResourceLocation, getOperationLocation, isOperationError, withOperationLocation, getPollingInterval, processResult, getError, updateState, setDelay, isDone, setErrorAsResult, } = inputs;
-    const { operationLocation } = state.config;
-    if (operationLocation !== undefined) {
-        const { response, status } = await pollOperationHelper({
-            poll,
-            getOperationStatus,
-            state,
-            stateProxy,
-            operationLocation,
-            getResourceLocation,
-            isOperationError,
-            options,
-        });
-        processOperationStatus({
-            status,
-            response,
-            state,
-            stateProxy,
-            isDone,
-            processResult,
-            getError,
-            setErrorAsResult,
-        });
-        if (!terminalStates.includes(status)) {
-            const intervalInMs = getPollingInterval === null || getPollingInterval === void 0 ? void 0 : getPollingInterval(response);
-            if (intervalInMs)
-                setDelay(intervalInMs);
-            const location = getOperationLocation === null || getOperationLocation === void 0 ? void 0 : getOperationLocation(response, state);
-            if (location !== undefined) {
-                const isUpdated = operationLocation !== location;
-                state.config.operationLocation = location;
-                withOperationLocation === null || withOperationLocation === void 0 ? void 0 : withOperationLocation(location, isUpdated);
-            }
-            else
-                withOperationLocation === null || withOperationLocation === void 0 ? void 0 : withOperationLocation(operationLocation, false);
-        }
-        updateState === null || updateState === void 0 ? void 0 : updateState(state, response);
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-function getOperationLocationPollingUrl(inputs) {
-    const { azureAsyncOperation, operationLocation } = inputs;
-    return operationLocation !== null && operationLocation !== void 0 ? operationLocation : azureAsyncOperation;
-}
-function getLocationHeader(rawResponse) {
-    return rawResponse.headers["location"];
-}
-function getOperationLocationHeader(rawResponse) {
-    return rawResponse.headers["operation-location"];
-}
-function getAzureAsyncOperationHeader(rawResponse) {
-    return rawResponse.headers["azure-asyncoperation"];
-}
-function findResourceLocation(inputs) {
-    var _a;
-    const { location, requestMethod, requestPath, resourceLocationConfig } = inputs;
-    switch (requestMethod) {
-        case "PUT": {
-            return requestPath;
-        }
-        case "DELETE": {
-            return undefined;
-        }
-        case "PATCH": {
-            return (_a = getDefault()) !== null && _a !== void 0 ? _a : requestPath;
-        }
-        default: {
-            return getDefault();
-        }
-    }
-    function getDefault() {
-        switch (resourceLocationConfig) {
-            case "azure-async-operation": {
-                return undefined;
-            }
-            case "original-uri": {
-                return requestPath;
-            }
-            case "location":
-            default: {
-                return location;
-            }
-        }
-    }
-}
-function inferLroMode(inputs) {
-    const { rawResponse, requestMethod, requestPath, resourceLocationConfig } = inputs;
-    const operationLocation = getOperationLocationHeader(rawResponse);
-    const azureAsyncOperation = getAzureAsyncOperationHeader(rawResponse);
-    const pollingUrl = getOperationLocationPollingUrl({ operationLocation, azureAsyncOperation });
-    const location = getLocationHeader(rawResponse);
-    const normalizedRequestMethod = requestMethod === null || requestMethod === void 0 ? void 0 : requestMethod.toLocaleUpperCase();
-    if (pollingUrl !== undefined) {
-        return {
-            mode: "OperationLocation",
-            operationLocation: pollingUrl,
-            resourceLocation: findResourceLocation({
-                requestMethod: normalizedRequestMethod,
-                location,
-                requestPath,
-                resourceLocationConfig,
-            }),
-        };
-    }
-    else if (location !== undefined) {
-        return {
-            mode: "ResourceLocation",
-            operationLocation: location,
-        };
-    }
-    else if (normalizedRequestMethod === "PUT" && requestPath) {
-        return {
-            mode: "Body",
-            operationLocation: requestPath,
-        };
-    }
-    else {
-        return undefined;
-    }
-}
-function transformStatus(inputs) {
-    const { status, statusCode } = inputs;
-    if (typeof status !== "string" && status !== undefined) {
-        throw new Error(`Polling was unsuccessful. Expected status to have a string value or no value but it has instead: ${status}. This doesn't necessarily indicate the operation has failed. Check your Azure subscription or resource status for more information.`);
-    }
-    switch (status === null || status === void 0 ? void 0 : status.toLocaleLowerCase()) {
-        case undefined:
-            return toOperationStatus(statusCode);
-        case "succeeded":
-            return "succeeded";
-        case "failed":
-            return "failed";
-        case "running":
-        case "accepted":
-        case "started":
-        case "canceling":
-        case "cancelling":
-            return "running";
-        case "canceled":
-        case "cancelled":
-            return "canceled";
-        default: {
-            logger.verbose(`LRO: unrecognized operation status: ${status}`);
-            return status;
-        }
-    }
-}
-function getStatus(rawResponse) {
-    var _a;
-    const { status } = (_a = rawResponse.body) !== null && _a !== void 0 ? _a : {};
-    return transformStatus({ status, statusCode: rawResponse.statusCode });
-}
-function getProvisioningState(rawResponse) {
-    var _a, _b;
-    const { properties, provisioningState } = (_a = rawResponse.body) !== null && _a !== void 0 ? _a : {};
-    const status = (_b = properties === null || properties === void 0 ? void 0 : properties.provisioningState) !== null && _b !== void 0 ? _b : provisioningState;
-    return transformStatus({ status, statusCode: rawResponse.statusCode });
-}
-function toOperationStatus(statusCode) {
-    if (statusCode === 202) {
-        return "running";
-    }
-    else if (statusCode < 300) {
-        return "succeeded";
-    }
-    else {
-        return "failed";
-    }
-}
-function parseRetryAfter({ rawResponse }) {
-    const retryAfter = rawResponse.headers["retry-after"];
-    if (retryAfter !== undefined) {
-        // Retry-After header value is either in HTTP date format, or in seconds
-        const retryAfterInSeconds = parseInt(retryAfter);
-        return isNaN(retryAfterInSeconds)
-            ? calculatePollingIntervalFromDate(new Date(retryAfter))
-            : retryAfterInSeconds * 1000;
-    }
-    return undefined;
-}
-function getErrorFromResponse(response) {
-    const error = accessBodyProperty(response, "error");
-    if (!error) {
-        logger.warning(`The long-running operation failed but there is no error property in the response's body`);
-        return;
-    }
-    if (!error.code || !error.message) {
-        logger.warning(`The long-running operation failed but the error property in the response's body doesn't contain code or message`);
-        return;
-    }
-    return error;
-}
-function calculatePollingIntervalFromDate(retryAfterDate) {
-    const timeNow = Math.floor(new Date().getTime());
-    const retryAfterTime = retryAfterDate.getTime();
-    if (timeNow < retryAfterTime) {
-        return retryAfterTime - timeNow;
-    }
-    return undefined;
-}
-function getStatusFromInitialResponse(inputs) {
-    const { response, state, operationLocation } = inputs;
-    function helper() {
-        var _a;
-        const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
-        switch (mode) {
-            case undefined:
-                return toOperationStatus(response.rawResponse.statusCode);
-            case "Body":
-                return getOperationStatus(response, state);
-            default:
-                return "running";
-        }
-    }
-    const status = helper();
-    return status === "running" && operationLocation === undefined ? "succeeded" : status;
-}
-/**
- * Initiates the long-running operation.
- */
-async function initHttpOperation(inputs) {
-    const { stateProxy, resourceLocationConfig, processResult, lro, setErrorAsResult } = inputs;
-    return initOperation({
-        init: async () => {
-            const response = await lro.sendInitialRequest();
-            const config = inferLroMode({
-                rawResponse: response.rawResponse,
-                requestPath: lro.requestPath,
-                requestMethod: lro.requestMethod,
-                resourceLocationConfig,
-            });
-            return Object.assign({ response, operationLocation: config === null || config === void 0 ? void 0 : config.operationLocation, resourceLocation: config === null || config === void 0 ? void 0 : config.resourceLocation }, ((config === null || config === void 0 ? void 0 : config.mode) ? { metadata: { mode: config.mode } } : {}));
-        },
-        stateProxy,
-        processResult: processResult
-            ? ({ flatResponse }, state) => processResult(flatResponse, state)
-            : ({ flatResponse }) => flatResponse,
-        getOperationStatus: getStatusFromInitialResponse,
-        setErrorAsResult,
-    });
-}
-function getOperationLocation({ rawResponse }, state) {
-    var _a;
-    const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
-    switch (mode) {
-        case "OperationLocation": {
-            return getOperationLocationPollingUrl({
-                operationLocation: getOperationLocationHeader(rawResponse),
-                azureAsyncOperation: getAzureAsyncOperationHeader(rawResponse),
-            });
-        }
-        case "ResourceLocation": {
-            return getLocationHeader(rawResponse);
-        }
-        case "Body":
-        default: {
-            return undefined;
-        }
-    }
-}
-function getOperationStatus({ rawResponse }, state) {
-    var _a;
-    const mode = (_a = state.config.metadata) === null || _a === void 0 ? void 0 : _a["mode"];
-    switch (mode) {
-        case "OperationLocation": {
-            return getStatus(rawResponse);
-        }
-        case "ResourceLocation": {
-            return toOperationStatus(rawResponse.statusCode);
-        }
-        case "Body": {
-            return getProvisioningState(rawResponse);
-        }
-        default:
-            throw new Error(`Internal error: Unexpected operation mode: ${mode}`);
-    }
-}
-function accessBodyProperty({ flatResponse, rawResponse }, prop) {
-    var _a, _b;
-    return (_a = flatResponse === null || flatResponse === void 0 ? void 0 : flatResponse[prop]) !== null && _a !== void 0 ? _a : (_b = rawResponse.body) === null || _b === void 0 ? void 0 : _b[prop];
-}
-function getResourceLocation(res, state) {
-    const loc = accessBodyProperty(res, "resourceLocation");
-    if (loc && typeof loc === "string") {
-        state.config.resourceLocation = loc;
-    }
-    return state.config.resourceLocation;
-}
-function isOperationError(e) {
-    return e.name === "RestError";
-}
-/** Polls the long-running operation. */
-async function pollHttpOperation(inputs) {
-    const { lro, stateProxy, options, processResult, updateState, setDelay, state, setErrorAsResult, } = inputs;
-    return pollOperation({
-        state,
-        stateProxy,
-        setDelay,
-        processResult: processResult
-            ? ({ flatResponse }, inputState) => processResult(flatResponse, inputState)
-            : ({ flatResponse }) => flatResponse,
-        getError: getErrorFromResponse,
-        updateState,
-        getPollingInterval: parseRetryAfter,
-        getOperationLocation,
-        getOperationStatus,
-        isOperationError,
-        getResourceLocation,
-        options,
-        /**
-         * The expansion here is intentional because `lro` could be an object that
-         * references an inner this, so we need to preserve a reference to it.
-         */
-        poll: async (location, inputOptions) => lro.sendPollRequest(location, inputOptions),
-        setErrorAsResult,
-    });
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-const createStateProxy$1 = () => ({
-    /**
-     * The state at this point is created to be of type OperationState<TResult>.
-     * It will be updated later to be of type TState when the
-     * customer-provided callback, `updateState`, is called during polling.
-     */
-    initState: (config) => ({ status: "running", config }),
-    setCanceled: (state) => (state.status = "canceled"),
-    setError: (state, error) => (state.error = error),
-    setResult: (state, result) => (state.result = result),
-    setRunning: (state) => (state.status = "running"),
-    setSucceeded: (state) => (state.status = "succeeded"),
-    setFailed: (state) => (state.status = "failed"),
-    getError: (state) => state.error,
-    getResult: (state) => state.result,
-    isCanceled: (state) => state.status === "canceled",
-    isFailed: (state) => state.status === "failed",
-    isRunning: (state) => state.status === "running",
-    isSucceeded: (state) => state.status === "succeeded",
-});
-/**
- * Returns a poller factory.
- */
-function buildCreatePoller(inputs) {
-    const { getOperationLocation, getStatusFromInitialResponse, getStatusFromPollResponse, isOperationError, getResourceLocation, getPollingInterval, getError, resolveOnUnsuccessful, } = inputs;
-    return async ({ init, poll }, options) => {
-        const { processResult, updateState, withOperationLocation: withOperationLocationCallback, intervalInMs = POLL_INTERVAL_IN_MS, restoreFrom, } = options || {};
-        const stateProxy = createStateProxy$1();
-        const withOperationLocation = withOperationLocationCallback
-            ? (() => {
-                let called = false;
-                return (operationLocation, isUpdated) => {
-                    if (isUpdated)
-                        withOperationLocationCallback(operationLocation);
-                    else if (!called)
-                        withOperationLocationCallback(operationLocation);
-                    called = true;
-                };
-            })()
-            : undefined;
-        const state = restoreFrom
-            ? deserializeState(restoreFrom)
-            : await initOperation({
-                init,
-                stateProxy,
-                processResult,
-                getOperationStatus: getStatusFromInitialResponse,
-                withOperationLocation,
-                setErrorAsResult: !resolveOnUnsuccessful,
-            });
-        let resultPromise;
-        const abortController = new AbortController();
-        const handlers = new Map();
-        const handleProgressEvents = async () => handlers.forEach((h) => h(state));
-        const cancelErrMsg = "Operation was canceled";
-        let currentPollIntervalInMs = intervalInMs;
-        const poller = {
-            getOperationState: () => state,
-            getResult: () => state.result,
-            isDone: () => ["succeeded", "failed", "canceled"].includes(state.status),
-            isStopped: () => resultPromise === undefined,
-            stopPolling: () => {
-                abortController.abort();
-            },
-            toString: () => JSON.stringify({
-                state,
-            }),
-            onProgress: (callback) => {
-                const s = Symbol();
-                handlers.set(s, callback);
-                return () => handlers.delete(s);
-            },
-            pollUntilDone: (pollOptions) => (resultPromise !== null && resultPromise !== void 0 ? resultPromise : (resultPromise = (async () => {
-                const { abortSignal: inputAbortSignal } = pollOptions || {};
-                // In the future we can use AbortSignal.any() instead
-                function abortListener() {
-                    abortController.abort();
-                }
-                const abortSignal = abortController.signal;
-                if (inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.aborted) {
-                    abortController.abort();
-                }
-                else if (!abortSignal.aborted) {
-                    inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.addEventListener("abort", abortListener, { once: true });
-                }
-                try {
-                    if (!poller.isDone()) {
-                        await poller.poll({ abortSignal });
-                        while (!poller.isDone()) {
-                            await coreUtil.delay(currentPollIntervalInMs, { abortSignal });
-                            await poller.poll({ abortSignal });
-                        }
-                    }
-                }
-                finally {
-                    inputAbortSignal === null || inputAbortSignal === void 0 ? void 0 : inputAbortSignal.removeEventListener("abort", abortListener);
-                }
-                if (resolveOnUnsuccessful) {
-                    return poller.getResult();
-                }
-                else {
-                    switch (state.status) {
-                        case "succeeded":
-                            return poller.getResult();
-                        case "canceled":
-                            throw new Error(cancelErrMsg);
-                        case "failed":
-                            throw state.error;
-                        case "notStarted":
-                        case "running":
-                            throw new Error(`Polling completed without succeeding or failing`);
-                    }
-                }
-            })().finally(() => {
-                resultPromise = undefined;
-            }))),
-            async poll(pollOptions) {
-                if (resolveOnUnsuccessful) {
-                    if (poller.isDone())
-                        return;
-                }
-                else {
-                    switch (state.status) {
-                        case "succeeded":
-                            return;
-                        case "canceled":
-                            throw new Error(cancelErrMsg);
-                        case "failed":
-                            throw state.error;
-                    }
-                }
-                await pollOperation({
-                    poll,
-                    state,
-                    stateProxy,
-                    getOperationLocation,
-                    isOperationError,
-                    withOperationLocation,
-                    getPollingInterval,
-                    getOperationStatus: getStatusFromPollResponse,
-                    getResourceLocation,
-                    processResult,
-                    getError,
-                    updateState,
-                    options: pollOptions,
-                    setDelay: (pollIntervalInMs) => {
-                        currentPollIntervalInMs = pollIntervalInMs;
-                    },
-                    setErrorAsResult: !resolveOnUnsuccessful,
-                });
-                await handleProgressEvents();
-                if (!resolveOnUnsuccessful) {
-                    switch (state.status) {
-                        case "canceled":
-                            throw new Error(cancelErrMsg);
-                        case "failed":
-                            throw state.error;
-                    }
-                }
-            },
-        };
-        return poller;
-    };
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Creates a poller that can be used to poll a long-running operation.
- * @param lro - Description of the long-running operation
- * @param options - options to configure the poller
- * @returns an initialized poller
- */
-async function createHttpPoller(lro, options) {
-    const { resourceLocationConfig, intervalInMs, processResult, restoreFrom, updateState, withOperationLocation, resolveOnUnsuccessful = false, } = options || {};
-    return buildCreatePoller({
-        getStatusFromInitialResponse,
-        getStatusFromPollResponse: getOperationStatus,
-        isOperationError,
-        getOperationLocation,
-        getResourceLocation,
-        getPollingInterval: parseRetryAfter,
-        getError: getErrorFromResponse,
-        resolveOnUnsuccessful,
-    })({
-        init: async () => {
-            const response = await lro.sendInitialRequest();
-            const config = inferLroMode({
-                rawResponse: response.rawResponse,
-                requestPath: lro.requestPath,
-                requestMethod: lro.requestMethod,
-                resourceLocationConfig,
-            });
-            return Object.assign({ response, operationLocation: config === null || config === void 0 ? void 0 : config.operationLocation, resourceLocation: config === null || config === void 0 ? void 0 : config.resourceLocation }, ((config === null || config === void 0 ? void 0 : config.mode) ? { metadata: { mode: config.mode } } : {}));
-        },
-        poll: lro.sendPollRequest,
-    }, {
-        intervalInMs,
-        withOperationLocation,
-        restoreFrom,
-        updateState,
-        processResult: processResult
-            ? ({ flatResponse }, state) => processResult(flatResponse, state)
-            : ({ flatResponse }) => flatResponse,
-    });
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-const createStateProxy = () => ({
-    initState: (config) => ({ config, isStarted: true }),
-    setCanceled: (state) => (state.isCancelled = true),
-    setError: (state, error) => (state.error = error),
-    setResult: (state, result) => (state.result = result),
-    setRunning: (state) => (state.isStarted = true),
-    setSucceeded: (state) => (state.isCompleted = true),
-    setFailed: () => {
-        /** empty body */
-    },
-    getError: (state) => state.error,
-    getResult: (state) => state.result,
-    isCanceled: (state) => !!state.isCancelled,
-    isFailed: (state) => !!state.error,
-    isRunning: (state) => !!state.isStarted,
-    isSucceeded: (state) => Boolean(state.isCompleted && !state.isCancelled && !state.error),
-});
-class GenericPollOperation {
-    constructor(state, lro, setErrorAsResult, lroResourceLocationConfig, processResult, updateState, isDone) {
-        this.state = state;
-        this.lro = lro;
-        this.setErrorAsResult = setErrorAsResult;
-        this.lroResourceLocationConfig = lroResourceLocationConfig;
-        this.processResult = processResult;
-        this.updateState = updateState;
-        this.isDone = isDone;
-    }
-    setPollerConfig(pollerConfig) {
-        this.pollerConfig = pollerConfig;
-    }
-    async update(options) {
-        var _a;
-        const stateProxy = createStateProxy();
-        if (!this.state.isStarted) {
-            this.state = Object.assign(Object.assign({}, this.state), (await initHttpOperation({
-                lro: this.lro,
-                stateProxy,
-                resourceLocationConfig: this.lroResourceLocationConfig,
-                processResult: this.processResult,
-                setErrorAsResult: this.setErrorAsResult,
-            })));
-        }
-        const updateState = this.updateState;
-        const isDone = this.isDone;
-        if (!this.state.isCompleted && this.state.error === undefined) {
-            await pollHttpOperation({
-                lro: this.lro,
-                state: this.state,
-                stateProxy,
-                processResult: this.processResult,
-                updateState: updateState
-                    ? (state, { rawResponse }) => updateState(state, rawResponse)
-                    : undefined,
-                isDone: isDone
-                    ? ({ flatResponse }, state) => isDone(flatResponse, state)
-                    : undefined,
-                options,
-                setDelay: (intervalInMs) => {
-                    this.pollerConfig.intervalInMs = intervalInMs;
-                },
-                setErrorAsResult: this.setErrorAsResult,
-            });
-        }
-        (_a = options === null || options === void 0 ? void 0 : options.fireProgress) === null || _a === void 0 ? void 0 : _a.call(options, this.state);
-        return this;
-    }
-    async cancel() {
-        logger.error("`cancelOperation` is deprecated because it wasn't implemented");
-        return this;
-    }
-    /**
-     * Serializes the Poller operation.
-     */
-    toString() {
-        return JSON.stringify({
-            state: this.state,
-        });
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * When a poller is manually stopped through the `stopPolling` method,
- * the poller will be rejected with an instance of the PollerStoppedError.
- */
-class PollerStoppedError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = "PollerStoppedError";
-        Object.setPrototypeOf(this, PollerStoppedError.prototype);
-    }
-}
-/**
- * When the operation is cancelled, the poller will be rejected with an instance
- * of the PollerCancelledError.
- */
-class PollerCancelledError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = "PollerCancelledError";
-        Object.setPrototypeOf(this, PollerCancelledError.prototype);
-    }
-}
-/**
- * A class that represents the definition of a program that polls through consecutive requests
- * until it reaches a state of completion.
- *
- * A poller can be executed manually, by polling request by request by calling to the `poll()` method repeatedly, until its operation is completed.
- * It also provides a way to wait until the operation completes, by calling `pollUntilDone()` and waiting until the operation finishes.
- * Pollers can also request the cancellation of the ongoing process to whom is providing the underlying long running operation.
- *
- * ```ts
- * const poller = new MyPoller();
- *
- * // Polling just once:
- * await poller.poll();
- *
- * // We can try to cancel the request here, by calling:
- * //
- * //     await poller.cancelOperation();
- * //
- *
- * // Getting the final result:
- * const result = await poller.pollUntilDone();
- * ```
- *
- * The Poller is defined by two types, a type representing the state of the poller, which
- * must include a basic set of properties from `PollOperationState<TResult>`,
- * and a return type defined by `TResult`, which can be anything.
- *
- * The Poller class implements the `PollerLike` interface, which allows poller implementations to avoid having
- * to export the Poller's class directly, and instead only export the already instantiated poller with the PollerLike type.
- *
- * ```ts
- * class Client {
- *   public async makePoller: PollerLike<MyOperationState, MyResult> {
- *     const poller = new MyPoller({});
- *     // It might be preferred to return the poller after the first request is made,
- *     // so that some information can be obtained right away.
- *     await poller.poll();
- *     return poller;
- *   }
- * }
- *
- * const poller: PollerLike<MyOperationState, MyResult> = myClient.makePoller();
- * ```
- *
- * A poller can be created through its constructor, then it can be polled until it's completed.
- * At any point in time, the state of the poller can be obtained without delay through the getOperationState method.
- * At any point in time, the intermediate forms of the result type can be requested without delay.
- * Once the underlying operation is marked as completed, the poller will stop and the final value will be returned.
- *
- * ```ts
- * const poller = myClient.makePoller();
- * const state: MyOperationState = poller.getOperationState();
- *
- * // The intermediate result can be obtained at any time.
- * const result: MyResult | undefined = poller.getResult();
- *
- * // The final result can only be obtained after the poller finishes.
- * const result: MyResult = await poller.pollUntilDone();
- * ```
- *
- */
-// eslint-disable-next-line no-use-before-define
-class Poller {
-    /**
-     * A poller needs to be initialized by passing in at least the basic properties of the `PollOperation<TState, TResult>`.
-     *
-     * When writing an implementation of a Poller, this implementation needs to deal with the initialization
-     * of any custom state beyond the basic definition of the poller. The basic poller assumes that the poller's
-     * operation has already been defined, at least its basic properties. The code below shows how to approach
-     * the definition of the constructor of a new custom poller.
-     *
-     * ```ts
-     * export class MyPoller extends Poller<MyOperationState, string> {
-     *   constructor({
-     *     // Anything you might need outside of the basics
-     *   }) {
-     *     let state: MyOperationState = {
-     *       privateProperty: private,
-     *       publicProperty: public,
-     *     };
-     *
-     *     const operation = {
-     *       state,
-     *       update,
-     *       cancel,
-     *       toString
-     *     }
-     *
-     *     // Sending the operation to the parent's constructor.
-     *     super(operation);
-     *
-     *     // You can assign more local properties here.
-     *   }
-     * }
-     * ```
-     *
-     * Inside of this constructor, a new promise is created. This will be used to
-     * tell the user when the poller finishes (see `pollUntilDone()`). The promise's
-     * resolve and reject methods are also used internally to control when to resolve
-     * or reject anyone waiting for the poller to finish.
-     *
-     * The constructor of a custom implementation of a poller is where any serialized version of
-     * a previous poller's operation should be deserialized into the operation sent to the
-     * base constructor. For example:
-     *
-     * ```ts
-     * export class MyPoller extends Poller<MyOperationState, string> {
-     *   constructor(
-     *     baseOperation: string | undefined
-     *   ) {
-     *     let state: MyOperationState = {};
-     *     if (baseOperation) {
-     *       state = {
-     *         ...JSON.parse(baseOperation).state,
-     *         ...state
-     *       };
-     *     }
-     *     const operation = {
-     *       state,
-     *       // ...
-     *     }
-     *     super(operation);
-     *   }
-     * }
-     * ```
-     *
-     * @param operation - Must contain the basic properties of `PollOperation<State, TResult>`.
-     */
-    constructor(operation) {
-        /** controls whether to throw an error if the operation failed or was canceled. */
-        this.resolveOnUnsuccessful = false;
-        this.stopped = true;
-        this.pollProgressCallbacks = [];
-        this.operation = operation;
-        this.promise = new Promise((resolve, reject) => {
-            this.resolve = resolve;
-            this.reject = reject;
-        });
-        // This prevents the UnhandledPromiseRejectionWarning in node.js from being thrown.
-        // The above warning would get thrown if `poller.poll` is called, it returns an error,
-        // and pullUntilDone did not have a .catch or await try/catch on it's return value.
-        this.promise.catch(() => {
-            /* intentionally blank */
-        });
-    }
-    /**
-     * Starts a loop that will break only if the poller is done
-     * or if the poller is stopped.
-     */
-    async startPolling(pollOptions = {}) {
-        if (this.stopped) {
-            this.stopped = false;
-        }
-        while (!this.isStopped() && !this.isDone()) {
-            await this.poll(pollOptions);
-            await this.delay();
-        }
-    }
-    /**
-     * pollOnce does one polling, by calling to the update method of the underlying
-     * poll operation to make any relevant change effective.
-     *
-     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
-     *
-     * @param options - Optional properties passed to the operation's update method.
-     */
-    async pollOnce(options = {}) {
-        if (!this.isDone()) {
-            this.operation = await this.operation.update({
-                abortSignal: options.abortSignal,
-                fireProgress: this.fireProgress.bind(this),
-            });
-        }
-        this.processUpdatedState();
-    }
-    /**
-     * fireProgress calls the functions passed in via onProgress the method of the poller.
-     *
-     * It loops over all of the callbacks received from onProgress, and executes them, sending them
-     * the current operation state.
-     *
-     * @param state - The current operation state.
-     */
-    fireProgress(state) {
-        for (const callback of this.pollProgressCallbacks) {
-            callback(state);
-        }
-    }
-    /**
-     * Invokes the underlying operation's cancel method.
-     */
-    async cancelOnce(options = {}) {
-        this.operation = await this.operation.cancel(options);
-    }
-    /**
-     * Returns a promise that will resolve once a single polling request finishes.
-     * It does this by calling the update method of the Poller's operation.
-     *
-     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
-     *
-     * @param options - Optional properties passed to the operation's update method.
-     */
-    poll(options = {}) {
-        if (!this.pollOncePromise) {
-            this.pollOncePromise = this.pollOnce(options);
-            const clearPollOncePromise = () => {
-                this.pollOncePromise = undefined;
-            };
-            this.pollOncePromise.then(clearPollOncePromise, clearPollOncePromise).catch(this.reject);
-        }
-        return this.pollOncePromise;
-    }
-    processUpdatedState() {
-        if (this.operation.state.error) {
-            this.stopped = true;
-            if (!this.resolveOnUnsuccessful) {
-                this.reject(this.operation.state.error);
-                throw this.operation.state.error;
-            }
-        }
-        if (this.operation.state.isCancelled) {
-            this.stopped = true;
-            if (!this.resolveOnUnsuccessful) {
-                const error = new PollerCancelledError("Operation was canceled");
-                this.reject(error);
-                throw error;
-            }
-        }
-        if (this.isDone() && this.resolve) {
-            // If the poller has finished polling, this means we now have a result.
-            // However, it can be the case that TResult is instantiated to void, so
-            // we are not expecting a result anyway. To assert that we might not
-            // have a result eventually after finishing polling, we cast the result
-            // to TResult.
-            this.resolve(this.getResult());
-        }
-    }
-    /**
-     * Returns a promise that will resolve once the underlying operation is completed.
-     */
-    async pollUntilDone(pollOptions = {}) {
-        if (this.stopped) {
-            this.startPolling(pollOptions).catch(this.reject);
-        }
-        // This is needed because the state could have been updated by
-        // `cancelOperation`, e.g. the operation is canceled or an error occurred.
-        this.processUpdatedState();
-        return this.promise;
-    }
-    /**
-     * Invokes the provided callback after each polling is completed,
-     * sending the current state of the poller's operation.
-     *
-     * It returns a method that can be used to stop receiving updates on the given callback function.
-     */
-    onProgress(callback) {
-        this.pollProgressCallbacks.push(callback);
-        return () => {
-            this.pollProgressCallbacks = this.pollProgressCallbacks.filter((c) => c !== callback);
-        };
-    }
-    /**
-     * Returns true if the poller has finished polling.
-     */
-    isDone() {
-        const state = this.operation.state;
-        return Boolean(state.isCompleted || state.isCancelled || state.error);
-    }
-    /**
-     * Stops the poller from continuing to poll.
-     */
-    stopPolling() {
-        if (!this.stopped) {
-            this.stopped = true;
-            if (this.reject) {
-                this.reject(new PollerStoppedError("This poller is already stopped"));
-            }
-        }
-    }
-    /**
-     * Returns true if the poller is stopped.
-     */
-    isStopped() {
-        return this.stopped;
-    }
-    /**
-     * Attempts to cancel the underlying operation.
-     *
-     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
-     *
-     * If it's called again before it finishes, it will throw an error.
-     *
-     * @param options - Optional properties passed to the operation's update method.
-     */
-    cancelOperation(options = {}) {
-        if (!this.cancelPromise) {
-            this.cancelPromise = this.cancelOnce(options);
-        }
-        else if (options.abortSignal) {
-            throw new Error("A cancel request is currently pending");
-        }
-        return this.cancelPromise;
-    }
-    /**
-     * Returns the state of the operation.
-     *
-     * Even though TState will be the same type inside any of the methods of any extension of the Poller class,
-     * implementations of the pollers can customize what's shared with the public by writing their own
-     * version of the `getOperationState` method, and by defining two types, one representing the internal state of the poller
-     * and a public type representing a safe to share subset of the properties of the internal state.
-     * Their definition of getOperationState can then return their public type.
-     *
-     * Example:
-     *
-     * ```ts
-     * // Let's say we have our poller's operation state defined as:
-     * interface MyOperationState extends PollOperationState<ResultType> {
-     *   privateProperty?: string;
-     *   publicProperty?: string;
-     * }
-     *
-     * // To allow us to have a true separation of public and private state, we have to define another interface:
-     * interface PublicState extends PollOperationState<ResultType> {
-     *   publicProperty?: string;
-     * }
-     *
-     * // Then, we define our Poller as follows:
-     * export class MyPoller extends Poller<MyOperationState, ResultType> {
-     *   // ... More content is needed here ...
-     *
-     *   public getOperationState(): PublicState {
-     *     const state: PublicState = this.operation.state;
-     *     return {
-     *       // Properties from PollOperationState<TResult>
-     *       isStarted: state.isStarted,
-     *       isCompleted: state.isCompleted,
-     *       isCancelled: state.isCancelled,
-     *       error: state.error,
-     *       result: state.result,
-     *
-     *       // The only other property needed by PublicState.
-     *       publicProperty: state.publicProperty
-     *     }
-     *   }
-     * }
-     * ```
-     *
-     * You can see this in the tests of this repository, go to the file:
-     * `../test/utils/testPoller.ts`
-     * and look for the getOperationState implementation.
-     */
-    getOperationState() {
-        return this.operation.state;
-    }
-    /**
-     * Returns the result value of the operation,
-     * regardless of the state of the poller.
-     * It can return undefined or an incomplete form of the final TResult value
-     * depending on the implementation.
-     */
-    getResult() {
-        const state = this.operation.state;
-        return state.result;
-    }
-    /**
-     * Returns a serialized version of the poller's operation
-     * by invoking the operation's toString method.
-     */
-    toString() {
-        return this.operation.toString();
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * The LRO Engine, a class that performs polling.
- */
-class LroEngine extends Poller {
-    constructor(lro, options) {
-        const { intervalInMs = POLL_INTERVAL_IN_MS, resumeFrom, resolveOnUnsuccessful = false, isDone, lroResourceLocationConfig, processResult, updateState, } = options || {};
-        const state = resumeFrom
-            ? deserializeState(resumeFrom)
-            : {};
-        const operation = new GenericPollOperation(state, lro, !resolveOnUnsuccessful, lroResourceLocationConfig, processResult, updateState, isDone);
-        super(operation);
-        this.resolveOnUnsuccessful = resolveOnUnsuccessful;
-        this.config = { intervalInMs: intervalInMs };
-        operation.setPollerConfig(this.config);
-    }
-    /**
-     * The method used by the poller to wait before attempting to update its operation.
-     */
-    delay() {
-        return new Promise((resolve) => setTimeout(() => resolve(), this.config.intervalInMs));
-    }
-}
-
-exports.LroEngine = LroEngine;
-exports.Poller = Poller;
-exports.PollerCancelledError = PollerCancelledError;
-exports.PollerStoppedError = PollerStoppedError;
-exports.createHttpPoller = createHttpPoller;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
-/***/ 4559:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var tslib = __nccwpck_require__(4351);
-
-// Copyright (c) Microsoft Corporation.
-/**
- * returns an async iterator that iterates over results. It also has a `byPage`
- * method that returns pages of items at once.
- *
- * @param pagedResult - an object that specifies how to get pages.
- * @returns a paged async iterator that iterates over results.
- */
-function getPagedAsyncIterator(pagedResult) {
-    var _a;
-    const iter = getItemAsyncIterator(pagedResult);
-    return {
-        next() {
-            return iter.next();
-        },
-        [Symbol.asyncIterator]() {
-            return this;
-        },
-        byPage: (_a = pagedResult === null || pagedResult === void 0 ? void 0 : pagedResult.byPage) !== null && _a !== void 0 ? _a : ((settings) => {
-            const { continuationToken, maxPageSize } = settings !== null && settings !== void 0 ? settings : {};
-            return getPageAsyncIterator(pagedResult, {
-                pageLink: continuationToken,
-                maxPageSize,
-            });
-        }),
-    };
-}
-function getItemAsyncIterator(pagedResult) {
-    return tslib.__asyncGenerator(this, arguments, function* getItemAsyncIterator_1() {
-        var e_1, _a, e_2, _b;
-        const pages = getPageAsyncIterator(pagedResult);
-        const firstVal = yield tslib.__await(pages.next());
-        // if the result does not have an array shape, i.e. TPage = TElement, then we return it as is
-        if (!Array.isArray(firstVal.value)) {
-            // can extract elements from this page
-            const { toElements } = pagedResult;
-            if (toElements) {
-                yield tslib.__await(yield* tslib.__asyncDelegator(tslib.__asyncValues(toElements(firstVal.value))));
-                try {
-                    for (var pages_1 = tslib.__asyncValues(pages), pages_1_1; pages_1_1 = yield tslib.__await(pages_1.next()), !pages_1_1.done;) {
-                        const page = pages_1_1.value;
-                        yield tslib.__await(yield* tslib.__asyncDelegator(tslib.__asyncValues(toElements(page))));
-                    }
-                }
-                catch (e_1_1) { e_1 = { error: e_1_1 }; }
-                finally {
-                    try {
-                        if (pages_1_1 && !pages_1_1.done && (_a = pages_1.return)) yield tslib.__await(_a.call(pages_1));
-                    }
-                    finally { if (e_1) throw e_1.error; }
-                }
-            }
-            else {
-                yield yield tslib.__await(firstVal.value);
-                // `pages` is of type `AsyncIterableIterator<TPage>` but TPage = TElement in this case
-                yield tslib.__await(yield* tslib.__asyncDelegator(tslib.__asyncValues(pages)));
-            }
-        }
-        else {
-            yield tslib.__await(yield* tslib.__asyncDelegator(tslib.__asyncValues(firstVal.value)));
-            try {
-                for (var pages_2 = tslib.__asyncValues(pages), pages_2_1; pages_2_1 = yield tslib.__await(pages_2.next()), !pages_2_1.done;) {
-                    const page = pages_2_1.value;
-                    // pages is of type `AsyncIterableIterator<TPage>` so `page` is of type `TPage`. In this branch,
-                    // it must be the case that `TPage = TElement[]`
-                    yield tslib.__await(yield* tslib.__asyncDelegator(tslib.__asyncValues(page)));
-                }
-            }
-            catch (e_2_1) { e_2 = { error: e_2_1 }; }
-            finally {
-                try {
-                    if (pages_2_1 && !pages_2_1.done && (_b = pages_2.return)) yield tslib.__await(_b.call(pages_2));
-                }
-                finally { if (e_2) throw e_2.error; }
-            }
-        }
-    });
-}
-function getPageAsyncIterator(pagedResult, options = {}) {
-    return tslib.__asyncGenerator(this, arguments, function* getPageAsyncIterator_1() {
-        const { pageLink, maxPageSize } = options;
-        let response = yield tslib.__await(pagedResult.getPage(pageLink !== null && pageLink !== void 0 ? pageLink : pagedResult.firstPageLink, maxPageSize));
-        if (!response) {
-            return yield tslib.__await(void 0);
-        }
-        yield yield tslib.__await(response.page);
-        while (response.nextPageLink) {
-            response = yield tslib.__await(pagedResult.getPage(response.nextPageLink, maxPageSize));
-            if (!response) {
-                return yield tslib.__await(void 0);
-            }
-            yield yield tslib.__await(response.page);
-        }
-    });
-}
-
-exports.getPagedAsyncIterator = getPagedAsyncIterator;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
 /***/ 4175:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -18965,630 +17452,6 @@ exports.setSpanContext = setSpanContext;
 
 /***/ }),
 
-/***/ 1333:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var abortController = __nccwpck_require__(4200);
-var crypto = __nccwpck_require__(6113);
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Creates an abortable promise.
- * @param buildPromise - A function that takes the resolve and reject functions as parameters.
- * @param options - The options for the abortable promise.
- * @returns A promise that can be aborted.
- */
-function createAbortablePromise(buildPromise, options) {
-    const { cleanupBeforeAbort, abortSignal, abortErrorMsg } = options !== null && options !== void 0 ? options : {};
-    return new Promise((resolve, reject) => {
-        function rejectOnAbort() {
-            reject(new abortController.AbortError(abortErrorMsg !== null && abortErrorMsg !== void 0 ? abortErrorMsg : "The operation was aborted."));
-        }
-        function removeListeners() {
-            abortSignal === null || abortSignal === void 0 ? void 0 : abortSignal.removeEventListener("abort", onAbort);
-        }
-        function onAbort() {
-            cleanupBeforeAbort === null || cleanupBeforeAbort === void 0 ? void 0 : cleanupBeforeAbort();
-            removeListeners();
-            rejectOnAbort();
-        }
-        if (abortSignal === null || abortSignal === void 0 ? void 0 : abortSignal.aborted) {
-            return rejectOnAbort();
-        }
-        try {
-            buildPromise((x) => {
-                removeListeners();
-                resolve(x);
-            }, (x) => {
-                removeListeners();
-                reject(x);
-            });
-        }
-        catch (err) {
-            reject(err);
-        }
-        abortSignal === null || abortSignal === void 0 ? void 0 : abortSignal.addEventListener("abort", onAbort);
-    });
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-const StandardAbortMessage = "The delay was aborted.";
-/**
- * A wrapper for setTimeout that resolves a promise after timeInMs milliseconds.
- * @param timeInMs - The number of milliseconds to be delayed.
- * @param options - The options for delay - currently abort options
- * @returns Promise that is resolved after timeInMs
- */
-function delay(timeInMs, options) {
-    let token;
-    const { abortSignal, abortErrorMsg } = options !== null && options !== void 0 ? options : {};
-    return createAbortablePromise((resolve) => {
-        token = setTimeout(resolve, timeInMs);
-    }, {
-        cleanupBeforeAbort: () => clearTimeout(token),
-        abortSignal,
-        abortErrorMsg: abortErrorMsg !== null && abortErrorMsg !== void 0 ? abortErrorMsg : StandardAbortMessage,
-    });
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * promise.race() wrapper that aborts rest of promises as soon as the first promise settles.
- */
-async function cancelablePromiseRace(abortablePromiseBuilders, options) {
-    var _a, _b;
-    const aborter = new AbortController();
-    function abortHandler() {
-        aborter.abort();
-    }
-    (_a = options === null || options === void 0 ? void 0 : options.abortSignal) === null || _a === void 0 ? void 0 : _a.addEventListener("abort", abortHandler);
-    try {
-        return await Promise.race(abortablePromiseBuilders.map((p) => p({ abortSignal: aborter.signal })));
-    }
-    finally {
-        aborter.abort();
-        (_b = options === null || options === void 0 ? void 0 : options.abortSignal) === null || _b === void 0 ? void 0 : _b.removeEventListener("abort", abortHandler);
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Returns a random integer value between a lower and upper bound,
- * inclusive of both bounds.
- * Note that this uses Math.random and isn't secure. If you need to use
- * this for any kind of security purpose, find a better source of random.
- * @param min - The smallest integer value allowed.
- * @param max - The largest integer value allowed.
- */
-function getRandomIntegerInclusive(min, max) {
-    // Make sure inputs are integers.
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    // Pick a random offset from zero to the size of the range.
-    // Since Math.random() can never return 1, we have to make the range one larger
-    // in order to be inclusive of the maximum value after we take the floor.
-    const offset = Math.floor(Math.random() * (max - min + 1));
-    return offset + min;
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Helper to determine when an input is a generic JS object.
- * @returns true when input is an object type that is not null, Array, RegExp, or Date.
- */
-function isObject(input) {
-    return (typeof input === "object" &&
-        input !== null &&
-        !Array.isArray(input) &&
-        !(input instanceof RegExp) &&
-        !(input instanceof Date));
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Typeguard for an error object shape (has name and message)
- * @param e - Something caught by a catch clause.
- */
-function isError(e) {
-    if (isObject(e)) {
-        const hasName = typeof e.name === "string";
-        const hasMessage = typeof e.message === "string";
-        return hasName && hasMessage;
-    }
-    return false;
-}
-/**
- * Given what is thought to be an error object, return the message if possible.
- * If the message is missing, returns a stringified version of the input.
- * @param e - Something thrown from a try block
- * @returns The error message or a string of the input
- */
-function getErrorMessage(e) {
-    if (isError(e)) {
-        return e.message;
-    }
-    else {
-        let stringified;
-        try {
-            if (typeof e === "object" && e) {
-                stringified = JSON.stringify(e);
-            }
-            else {
-                stringified = String(e);
-            }
-        }
-        catch (err) {
-            stringified = "[unable to stringify input]";
-        }
-        return `Unknown error ${stringified}`;
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Generates a SHA-256 HMAC signature.
- * @param key - The HMAC key represented as a base64 string, used to generate the cryptographic HMAC hash.
- * @param stringToSign - The data to be signed.
- * @param encoding - The textual encoding to use for the returned HMAC digest.
- */
-async function computeSha256Hmac(key, stringToSign, encoding) {
-    const decodedKey = Buffer.from(key, "base64");
-    return crypto.createHmac("sha256", decodedKey).update(stringToSign).digest(encoding);
-}
-/**
- * Generates a SHA-256 hash.
- * @param content - The data to be included in the hash.
- * @param encoding - The textual encoding to use for the returned hash.
- */
-async function computeSha256Hash(content, encoding) {
-    return crypto.createHash("sha256").update(content).digest(encoding);
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * Helper TypeGuard that checks if something is defined or not.
- * @param thing - Anything
- */
-function isDefined(thing) {
-    return typeof thing !== "undefined" && thing !== null;
-}
-/**
- * Helper TypeGuard that checks if the input is an object with the specified properties.
- * @param thing - Anything.
- * @param properties - The name of the properties that should appear in the object.
- */
-function isObjectWithProperties(thing, properties) {
-    if (!isDefined(thing) || typeof thing !== "object") {
-        return false;
-    }
-    for (const property of properties) {
-        if (!objectHasProperty(thing, property)) {
-            return false;
-        }
-    }
-    return true;
-}
-/**
- * Helper TypeGuard that checks if the input is an object with the specified property.
- * @param thing - Any object.
- * @param property - The name of the property that should appear in the object.
- */
-function objectHasProperty(thing, property) {
-    return (isDefined(thing) && typeof thing === "object" && property in thing);
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/*
- * NOTE: When moving this file, please update "react-native" section in package.json.
- */
-/**
- * Generated Universally Unique Identifier
- *
- * @returns RFC4122 v4 UUID.
- */
-function generateUUID() {
-    let uuid = "";
-    for (let i = 0; i < 32; i++) {
-        // Generate a random number between 0 and 15
-        const randomNumber = Math.floor(Math.random() * 16);
-        // Set the UUID version to 4 in the 13th position
-        if (i === 12) {
-            uuid += "4";
-        }
-        else if (i === 16) {
-            // Set the UUID variant to "10" in the 17th position
-            uuid += (randomNumber & 0x3) | 0x8;
-        }
-        else {
-            // Add a random hexadecimal digit to the UUID string
-            uuid += randomNumber.toString(16);
-        }
-        // Add hyphens to the UUID string at the appropriate positions
-        if (i === 7 || i === 11 || i === 15 || i === 19) {
-            uuid += "-";
-        }
-    }
-    return uuid;
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-var _a$1;
-// NOTE: This is a workaround until we can use `globalThis.crypto.randomUUID` in Node.js 19+.
-let uuidFunction = typeof ((_a$1 = globalThis === null || globalThis === void 0 ? void 0 : globalThis.crypto) === null || _a$1 === void 0 ? void 0 : _a$1.randomUUID) === "function"
-    ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
-    : crypto.randomUUID;
-// Not defined in earlier versions of Node.js 14
-if (!uuidFunction) {
-    uuidFunction = generateUUID;
-}
-/**
- * Generated Universally Unique Identifier
- *
- * @returns RFC4122 v4 UUID.
- */
-function randomUUID() {
-    return uuidFunction();
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-var _a, _b, _c, _d;
-/**
- * A constant that indicates whether the environment the code is running is a Web Browser.
- */
-// eslint-disable-next-line @azure/azure-sdk/ts-no-window
-const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
-/**
- * A constant that indicates whether the environment the code is running is a Web Worker.
- */
-const isWebWorker = typeof self === "object" &&
-    typeof (self === null || self === void 0 ? void 0 : self.importScripts) === "function" &&
-    (((_a = self.constructor) === null || _a === void 0 ? void 0 : _a.name) === "DedicatedWorkerGlobalScope" ||
-        ((_b = self.constructor) === null || _b === void 0 ? void 0 : _b.name) === "ServiceWorkerGlobalScope" ||
-        ((_c = self.constructor) === null || _c === void 0 ? void 0 : _c.name) === "SharedWorkerGlobalScope");
-/**
- * A constant that indicates whether the environment the code is running is Deno.
- */
-const isDeno = typeof Deno !== "undefined" &&
-    typeof Deno.version !== "undefined" &&
-    typeof Deno.version.deno !== "undefined";
-/**
- * A constant that indicates whether the environment the code is running is Node.JS.
- */
-const isNode = typeof process !== "undefined" &&
-    Boolean(process.version) &&
-    Boolean((_d = process.versions) === null || _d === void 0 ? void 0 : _d.node) &&
-    // Deno thought it was a good idea to spoof process.versions.node, see https://deno.land/std@0.177.0/node/process.ts?s=versions
-    !isDeno;
-/**
- * A constant that indicates whether the environment the code is running is Bun.sh.
- */
-const isBun = typeof Bun !== "undefined" && typeof Bun.version !== "undefined";
-/**
- * A constant that indicates whether the environment the code is running is in React-Native.
- */
-// https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/Core/setUpNavigator.js
-const isReactNative = typeof navigator !== "undefined" && (navigator === null || navigator === void 0 ? void 0 : navigator.product) === "ReactNative";
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * The helper that transforms bytes with specific character encoding into string
- * @param bytes - the uint8array bytes
- * @param format - the format we use to encode the byte
- * @returns a string of the encoded string
- */
-function uint8ArrayToString(bytes, format) {
-    return Buffer.from(bytes).toString(format);
-}
-/**
- * The helper that transforms string to specific character encoded bytes array.
- * @param value - the string to be converted
- * @param format - the format we use to decode the value
- * @returns a uint8array
- */
-function stringToUint8Array(value, format) {
-    return Buffer.from(value, format);
-}
-
-exports.cancelablePromiseRace = cancelablePromiseRace;
-exports.computeSha256Hash = computeSha256Hash;
-exports.computeSha256Hmac = computeSha256Hmac;
-exports.createAbortablePromise = createAbortablePromise;
-exports.delay = delay;
-exports.getErrorMessage = getErrorMessage;
-exports.getRandomIntegerInclusive = getRandomIntegerInclusive;
-exports.isBrowser = isBrowser;
-exports.isBun = isBun;
-exports.isDefined = isDefined;
-exports.isDeno = isDeno;
-exports.isError = isError;
-exports.isNode = isNode;
-exports.isObject = isObject;
-exports.isObjectWithProperties = isObjectWithProperties;
-exports.isReactNative = isReactNative;
-exports.isWebWorker = isWebWorker;
-exports.objectHasProperty = objectHasProperty;
-exports.randomUUID = randomUUID;
-exports.stringToUint8Array = stringToUint8Array;
-exports.uint8ArrayToString = uint8ArrayToString;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
-/***/ 4200:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-/**
- * This error is thrown when an asynchronous operation has been aborted.
- * Check for this error by testing the `name` that the name property of the
- * error matches `"AbortError"`.
- *
- * @example
- * ```ts
- * const controller = new AbortController();
- * controller.abort();
- * try {
- *   doAsyncWork(controller.signal)
- * } catch (e) {
- *   if (e.name === 'AbortError') {
- *     // handle abort error here.
- *   }
- * }
- * ```
- */
-class AbortError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = "AbortError";
-    }
-}
-
-exports.AbortError = AbortError;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
-/***/ 3233:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var os = __nccwpck_require__(2037);
-var util = __nccwpck_require__(3837);
-
-function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-var util__default = /*#__PURE__*/_interopDefaultLegacy(util);
-
-// Copyright (c) Microsoft Corporation.
-function log(message, ...args) {
-    process.stderr.write(`${util__default["default"].format(message, ...args)}${os.EOL}`);
-}
-
-// Copyright (c) Microsoft Corporation.
-const debugEnvVariable = (typeof process !== "undefined" && process.env && process.env.DEBUG) || undefined;
-let enabledString;
-let enabledNamespaces = [];
-let skippedNamespaces = [];
-const debuggers = [];
-if (debugEnvVariable) {
-    enable(debugEnvVariable);
-}
-const debugObj = Object.assign((namespace) => {
-    return createDebugger(namespace);
-}, {
-    enable,
-    enabled,
-    disable,
-    log,
-});
-function enable(namespaces) {
-    enabledString = namespaces;
-    enabledNamespaces = [];
-    skippedNamespaces = [];
-    const wildcard = /\*/g;
-    const namespaceList = namespaces.split(",").map((ns) => ns.trim().replace(wildcard, ".*?"));
-    for (const ns of namespaceList) {
-        if (ns.startsWith("-")) {
-            skippedNamespaces.push(new RegExp(`^${ns.substr(1)}$`));
-        }
-        else {
-            enabledNamespaces.push(new RegExp(`^${ns}$`));
-        }
-    }
-    for (const instance of debuggers) {
-        instance.enabled = enabled(instance.namespace);
-    }
-}
-function enabled(namespace) {
-    if (namespace.endsWith("*")) {
-        return true;
-    }
-    for (const skipped of skippedNamespaces) {
-        if (skipped.test(namespace)) {
-            return false;
-        }
-    }
-    for (const enabledNamespace of enabledNamespaces) {
-        if (enabledNamespace.test(namespace)) {
-            return true;
-        }
-    }
-    return false;
-}
-function disable() {
-    const result = enabledString || "";
-    enable("");
-    return result;
-}
-function createDebugger(namespace) {
-    const newDebugger = Object.assign(debug, {
-        enabled: enabled(namespace),
-        destroy,
-        log: debugObj.log,
-        namespace,
-        extend,
-    });
-    function debug(...args) {
-        if (!newDebugger.enabled) {
-            return;
-        }
-        if (args.length > 0) {
-            args[0] = `${namespace} ${args[0]}`;
-        }
-        newDebugger.log(...args);
-    }
-    debuggers.push(newDebugger);
-    return newDebugger;
-}
-function destroy() {
-    const index = debuggers.indexOf(this);
-    if (index >= 0) {
-        debuggers.splice(index, 1);
-        return true;
-    }
-    return false;
-}
-function extend(namespace) {
-    const newDebugger = createDebugger(`${this.namespace}:${namespace}`);
-    newDebugger.log = this.log;
-    return newDebugger;
-}
-var debug = debugObj;
-
-// Copyright (c) Microsoft Corporation.
-const registeredLoggers = new Set();
-const logLevelFromEnv = (typeof process !== "undefined" && process.env && process.env.AZURE_LOG_LEVEL) || undefined;
-let azureLogLevel;
-/**
- * The AzureLogger provides a mechanism for overriding where logs are output to.
- * By default, logs are sent to stderr.
- * Override the `log` method to redirect logs to another location.
- */
-const AzureLogger = debug("azure");
-AzureLogger.log = (...args) => {
-    debug.log(...args);
-};
-const AZURE_LOG_LEVELS = ["verbose", "info", "warning", "error"];
-if (logLevelFromEnv) {
-    // avoid calling setLogLevel because we don't want a mis-set environment variable to crash
-    if (isAzureLogLevel(logLevelFromEnv)) {
-        setLogLevel(logLevelFromEnv);
-    }
-    else {
-        console.error(`AZURE_LOG_LEVEL set to unknown log level '${logLevelFromEnv}'; logging is not enabled. Acceptable values: ${AZURE_LOG_LEVELS.join(", ")}.`);
-    }
-}
-/**
- * Immediately enables logging at the specified log level. If no level is specified, logging is disabled.
- * @param level - The log level to enable for logging.
- * Options from most verbose to least verbose are:
- * - verbose
- * - info
- * - warning
- * - error
- */
-function setLogLevel(level) {
-    if (level && !isAzureLogLevel(level)) {
-        throw new Error(`Unknown log level '${level}'. Acceptable values: ${AZURE_LOG_LEVELS.join(",")}`);
-    }
-    azureLogLevel = level;
-    const enabledNamespaces = [];
-    for (const logger of registeredLoggers) {
-        if (shouldEnable(logger)) {
-            enabledNamespaces.push(logger.namespace);
-        }
-    }
-    debug.enable(enabledNamespaces.join(","));
-}
-/**
- * Retrieves the currently specified log level.
- */
-function getLogLevel() {
-    return azureLogLevel;
-}
-const levelMap = {
-    verbose: 400,
-    info: 300,
-    warning: 200,
-    error: 100,
-};
-/**
- * Creates a logger for use by the Azure SDKs that inherits from `AzureLogger`.
- * @param namespace - The name of the SDK package.
- * @hidden
- */
-function createClientLogger(namespace) {
-    const clientRootLogger = AzureLogger.extend(namespace);
-    patchLogMethod(AzureLogger, clientRootLogger);
-    return {
-        error: createLogger(clientRootLogger, "error"),
-        warning: createLogger(clientRootLogger, "warning"),
-        info: createLogger(clientRootLogger, "info"),
-        verbose: createLogger(clientRootLogger, "verbose"),
-    };
-}
-function patchLogMethod(parent, child) {
-    child.log = (...args) => {
-        parent.log(...args);
-    };
-}
-function createLogger(parent, level) {
-    const logger = Object.assign(parent.extend(level), {
-        level,
-    });
-    patchLogMethod(parent, logger);
-    if (shouldEnable(logger)) {
-        const enabledNamespaces = debug.disable();
-        debug.enable(enabledNamespaces + "," + logger.namespace);
-    }
-    registeredLoggers.add(logger);
-    return logger;
-}
-function shouldEnable(logger) {
-    return Boolean(azureLogLevel && levelMap[logger.level] <= levelMap[azureLogLevel]);
-}
-function isAzureLogLevel(logLevel) {
-    return AZURE_LOG_LEVELS.includes(logLevel);
-}
-
-exports.AzureLogger = AzureLogger;
-exports.createClientLogger = createClientLogger;
-exports.getLogLevel = getLogLevel;
-exports.setLogLevel = setLogLevel;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
 /***/ 4100:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -19600,13 +17463,13 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 var coreHttp = __nccwpck_require__(4607);
 var tslib = __nccwpck_require__(4351);
 var coreTracing = __nccwpck_require__(4175);
-var logger$1 = __nccwpck_require__(3233);
+var logger$1 = __nccwpck_require__(9497);
 var abortController = __nccwpck_require__(978);
 var os = __nccwpck_require__(2037);
 var crypto = __nccwpck_require__(6113);
 var stream = __nccwpck_require__(2781);
-__nccwpck_require__(4559);
-var coreLro = __nccwpck_require__(7094);
+__nccwpck_require__(7947);
+var coreLro = __nccwpck_require__(334);
 var events = __nccwpck_require__(2361);
 var fs = __nccwpck_require__(7147);
 var util = __nccwpck_require__(3837);
@@ -47427,12 +45290,12 @@ var TraceFlags;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VERSION = void 0;
 // this is autogenerated file, see scripts/version-update.js
-exports.VERSION = '1.7.0';
+exports.VERSION = '1.8.0';
 //# sourceMappingURL=version.js.map
 
 /***/ }),
 
-/***/ 4812:
+/***/ 6284:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 module.exports =
@@ -67384,6 +65247,9 @@ function httpRedirectFetch (fetchParams, response) {
     // https://fetch.spec.whatwg.org/#cors-non-wildcard-request-header-name
     request.headersList.delete('authorization')
 
+    // https://fetch.spec.whatwg.org/#authentication-entries
+    request.headersList.delete('proxy-authorization', true)
+
     // "Cookie" and "Host" are forbidden request-headers, which undici doesn't implement.
     request.headersList.delete('cookie')
     request.headersList.delete('host')
@@ -84857,6 +82723,22 @@ module.exports = require("node:events");
 
 /***/ }),
 
+/***/ 612:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:os");
+
+/***/ }),
+
+/***/ 7742:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:process");
+
+/***/ }),
+
 /***/ 4492:
 /***/ ((module) => {
 
@@ -84993,6 +82875,2519 @@ module.exports = require("zlib");
 
 /***/ }),
 
+/***/ 1875:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AzureKeyCredential = void 0;
+/**
+ * A static-key-based credential that supports updating
+ * the underlying key value.
+ */
+class AzureKeyCredential {
+    _key;
+    /**
+     * The value of the key to be used in authentication
+     */
+    get key() {
+        return this._key;
+    }
+    /**
+     * Create an instance of an AzureKeyCredential for use
+     * with a service client.
+     *
+     * @param key - The initial value of the key to use in authentication
+     */
+    constructor(key) {
+        if (!key) {
+            throw new Error("key must be a non-empty string");
+        }
+        this._key = key;
+    }
+    /**
+     * Change the value of the key.
+     *
+     * Updates will take effect upon the next request after
+     * updating the key value.
+     *
+     * @param newKey - The new key value to be used
+     */
+    update(newKey) {
+        this._key = newKey;
+    }
+}
+exports.AzureKeyCredential = AzureKeyCredential;
+//# sourceMappingURL=azureKeyCredential.js.map
+
+/***/ }),
+
+/***/ 1377:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isNamedKeyCredential = exports.AzureNamedKeyCredential = void 0;
+const core_util_1 = __nccwpck_require__(637);
+/**
+ * A static name/key-based credential that supports updating
+ * the underlying name and key values.
+ */
+class AzureNamedKeyCredential {
+    _key;
+    _name;
+    /**
+     * The value of the key to be used in authentication.
+     */
+    get key() {
+        return this._key;
+    }
+    /**
+     * The value of the name to be used in authentication.
+     */
+    get name() {
+        return this._name;
+    }
+    /**
+     * Create an instance of an AzureNamedKeyCredential for use
+     * with a service client.
+     *
+     * @param name - The initial value of the name to use in authentication.
+     * @param key - The initial value of the key to use in authentication.
+     */
+    constructor(name, key) {
+        if (!name || !key) {
+            throw new TypeError("name and key must be non-empty strings");
+        }
+        this._name = name;
+        this._key = key;
+    }
+    /**
+     * Change the value of the key.
+     *
+     * Updates will take effect upon the next request after
+     * updating the key value.
+     *
+     * @param newName - The new name value to be used.
+     * @param newKey - The new key value to be used.
+     */
+    update(newName, newKey) {
+        if (!newName || !newKey) {
+            throw new TypeError("newName and newKey must be non-empty strings");
+        }
+        this._name = newName;
+        this._key = newKey;
+    }
+}
+exports.AzureNamedKeyCredential = AzureNamedKeyCredential;
+/**
+ * Tests an object to determine whether it implements NamedKeyCredential.
+ *
+ * @param credential - The assumed NamedKeyCredential to be tested.
+ */
+function isNamedKeyCredential(credential) {
+    return ((0, core_util_1.isObjectWithProperties)(credential, ["name", "key"]) &&
+        typeof credential.key === "string" &&
+        typeof credential.name === "string");
+}
+exports.isNamedKeyCredential = isNamedKeyCredential;
+//# sourceMappingURL=azureNamedKeyCredential.js.map
+
+/***/ }),
+
+/***/ 7182:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isSASCredential = exports.AzureSASCredential = void 0;
+const core_util_1 = __nccwpck_require__(637);
+/**
+ * A static-signature-based credential that supports updating
+ * the underlying signature value.
+ */
+class AzureSASCredential {
+    _signature;
+    /**
+     * The value of the shared access signature to be used in authentication
+     */
+    get signature() {
+        return this._signature;
+    }
+    /**
+     * Create an instance of an AzureSASCredential for use
+     * with a service client.
+     *
+     * @param signature - The initial value of the shared access signature to use in authentication
+     */
+    constructor(signature) {
+        if (!signature) {
+            throw new Error("shared access signature must be a non-empty string");
+        }
+        this._signature = signature;
+    }
+    /**
+     * Change the value of the signature.
+     *
+     * Updates will take effect upon the next request after
+     * updating the signature value.
+     *
+     * @param newSignature - The new shared access signature value to be used
+     */
+    update(newSignature) {
+        if (!newSignature) {
+            throw new Error("shared access signature must be a non-empty string");
+        }
+        this._signature = newSignature;
+    }
+}
+exports.AzureSASCredential = AzureSASCredential;
+/**
+ * Tests an object to determine whether it implements SASCredential.
+ *
+ * @param credential - The assumed SASCredential to be tested.
+ */
+function isSASCredential(credential) {
+    return ((0, core_util_1.isObjectWithProperties)(credential, ["signature"]) && typeof credential.signature === "string");
+}
+exports.isSASCredential = isSASCredential;
+//# sourceMappingURL=azureSASCredential.js.map
+
+/***/ }),
+
+/***/ 8834:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isTokenCredential = exports.isSASCredential = exports.AzureSASCredential = exports.isNamedKeyCredential = exports.AzureNamedKeyCredential = exports.isKeyCredential = exports.AzureKeyCredential = void 0;
+var azureKeyCredential_js_1 = __nccwpck_require__(1875);
+Object.defineProperty(exports, "AzureKeyCredential", ({ enumerable: true, get: function () { return azureKeyCredential_js_1.AzureKeyCredential; } }));
+var keyCredential_js_1 = __nccwpck_require__(9122);
+Object.defineProperty(exports, "isKeyCredential", ({ enumerable: true, get: function () { return keyCredential_js_1.isKeyCredential; } }));
+var azureNamedKeyCredential_js_1 = __nccwpck_require__(1377);
+Object.defineProperty(exports, "AzureNamedKeyCredential", ({ enumerable: true, get: function () { return azureNamedKeyCredential_js_1.AzureNamedKeyCredential; } }));
+Object.defineProperty(exports, "isNamedKeyCredential", ({ enumerable: true, get: function () { return azureNamedKeyCredential_js_1.isNamedKeyCredential; } }));
+var azureSASCredential_js_1 = __nccwpck_require__(7182);
+Object.defineProperty(exports, "AzureSASCredential", ({ enumerable: true, get: function () { return azureSASCredential_js_1.AzureSASCredential; } }));
+Object.defineProperty(exports, "isSASCredential", ({ enumerable: true, get: function () { return azureSASCredential_js_1.isSASCredential; } }));
+var tokenCredential_js_1 = __nccwpck_require__(9162);
+Object.defineProperty(exports, "isTokenCredential", ({ enumerable: true, get: function () { return tokenCredential_js_1.isTokenCredential; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 9122:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isKeyCredential = void 0;
+const core_util_1 = __nccwpck_require__(637);
+/**
+ * Tests an object to determine whether it implements KeyCredential.
+ *
+ * @param credential - The assumed KeyCredential to be tested.
+ */
+function isKeyCredential(credential) {
+    return (0, core_util_1.isObjectWithProperties)(credential, ["key"]) && typeof credential.key === "string";
+}
+exports.isKeyCredential = isKeyCredential;
+//# sourceMappingURL=keyCredential.js.map
+
+/***/ }),
+
+/***/ 9162:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isTokenCredential = void 0;
+/**
+ * Tests an object to determine whether it implements TokenCredential.
+ *
+ * @param credential - The assumed TokenCredential to be tested.
+ */
+function isTokenCredential(credential) {
+    // Check for an object with a 'getToken' function and possibly with
+    // a 'signRequest' function.  We do this check to make sure that
+    // a ServiceClientCredentials implementor (like TokenClientCredentials
+    // in ms-rest-nodeauth) doesn't get mistaken for a TokenCredential if
+    // it doesn't actually implement TokenCredential also.
+    const castCredential = credential;
+    return (castCredential &&
+        typeof castCredential.getToken === "function" &&
+        (castCredential.signRequest === undefined || castCredential.getToken.length > 0));
+}
+exports.isTokenCredential = isTokenCredential;
+//# sourceMappingURL=tokenCredential.js.map
+
+/***/ }),
+
+/***/ 7759:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pollHttpOperation = exports.isOperationError = exports.getResourceLocation = exports.getOperationStatus = exports.getOperationLocation = exports.initHttpOperation = exports.getStatusFromInitialResponse = exports.getErrorFromResponse = exports.parseRetryAfter = exports.inferLroMode = void 0;
+const operation_js_1 = __nccwpck_require__(281);
+const logger_js_1 = __nccwpck_require__(8121);
+function getOperationLocationPollingUrl(inputs) {
+    const { azureAsyncOperation, operationLocation } = inputs;
+    return operationLocation ?? azureAsyncOperation;
+}
+function getLocationHeader(rawResponse) {
+    return rawResponse.headers["location"];
+}
+function getOperationLocationHeader(rawResponse) {
+    return rawResponse.headers["operation-location"];
+}
+function getAzureAsyncOperationHeader(rawResponse) {
+    return rawResponse.headers["azure-asyncoperation"];
+}
+function findResourceLocation(inputs) {
+    const { location, requestMethod, requestPath, resourceLocationConfig } = inputs;
+    switch (requestMethod) {
+        case "PUT": {
+            return requestPath;
+        }
+        case "DELETE": {
+            return undefined;
+        }
+        case "PATCH": {
+            return getDefault() ?? requestPath;
+        }
+        default: {
+            return getDefault();
+        }
+    }
+    function getDefault() {
+        switch (resourceLocationConfig) {
+            case "azure-async-operation": {
+                return undefined;
+            }
+            case "original-uri": {
+                return requestPath;
+            }
+            case "location":
+            default: {
+                return location;
+            }
+        }
+    }
+}
+function inferLroMode(inputs) {
+    const { rawResponse, requestMethod, requestPath, resourceLocationConfig } = inputs;
+    const operationLocation = getOperationLocationHeader(rawResponse);
+    const azureAsyncOperation = getAzureAsyncOperationHeader(rawResponse);
+    const pollingUrl = getOperationLocationPollingUrl({ operationLocation, azureAsyncOperation });
+    const location = getLocationHeader(rawResponse);
+    const normalizedRequestMethod = requestMethod?.toLocaleUpperCase();
+    if (pollingUrl !== undefined) {
+        return {
+            mode: "OperationLocation",
+            operationLocation: pollingUrl,
+            resourceLocation: findResourceLocation({
+                requestMethod: normalizedRequestMethod,
+                location,
+                requestPath,
+                resourceLocationConfig,
+            }),
+        };
+    }
+    else if (location !== undefined) {
+        return {
+            mode: "ResourceLocation",
+            operationLocation: location,
+        };
+    }
+    else if (normalizedRequestMethod === "PUT" && requestPath) {
+        return {
+            mode: "Body",
+            operationLocation: requestPath,
+        };
+    }
+    else {
+        return undefined;
+    }
+}
+exports.inferLroMode = inferLroMode;
+function transformStatus(inputs) {
+    const { status, statusCode } = inputs;
+    if (typeof status !== "string" && status !== undefined) {
+        throw new Error(`Polling was unsuccessful. Expected status to have a string value or no value but it has instead: ${status}. This doesn't necessarily indicate the operation has failed. Check your Azure subscription or resource status for more information.`);
+    }
+    switch (status?.toLocaleLowerCase()) {
+        case undefined:
+            return toOperationStatus(statusCode);
+        case "succeeded":
+            return "succeeded";
+        case "failed":
+            return "failed";
+        case "running":
+        case "accepted":
+        case "started":
+        case "canceling":
+        case "cancelling":
+            return "running";
+        case "canceled":
+        case "cancelled":
+            return "canceled";
+        default: {
+            logger_js_1.logger.verbose(`LRO: unrecognized operation status: ${status}`);
+            return status;
+        }
+    }
+}
+function getStatus(rawResponse) {
+    const { status } = rawResponse.body ?? {};
+    return transformStatus({ status, statusCode: rawResponse.statusCode });
+}
+function getProvisioningState(rawResponse) {
+    const { properties, provisioningState } = rawResponse.body ?? {};
+    const status = properties?.provisioningState ?? provisioningState;
+    return transformStatus({ status, statusCode: rawResponse.statusCode });
+}
+function toOperationStatus(statusCode) {
+    if (statusCode === 202) {
+        return "running";
+    }
+    else if (statusCode < 300) {
+        return "succeeded";
+    }
+    else {
+        return "failed";
+    }
+}
+function parseRetryAfter({ rawResponse }) {
+    const retryAfter = rawResponse.headers["retry-after"];
+    if (retryAfter !== undefined) {
+        // Retry-After header value is either in HTTP date format, or in seconds
+        const retryAfterInSeconds = parseInt(retryAfter);
+        return isNaN(retryAfterInSeconds)
+            ? calculatePollingIntervalFromDate(new Date(retryAfter))
+            : retryAfterInSeconds * 1000;
+    }
+    return undefined;
+}
+exports.parseRetryAfter = parseRetryAfter;
+function getErrorFromResponse(response) {
+    const error = accessBodyProperty(response, "error");
+    if (!error) {
+        logger_js_1.logger.warning(`The long-running operation failed but there is no error property in the response's body`);
+        return;
+    }
+    if (!error.code || !error.message) {
+        logger_js_1.logger.warning(`The long-running operation failed but the error property in the response's body doesn't contain code or message`);
+        return;
+    }
+    return error;
+}
+exports.getErrorFromResponse = getErrorFromResponse;
+function calculatePollingIntervalFromDate(retryAfterDate) {
+    const timeNow = Math.floor(new Date().getTime());
+    const retryAfterTime = retryAfterDate.getTime();
+    if (timeNow < retryAfterTime) {
+        return retryAfterTime - timeNow;
+    }
+    return undefined;
+}
+function getStatusFromInitialResponse(inputs) {
+    const { response, state, operationLocation } = inputs;
+    function helper() {
+        const mode = state.config.metadata?.["mode"];
+        switch (mode) {
+            case undefined:
+                return toOperationStatus(response.rawResponse.statusCode);
+            case "Body":
+                return getOperationStatus(response, state);
+            default:
+                return "running";
+        }
+    }
+    const status = helper();
+    return status === "running" && operationLocation === undefined ? "succeeded" : status;
+}
+exports.getStatusFromInitialResponse = getStatusFromInitialResponse;
+/**
+ * Initiates the long-running operation.
+ */
+async function initHttpOperation(inputs) {
+    const { stateProxy, resourceLocationConfig, processResult, lro, setErrorAsResult } = inputs;
+    return (0, operation_js_1.initOperation)({
+        init: async () => {
+            const response = await lro.sendInitialRequest();
+            const config = inferLroMode({
+                rawResponse: response.rawResponse,
+                requestPath: lro.requestPath,
+                requestMethod: lro.requestMethod,
+                resourceLocationConfig,
+            });
+            return {
+                response,
+                operationLocation: config?.operationLocation,
+                resourceLocation: config?.resourceLocation,
+                ...(config?.mode ? { metadata: { mode: config.mode } } : {}),
+            };
+        },
+        stateProxy,
+        processResult: processResult
+            ? ({ flatResponse }, state) => processResult(flatResponse, state)
+            : ({ flatResponse }) => flatResponse,
+        getOperationStatus: getStatusFromInitialResponse,
+        setErrorAsResult,
+    });
+}
+exports.initHttpOperation = initHttpOperation;
+function getOperationLocation({ rawResponse }, state) {
+    const mode = state.config.metadata?.["mode"];
+    switch (mode) {
+        case "OperationLocation": {
+            return getOperationLocationPollingUrl({
+                operationLocation: getOperationLocationHeader(rawResponse),
+                azureAsyncOperation: getAzureAsyncOperationHeader(rawResponse),
+            });
+        }
+        case "ResourceLocation": {
+            return getLocationHeader(rawResponse);
+        }
+        case "Body":
+        default: {
+            return undefined;
+        }
+    }
+}
+exports.getOperationLocation = getOperationLocation;
+function getOperationStatus({ rawResponse }, state) {
+    const mode = state.config.metadata?.["mode"];
+    switch (mode) {
+        case "OperationLocation": {
+            return getStatus(rawResponse);
+        }
+        case "ResourceLocation": {
+            return toOperationStatus(rawResponse.statusCode);
+        }
+        case "Body": {
+            return getProvisioningState(rawResponse);
+        }
+        default:
+            throw new Error(`Internal error: Unexpected operation mode: ${mode}`);
+    }
+}
+exports.getOperationStatus = getOperationStatus;
+function accessBodyProperty({ flatResponse, rawResponse }, prop) {
+    return flatResponse?.[prop] ?? rawResponse.body?.[prop];
+}
+function getResourceLocation(res, state) {
+    const loc = accessBodyProperty(res, "resourceLocation");
+    if (loc && typeof loc === "string") {
+        state.config.resourceLocation = loc;
+    }
+    return state.config.resourceLocation;
+}
+exports.getResourceLocation = getResourceLocation;
+function isOperationError(e) {
+    return e.name === "RestError";
+}
+exports.isOperationError = isOperationError;
+/** Polls the long-running operation. */
+async function pollHttpOperation(inputs) {
+    const { lro, stateProxy, options, processResult, updateState, setDelay, state, setErrorAsResult, } = inputs;
+    return (0, operation_js_1.pollOperation)({
+        state,
+        stateProxy,
+        setDelay,
+        processResult: processResult
+            ? ({ flatResponse }, inputState) => processResult(flatResponse, inputState)
+            : ({ flatResponse }) => flatResponse,
+        getError: getErrorFromResponse,
+        updateState,
+        getPollingInterval: parseRetryAfter,
+        getOperationLocation,
+        getOperationStatus,
+        isOperationError,
+        getResourceLocation,
+        options,
+        /**
+         * The expansion here is intentional because `lro` could be an object that
+         * references an inner this, so we need to preserve a reference to it.
+         */
+        poll: async (location, inputOptions) => lro.sendPollRequest(location, inputOptions),
+        setErrorAsResult,
+    });
+}
+exports.pollHttpOperation = pollHttpOperation;
+//# sourceMappingURL=operation.js.map
+
+/***/ }),
+
+/***/ 8412:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createHttpPoller = void 0;
+const operation_js_1 = __nccwpck_require__(7759);
+const poller_js_1 = __nccwpck_require__(6713);
+/**
+ * Creates a poller that can be used to poll a long-running operation.
+ * @param lro - Description of the long-running operation
+ * @param options - options to configure the poller
+ * @returns an initialized poller
+ */
+async function createHttpPoller(lro, options) {
+    const { resourceLocationConfig, intervalInMs, processResult, restoreFrom, updateState, withOperationLocation, resolveOnUnsuccessful = false, } = options || {};
+    return (0, poller_js_1.buildCreatePoller)({
+        getStatusFromInitialResponse: operation_js_1.getStatusFromInitialResponse,
+        getStatusFromPollResponse: operation_js_1.getOperationStatus,
+        isOperationError: operation_js_1.isOperationError,
+        getOperationLocation: operation_js_1.getOperationLocation,
+        getResourceLocation: operation_js_1.getResourceLocation,
+        getPollingInterval: operation_js_1.parseRetryAfter,
+        getError: operation_js_1.getErrorFromResponse,
+        resolveOnUnsuccessful,
+    })({
+        init: async () => {
+            const response = await lro.sendInitialRequest();
+            const config = (0, operation_js_1.inferLroMode)({
+                rawResponse: response.rawResponse,
+                requestPath: lro.requestPath,
+                requestMethod: lro.requestMethod,
+                resourceLocationConfig,
+            });
+            return {
+                response,
+                operationLocation: config?.operationLocation,
+                resourceLocation: config?.resourceLocation,
+                ...(config?.mode ? { metadata: { mode: config.mode } } : {}),
+            };
+        },
+        poll: lro.sendPollRequest,
+    }, {
+        intervalInMs,
+        withOperationLocation,
+        restoreFrom,
+        updateState,
+        processResult: processResult
+            ? ({ flatResponse }, state) => processResult(flatResponse, state)
+            : ({ flatResponse }) => flatResponse,
+    });
+}
+exports.createHttpPoller = createHttpPoller;
+//# sourceMappingURL=poller.js.map
+
+/***/ }),
+
+/***/ 334:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createHttpPoller = void 0;
+const tslib_1 = __nccwpck_require__(4351);
+var poller_js_1 = __nccwpck_require__(8412);
+Object.defineProperty(exports, "createHttpPoller", ({ enumerable: true, get: function () { return poller_js_1.createHttpPoller; } }));
+/**
+ * This can be uncommented to expose the protocol-agnostic poller
+ */
+// export {
+//   BuildCreatePollerOptions,
+//   Operation,
+//   CreatePollerOptions,
+//   OperationConfig,
+//   RestorableOperationState,
+// } from "./poller/models";
+// export { buildCreatePoller } from "./poller/poller";
+/** legacy */
+tslib_1.__exportStar(__nccwpck_require__(2260), exports);
+tslib_1.__exportStar(__nccwpck_require__(7270), exports);
+tslib_1.__exportStar(__nccwpck_require__(3586), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 2260:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LroEngine = void 0;
+var lroEngine_js_1 = __nccwpck_require__(5780);
+Object.defineProperty(exports, "LroEngine", ({ enumerable: true, get: function () { return lroEngine_js_1.LroEngine; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 5780:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LroEngine = void 0;
+const operation_js_1 = __nccwpck_require__(7954);
+const constants_js_1 = __nccwpck_require__(3846);
+const poller_js_1 = __nccwpck_require__(7270);
+const operation_js_2 = __nccwpck_require__(281);
+/**
+ * The LRO Engine, a class that performs polling.
+ */
+class LroEngine extends poller_js_1.Poller {
+    config;
+    constructor(lro, options) {
+        const { intervalInMs = constants_js_1.POLL_INTERVAL_IN_MS, resumeFrom, resolveOnUnsuccessful = false, isDone, lroResourceLocationConfig, processResult, updateState, } = options || {};
+        const state = resumeFrom
+            ? (0, operation_js_2.deserializeState)(resumeFrom)
+            : {};
+        const operation = new operation_js_1.GenericPollOperation(state, lro, !resolveOnUnsuccessful, lroResourceLocationConfig, processResult, updateState, isDone);
+        super(operation);
+        this.resolveOnUnsuccessful = resolveOnUnsuccessful;
+        this.config = { intervalInMs: intervalInMs };
+        operation.setPollerConfig(this.config);
+    }
+    /**
+     * The method used by the poller to wait before attempting to update its operation.
+     */
+    delay() {
+        return new Promise((resolve) => setTimeout(() => resolve(), this.config.intervalInMs));
+    }
+}
+exports.LroEngine = LroEngine;
+//# sourceMappingURL=lroEngine.js.map
+
+/***/ }),
+
+/***/ 7954:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GenericPollOperation = void 0;
+const operation_js_1 = __nccwpck_require__(7759);
+const logger_js_1 = __nccwpck_require__(8121);
+const createStateProxy = () => ({
+    initState: (config) => ({ config, isStarted: true }),
+    setCanceled: (state) => (state.isCancelled = true),
+    setError: (state, error) => (state.error = error),
+    setResult: (state, result) => (state.result = result),
+    setRunning: (state) => (state.isStarted = true),
+    setSucceeded: (state) => (state.isCompleted = true),
+    setFailed: () => {
+        /** empty body */
+    },
+    getError: (state) => state.error,
+    getResult: (state) => state.result,
+    isCanceled: (state) => !!state.isCancelled,
+    isFailed: (state) => !!state.error,
+    isRunning: (state) => !!state.isStarted,
+    isSucceeded: (state) => Boolean(state.isCompleted && !state.isCancelled && !state.error),
+});
+class GenericPollOperation {
+    state;
+    lro;
+    setErrorAsResult;
+    lroResourceLocationConfig;
+    processResult;
+    updateState;
+    isDone;
+    pollerConfig;
+    constructor(state, lro, setErrorAsResult, lroResourceLocationConfig, processResult, updateState, isDone) {
+        this.state = state;
+        this.lro = lro;
+        this.setErrorAsResult = setErrorAsResult;
+        this.lroResourceLocationConfig = lroResourceLocationConfig;
+        this.processResult = processResult;
+        this.updateState = updateState;
+        this.isDone = isDone;
+    }
+    setPollerConfig(pollerConfig) {
+        this.pollerConfig = pollerConfig;
+    }
+    async update(options) {
+        const stateProxy = createStateProxy();
+        if (!this.state.isStarted) {
+            this.state = {
+                ...this.state,
+                ...(await (0, operation_js_1.initHttpOperation)({
+                    lro: this.lro,
+                    stateProxy,
+                    resourceLocationConfig: this.lroResourceLocationConfig,
+                    processResult: this.processResult,
+                    setErrorAsResult: this.setErrorAsResult,
+                })),
+            };
+        }
+        const updateState = this.updateState;
+        const isDone = this.isDone;
+        if (!this.state.isCompleted && this.state.error === undefined) {
+            await (0, operation_js_1.pollHttpOperation)({
+                lro: this.lro,
+                state: this.state,
+                stateProxy,
+                processResult: this.processResult,
+                updateState: updateState
+                    ? (state, { rawResponse }) => updateState(state, rawResponse)
+                    : undefined,
+                isDone: isDone
+                    ? ({ flatResponse }, state) => isDone(flatResponse, state)
+                    : undefined,
+                options,
+                setDelay: (intervalInMs) => {
+                    this.pollerConfig.intervalInMs = intervalInMs;
+                },
+                setErrorAsResult: this.setErrorAsResult,
+            });
+        }
+        options?.fireProgress?.(this.state);
+        return this;
+    }
+    async cancel() {
+        logger_js_1.logger.error("`cancelOperation` is deprecated because it wasn't implemented");
+        return this;
+    }
+    /**
+     * Serializes the Poller operation.
+     */
+    toString() {
+        return JSON.stringify({
+            state: this.state,
+        });
+    }
+}
+exports.GenericPollOperation = GenericPollOperation;
+//# sourceMappingURL=operation.js.map
+
+/***/ }),
+
+/***/ 3586:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=pollOperation.js.map
+
+/***/ }),
+
+/***/ 7270:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Poller = exports.PollerCancelledError = exports.PollerStoppedError = void 0;
+/**
+ * When a poller is manually stopped through the `stopPolling` method,
+ * the poller will be rejected with an instance of the PollerStoppedError.
+ */
+class PollerStoppedError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "PollerStoppedError";
+        Object.setPrototypeOf(this, PollerStoppedError.prototype);
+    }
+}
+exports.PollerStoppedError = PollerStoppedError;
+/**
+ * When the operation is cancelled, the poller will be rejected with an instance
+ * of the PollerCancelledError.
+ */
+class PollerCancelledError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "PollerCancelledError";
+        Object.setPrototypeOf(this, PollerCancelledError.prototype);
+    }
+}
+exports.PollerCancelledError = PollerCancelledError;
+/**
+ * A class that represents the definition of a program that polls through consecutive requests
+ * until it reaches a state of completion.
+ *
+ * A poller can be executed manually, by polling request by request by calling to the `poll()` method repeatedly, until its operation is completed.
+ * It also provides a way to wait until the operation completes, by calling `pollUntilDone()` and waiting until the operation finishes.
+ * Pollers can also request the cancellation of the ongoing process to whom is providing the underlying long running operation.
+ *
+ * ```ts
+ * const poller = new MyPoller();
+ *
+ * // Polling just once:
+ * await poller.poll();
+ *
+ * // We can try to cancel the request here, by calling:
+ * //
+ * //     await poller.cancelOperation();
+ * //
+ *
+ * // Getting the final result:
+ * const result = await poller.pollUntilDone();
+ * ```
+ *
+ * The Poller is defined by two types, a type representing the state of the poller, which
+ * must include a basic set of properties from `PollOperationState<TResult>`,
+ * and a return type defined by `TResult`, which can be anything.
+ *
+ * The Poller class implements the `PollerLike` interface, which allows poller implementations to avoid having
+ * to export the Poller's class directly, and instead only export the already instantiated poller with the PollerLike type.
+ *
+ * ```ts
+ * class Client {
+ *   public async makePoller: PollerLike<MyOperationState, MyResult> {
+ *     const poller = new MyPoller({});
+ *     // It might be preferred to return the poller after the first request is made,
+ *     // so that some information can be obtained right away.
+ *     await poller.poll();
+ *     return poller;
+ *   }
+ * }
+ *
+ * const poller: PollerLike<MyOperationState, MyResult> = myClient.makePoller();
+ * ```
+ *
+ * A poller can be created through its constructor, then it can be polled until it's completed.
+ * At any point in time, the state of the poller can be obtained without delay through the getOperationState method.
+ * At any point in time, the intermediate forms of the result type can be requested without delay.
+ * Once the underlying operation is marked as completed, the poller will stop and the final value will be returned.
+ *
+ * ```ts
+ * const poller = myClient.makePoller();
+ * const state: MyOperationState = poller.getOperationState();
+ *
+ * // The intermediate result can be obtained at any time.
+ * const result: MyResult | undefined = poller.getResult();
+ *
+ * // The final result can only be obtained after the poller finishes.
+ * const result: MyResult = await poller.pollUntilDone();
+ * ```
+ *
+ */
+// eslint-disable-next-line no-use-before-define
+class Poller {
+    /** controls whether to throw an error if the operation failed or was canceled. */
+    resolveOnUnsuccessful = false;
+    stopped = true;
+    resolve;
+    reject;
+    pollOncePromise;
+    cancelPromise;
+    promise;
+    pollProgressCallbacks = [];
+    /**
+     * The poller's operation is available in full to any of the methods of the Poller class
+     * and any class extending the Poller class.
+     */
+    operation;
+    /**
+     * A poller needs to be initialized by passing in at least the basic properties of the `PollOperation<TState, TResult>`.
+     *
+     * When writing an implementation of a Poller, this implementation needs to deal with the initialization
+     * of any custom state beyond the basic definition of the poller. The basic poller assumes that the poller's
+     * operation has already been defined, at least its basic properties. The code below shows how to approach
+     * the definition of the constructor of a new custom poller.
+     *
+     * ```ts
+     * export class MyPoller extends Poller<MyOperationState, string> {
+     *   constructor({
+     *     // Anything you might need outside of the basics
+     *   }) {
+     *     let state: MyOperationState = {
+     *       privateProperty: private,
+     *       publicProperty: public,
+     *     };
+     *
+     *     const operation = {
+     *       state,
+     *       update,
+     *       cancel,
+     *       toString
+     *     }
+     *
+     *     // Sending the operation to the parent's constructor.
+     *     super(operation);
+     *
+     *     // You can assign more local properties here.
+     *   }
+     * }
+     * ```
+     *
+     * Inside of this constructor, a new promise is created. This will be used to
+     * tell the user when the poller finishes (see `pollUntilDone()`). The promise's
+     * resolve and reject methods are also used internally to control when to resolve
+     * or reject anyone waiting for the poller to finish.
+     *
+     * The constructor of a custom implementation of a poller is where any serialized version of
+     * a previous poller's operation should be deserialized into the operation sent to the
+     * base constructor. For example:
+     *
+     * ```ts
+     * export class MyPoller extends Poller<MyOperationState, string> {
+     *   constructor(
+     *     baseOperation: string | undefined
+     *   ) {
+     *     let state: MyOperationState = {};
+     *     if (baseOperation) {
+     *       state = {
+     *         ...JSON.parse(baseOperation).state,
+     *         ...state
+     *       };
+     *     }
+     *     const operation = {
+     *       state,
+     *       // ...
+     *     }
+     *     super(operation);
+     *   }
+     * }
+     * ```
+     *
+     * @param operation - Must contain the basic properties of `PollOperation<State, TResult>`.
+     */
+    constructor(operation) {
+        this.operation = operation;
+        this.promise = new Promise((resolve, reject) => {
+            this.resolve = resolve;
+            this.reject = reject;
+        });
+        // This prevents the UnhandledPromiseRejectionWarning in node.js from being thrown.
+        // The above warning would get thrown if `poller.poll` is called, it returns an error,
+        // and pullUntilDone did not have a .catch or await try/catch on it's return value.
+        this.promise.catch(() => {
+            /* intentionally blank */
+        });
+    }
+    /**
+     * Starts a loop that will break only if the poller is done
+     * or if the poller is stopped.
+     */
+    async startPolling(pollOptions = {}) {
+        if (this.stopped) {
+            this.stopped = false;
+        }
+        while (!this.isStopped() && !this.isDone()) {
+            await this.poll(pollOptions);
+            await this.delay();
+        }
+    }
+    /**
+     * pollOnce does one polling, by calling to the update method of the underlying
+     * poll operation to make any relevant change effective.
+     *
+     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
+     *
+     * @param options - Optional properties passed to the operation's update method.
+     */
+    async pollOnce(options = {}) {
+        if (!this.isDone()) {
+            this.operation = await this.operation.update({
+                abortSignal: options.abortSignal,
+                fireProgress: this.fireProgress.bind(this),
+            });
+        }
+        this.processUpdatedState();
+    }
+    /**
+     * fireProgress calls the functions passed in via onProgress the method of the poller.
+     *
+     * It loops over all of the callbacks received from onProgress, and executes them, sending them
+     * the current operation state.
+     *
+     * @param state - The current operation state.
+     */
+    fireProgress(state) {
+        for (const callback of this.pollProgressCallbacks) {
+            callback(state);
+        }
+    }
+    /**
+     * Invokes the underlying operation's cancel method.
+     */
+    async cancelOnce(options = {}) {
+        this.operation = await this.operation.cancel(options);
+    }
+    /**
+     * Returns a promise that will resolve once a single polling request finishes.
+     * It does this by calling the update method of the Poller's operation.
+     *
+     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
+     *
+     * @param options - Optional properties passed to the operation's update method.
+     */
+    poll(options = {}) {
+        if (!this.pollOncePromise) {
+            this.pollOncePromise = this.pollOnce(options);
+            const clearPollOncePromise = () => {
+                this.pollOncePromise = undefined;
+            };
+            this.pollOncePromise.then(clearPollOncePromise, clearPollOncePromise).catch(this.reject);
+        }
+        return this.pollOncePromise;
+    }
+    processUpdatedState() {
+        if (this.operation.state.error) {
+            this.stopped = true;
+            if (!this.resolveOnUnsuccessful) {
+                this.reject(this.operation.state.error);
+                throw this.operation.state.error;
+            }
+        }
+        if (this.operation.state.isCancelled) {
+            this.stopped = true;
+            if (!this.resolveOnUnsuccessful) {
+                const error = new PollerCancelledError("Operation was canceled");
+                this.reject(error);
+                throw error;
+            }
+        }
+        if (this.isDone() && this.resolve) {
+            // If the poller has finished polling, this means we now have a result.
+            // However, it can be the case that TResult is instantiated to void, so
+            // we are not expecting a result anyway. To assert that we might not
+            // have a result eventually after finishing polling, we cast the result
+            // to TResult.
+            this.resolve(this.getResult());
+        }
+    }
+    /**
+     * Returns a promise that will resolve once the underlying operation is completed.
+     */
+    async pollUntilDone(pollOptions = {}) {
+        if (this.stopped) {
+            this.startPolling(pollOptions).catch(this.reject);
+        }
+        // This is needed because the state could have been updated by
+        // `cancelOperation`, e.g. the operation is canceled or an error occurred.
+        this.processUpdatedState();
+        return this.promise;
+    }
+    /**
+     * Invokes the provided callback after each polling is completed,
+     * sending the current state of the poller's operation.
+     *
+     * It returns a method that can be used to stop receiving updates on the given callback function.
+     */
+    onProgress(callback) {
+        this.pollProgressCallbacks.push(callback);
+        return () => {
+            this.pollProgressCallbacks = this.pollProgressCallbacks.filter((c) => c !== callback);
+        };
+    }
+    /**
+     * Returns true if the poller has finished polling.
+     */
+    isDone() {
+        const state = this.operation.state;
+        return Boolean(state.isCompleted || state.isCancelled || state.error);
+    }
+    /**
+     * Stops the poller from continuing to poll.
+     */
+    stopPolling() {
+        if (!this.stopped) {
+            this.stopped = true;
+            if (this.reject) {
+                this.reject(new PollerStoppedError("This poller is already stopped"));
+            }
+        }
+    }
+    /**
+     * Returns true if the poller is stopped.
+     */
+    isStopped() {
+        return this.stopped;
+    }
+    /**
+     * Attempts to cancel the underlying operation.
+     *
+     * It only optionally receives an object with an abortSignal property, from \@azure/abort-controller's AbortSignalLike.
+     *
+     * If it's called again before it finishes, it will throw an error.
+     *
+     * @param options - Optional properties passed to the operation's update method.
+     */
+    cancelOperation(options = {}) {
+        if (!this.cancelPromise) {
+            this.cancelPromise = this.cancelOnce(options);
+        }
+        else if (options.abortSignal) {
+            throw new Error("A cancel request is currently pending");
+        }
+        return this.cancelPromise;
+    }
+    /**
+     * Returns the state of the operation.
+     *
+     * Even though TState will be the same type inside any of the methods of any extension of the Poller class,
+     * implementations of the pollers can customize what's shared with the public by writing their own
+     * version of the `getOperationState` method, and by defining two types, one representing the internal state of the poller
+     * and a public type representing a safe to share subset of the properties of the internal state.
+     * Their definition of getOperationState can then return their public type.
+     *
+     * Example:
+     *
+     * ```ts
+     * // Let's say we have our poller's operation state defined as:
+     * interface MyOperationState extends PollOperationState<ResultType> {
+     *   privateProperty?: string;
+     *   publicProperty?: string;
+     * }
+     *
+     * // To allow us to have a true separation of public and private state, we have to define another interface:
+     * interface PublicState extends PollOperationState<ResultType> {
+     *   publicProperty?: string;
+     * }
+     *
+     * // Then, we define our Poller as follows:
+     * export class MyPoller extends Poller<MyOperationState, ResultType> {
+     *   // ... More content is needed here ...
+     *
+     *   public getOperationState(): PublicState {
+     *     const state: PublicState = this.operation.state;
+     *     return {
+     *       // Properties from PollOperationState<TResult>
+     *       isStarted: state.isStarted,
+     *       isCompleted: state.isCompleted,
+     *       isCancelled: state.isCancelled,
+     *       error: state.error,
+     *       result: state.result,
+     *
+     *       // The only other property needed by PublicState.
+     *       publicProperty: state.publicProperty
+     *     }
+     *   }
+     * }
+     * ```
+     *
+     * You can see this in the tests of this repository, go to the file:
+     * `../test/utils/testPoller.ts`
+     * and look for the getOperationState implementation.
+     */
+    getOperationState() {
+        return this.operation.state;
+    }
+    /**
+     * Returns the result value of the operation,
+     * regardless of the state of the poller.
+     * It can return undefined or an incomplete form of the final TResult value
+     * depending on the implementation.
+     */
+    getResult() {
+        const state = this.operation.state;
+        return state.result;
+    }
+    /**
+     * Returns a serialized version of the poller's operation
+     * by invoking the operation's toString method.
+     */
+    toString() {
+        return this.operation.toString();
+    }
+}
+exports.Poller = Poller;
+//# sourceMappingURL=poller.js.map
+
+/***/ }),
+
+/***/ 8121:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.logger = void 0;
+const logger_1 = __nccwpck_require__(9497);
+/**
+ * The `@azure/logger` configuration for this package.
+ * @internal
+ */
+exports.logger = (0, logger_1.createClientLogger)("core-lro");
+//# sourceMappingURL=logger.js.map
+
+/***/ }),
+
+/***/ 3846:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.terminalStates = exports.POLL_INTERVAL_IN_MS = void 0;
+/**
+ * The default time interval to wait before sending the next polling request.
+ */
+exports.POLL_INTERVAL_IN_MS = 2000;
+/**
+ * The closed set of terminal states.
+ */
+exports.terminalStates = ["succeeded", "canceled", "failed"];
+//# sourceMappingURL=constants.js.map
+
+/***/ }),
+
+/***/ 281:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pollOperation = exports.initOperation = exports.deserializeState = void 0;
+const logger_js_1 = __nccwpck_require__(8121);
+const constants_js_1 = __nccwpck_require__(3846);
+/**
+ * Deserializes the state
+ */
+function deserializeState(serializedState) {
+    try {
+        return JSON.parse(serializedState).state;
+    }
+    catch (e) {
+        throw new Error(`Unable to deserialize input state: ${serializedState}`);
+    }
+}
+exports.deserializeState = deserializeState;
+function setStateError(inputs) {
+    const { state, stateProxy, isOperationError } = inputs;
+    return (error) => {
+        if (isOperationError(error)) {
+            stateProxy.setError(state, error);
+            stateProxy.setFailed(state);
+        }
+        throw error;
+    };
+}
+function appendReadableErrorMessage(currentMessage, innerMessage) {
+    let message = currentMessage;
+    if (message.slice(-1) !== ".") {
+        message = message + ".";
+    }
+    return message + " " + innerMessage;
+}
+function simplifyError(err) {
+    let message = err.message;
+    let code = err.code;
+    let curErr = err;
+    while (curErr.innererror) {
+        curErr = curErr.innererror;
+        code = curErr.code;
+        message = appendReadableErrorMessage(message, curErr.message);
+    }
+    return {
+        code,
+        message,
+    };
+}
+function processOperationStatus(result) {
+    const { state, stateProxy, status, isDone, processResult, getError, response, setErrorAsResult } = result;
+    switch (status) {
+        case "succeeded": {
+            stateProxy.setSucceeded(state);
+            break;
+        }
+        case "failed": {
+            const err = getError?.(response);
+            let postfix = "";
+            if (err) {
+                const { code, message } = simplifyError(err);
+                postfix = `. ${code}. ${message}`;
+            }
+            const errStr = `The long-running operation has failed${postfix}`;
+            stateProxy.setError(state, new Error(errStr));
+            stateProxy.setFailed(state);
+            logger_js_1.logger.warning(errStr);
+            break;
+        }
+        case "canceled": {
+            stateProxy.setCanceled(state);
+            break;
+        }
+    }
+    if (isDone?.(response, state) ||
+        (isDone === undefined &&
+            ["succeeded", "canceled"].concat(setErrorAsResult ? [] : ["failed"]).includes(status))) {
+        stateProxy.setResult(state, buildResult({
+            response,
+            state,
+            processResult,
+        }));
+    }
+}
+function buildResult(inputs) {
+    const { processResult, response, state } = inputs;
+    return processResult ? processResult(response, state) : response;
+}
+/**
+ * Initiates the long-running operation.
+ */
+async function initOperation(inputs) {
+    const { init, stateProxy, processResult, getOperationStatus, withOperationLocation, setErrorAsResult, } = inputs;
+    const { operationLocation, resourceLocation, metadata, response } = await init();
+    if (operationLocation)
+        withOperationLocation?.(operationLocation, false);
+    const config = {
+        metadata,
+        operationLocation,
+        resourceLocation,
+    };
+    logger_js_1.logger.verbose(`LRO: Operation description:`, config);
+    const state = stateProxy.initState(config);
+    const status = getOperationStatus({ response, state, operationLocation });
+    processOperationStatus({ state, status, stateProxy, response, setErrorAsResult, processResult });
+    return state;
+}
+exports.initOperation = initOperation;
+async function pollOperationHelper(inputs) {
+    const { poll, state, stateProxy, operationLocation, getOperationStatus, getResourceLocation, isOperationError, options, } = inputs;
+    const response = await poll(operationLocation, options).catch(setStateError({
+        state,
+        stateProxy,
+        isOperationError,
+    }));
+    const status = getOperationStatus(response, state);
+    logger_js_1.logger.verbose(`LRO: Status:\n\tPolling from: ${state.config.operationLocation}\n\tOperation status: ${status}\n\tPolling status: ${constants_js_1.terminalStates.includes(status) ? "Stopped" : "Running"}`);
+    if (status === "succeeded") {
+        const resourceLocation = getResourceLocation(response, state);
+        if (resourceLocation !== undefined) {
+            return {
+                response: await poll(resourceLocation).catch(setStateError({ state, stateProxy, isOperationError })),
+                status,
+            };
+        }
+    }
+    return { response, status };
+}
+/** Polls the long-running operation. */
+async function pollOperation(inputs) {
+    const { poll, state, stateProxy, options, getOperationStatus, getResourceLocation, getOperationLocation, isOperationError, withOperationLocation, getPollingInterval, processResult, getError, updateState, setDelay, isDone, setErrorAsResult, } = inputs;
+    const { operationLocation } = state.config;
+    if (operationLocation !== undefined) {
+        const { response, status } = await pollOperationHelper({
+            poll,
+            getOperationStatus,
+            state,
+            stateProxy,
+            operationLocation,
+            getResourceLocation,
+            isOperationError,
+            options,
+        });
+        processOperationStatus({
+            status,
+            response,
+            state,
+            stateProxy,
+            isDone,
+            processResult,
+            getError,
+            setErrorAsResult,
+        });
+        if (!constants_js_1.terminalStates.includes(status)) {
+            const intervalInMs = getPollingInterval?.(response);
+            if (intervalInMs)
+                setDelay(intervalInMs);
+            const location = getOperationLocation?.(response, state);
+            if (location !== undefined) {
+                const isUpdated = operationLocation !== location;
+                state.config.operationLocation = location;
+                withOperationLocation?.(location, isUpdated);
+            }
+            else
+                withOperationLocation?.(operationLocation, false);
+        }
+        updateState?.(state, response);
+    }
+}
+exports.pollOperation = pollOperation;
+//# sourceMappingURL=operation.js.map
+
+/***/ }),
+
+/***/ 6713:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.buildCreatePoller = void 0;
+const operation_js_1 = __nccwpck_require__(281);
+const constants_js_1 = __nccwpck_require__(3846);
+const core_util_1 = __nccwpck_require__(637);
+const createStateProxy = () => ({
+    /**
+     * The state at this point is created to be of type OperationState<TResult>.
+     * It will be updated later to be of type TState when the
+     * customer-provided callback, `updateState`, is called during polling.
+     */
+    initState: (config) => ({ status: "running", config }),
+    setCanceled: (state) => (state.status = "canceled"),
+    setError: (state, error) => (state.error = error),
+    setResult: (state, result) => (state.result = result),
+    setRunning: (state) => (state.status = "running"),
+    setSucceeded: (state) => (state.status = "succeeded"),
+    setFailed: (state) => (state.status = "failed"),
+    getError: (state) => state.error,
+    getResult: (state) => state.result,
+    isCanceled: (state) => state.status === "canceled",
+    isFailed: (state) => state.status === "failed",
+    isRunning: (state) => state.status === "running",
+    isSucceeded: (state) => state.status === "succeeded",
+});
+/**
+ * Returns a poller factory.
+ */
+function buildCreatePoller(inputs) {
+    const { getOperationLocation, getStatusFromInitialResponse, getStatusFromPollResponse, isOperationError, getResourceLocation, getPollingInterval, getError, resolveOnUnsuccessful, } = inputs;
+    return async ({ init, poll }, options) => {
+        const { processResult, updateState, withOperationLocation: withOperationLocationCallback, intervalInMs = constants_js_1.POLL_INTERVAL_IN_MS, restoreFrom, } = options || {};
+        const stateProxy = createStateProxy();
+        const withOperationLocation = withOperationLocationCallback
+            ? (() => {
+                let called = false;
+                return (operationLocation, isUpdated) => {
+                    if (isUpdated)
+                        withOperationLocationCallback(operationLocation);
+                    else if (!called)
+                        withOperationLocationCallback(operationLocation);
+                    called = true;
+                };
+            })()
+            : undefined;
+        const state = restoreFrom
+            ? (0, operation_js_1.deserializeState)(restoreFrom)
+            : await (0, operation_js_1.initOperation)({
+                init,
+                stateProxy,
+                processResult,
+                getOperationStatus: getStatusFromInitialResponse,
+                withOperationLocation,
+                setErrorAsResult: !resolveOnUnsuccessful,
+            });
+        let resultPromise;
+        const abortController = new AbortController();
+        const handlers = new Map();
+        const handleProgressEvents = async () => handlers.forEach((h) => h(state));
+        const cancelErrMsg = "Operation was canceled";
+        let currentPollIntervalInMs = intervalInMs;
+        const poller = {
+            getOperationState: () => state,
+            getResult: () => state.result,
+            isDone: () => ["succeeded", "failed", "canceled"].includes(state.status),
+            isStopped: () => resultPromise === undefined,
+            stopPolling: () => {
+                abortController.abort();
+            },
+            toString: () => JSON.stringify({
+                state,
+            }),
+            onProgress: (callback) => {
+                const s = Symbol();
+                handlers.set(s, callback);
+                return () => handlers.delete(s);
+            },
+            pollUntilDone: (pollOptions) => (resultPromise ??= (async () => {
+                const { abortSignal: inputAbortSignal } = pollOptions || {};
+                // In the future we can use AbortSignal.any() instead
+                function abortListener() {
+                    abortController.abort();
+                }
+                const abortSignal = abortController.signal;
+                if (inputAbortSignal?.aborted) {
+                    abortController.abort();
+                }
+                else if (!abortSignal.aborted) {
+                    inputAbortSignal?.addEventListener("abort", abortListener, { once: true });
+                }
+                try {
+                    if (!poller.isDone()) {
+                        await poller.poll({ abortSignal });
+                        while (!poller.isDone()) {
+                            await (0, core_util_1.delay)(currentPollIntervalInMs, { abortSignal });
+                            await poller.poll({ abortSignal });
+                        }
+                    }
+                }
+                finally {
+                    inputAbortSignal?.removeEventListener("abort", abortListener);
+                }
+                if (resolveOnUnsuccessful) {
+                    return poller.getResult();
+                }
+                else {
+                    switch (state.status) {
+                        case "succeeded":
+                            return poller.getResult();
+                        case "canceled":
+                            throw new Error(cancelErrMsg);
+                        case "failed":
+                            throw state.error;
+                        case "notStarted":
+                        case "running":
+                            throw new Error(`Polling completed without succeeding or failing`);
+                    }
+                }
+            })().finally(() => {
+                resultPromise = undefined;
+            })),
+            async poll(pollOptions) {
+                if (resolveOnUnsuccessful) {
+                    if (poller.isDone())
+                        return;
+                }
+                else {
+                    switch (state.status) {
+                        case "succeeded":
+                            return;
+                        case "canceled":
+                            throw new Error(cancelErrMsg);
+                        case "failed":
+                            throw state.error;
+                    }
+                }
+                await (0, operation_js_1.pollOperation)({
+                    poll,
+                    state,
+                    stateProxy,
+                    getOperationLocation,
+                    isOperationError,
+                    withOperationLocation,
+                    getPollingInterval,
+                    getOperationStatus: getStatusFromPollResponse,
+                    getResourceLocation,
+                    processResult,
+                    getError,
+                    updateState,
+                    options: pollOptions,
+                    setDelay: (pollIntervalInMs) => {
+                        currentPollIntervalInMs = pollIntervalInMs;
+                    },
+                    setErrorAsResult: !resolveOnUnsuccessful,
+                });
+                await handleProgressEvents();
+                if (!resolveOnUnsuccessful) {
+                    switch (state.status) {
+                        case "canceled":
+                            throw new Error(cancelErrMsg);
+                        case "failed":
+                            throw state.error;
+                    }
+                }
+            },
+        };
+        return poller;
+    };
+}
+exports.buildCreatePoller = buildCreatePoller;
+//# sourceMappingURL=poller.js.map
+
+/***/ }),
+
+/***/ 5002:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getPagedAsyncIterator = void 0;
+/**
+ * returns an async iterator that iterates over results. It also has a `byPage`
+ * method that returns pages of items at once.
+ *
+ * @param pagedResult - an object that specifies how to get pages.
+ * @returns a paged async iterator that iterates over results.
+ */
+function getPagedAsyncIterator(pagedResult) {
+    const iter = getItemAsyncIterator(pagedResult);
+    return {
+        next() {
+            return iter.next();
+        },
+        [Symbol.asyncIterator]() {
+            return this;
+        },
+        byPage: pagedResult?.byPage ??
+            ((settings) => {
+                const { continuationToken, maxPageSize } = settings ?? {};
+                return getPageAsyncIterator(pagedResult, {
+                    pageLink: continuationToken,
+                    maxPageSize,
+                });
+            }),
+    };
+}
+exports.getPagedAsyncIterator = getPagedAsyncIterator;
+async function* getItemAsyncIterator(pagedResult) {
+    const pages = getPageAsyncIterator(pagedResult);
+    const firstVal = await pages.next();
+    // if the result does not have an array shape, i.e. TPage = TElement, then we return it as is
+    if (!Array.isArray(firstVal.value)) {
+        // can extract elements from this page
+        const { toElements } = pagedResult;
+        if (toElements) {
+            yield* toElements(firstVal.value);
+            for await (const page of pages) {
+                yield* toElements(page);
+            }
+        }
+        else {
+            yield firstVal.value;
+            // `pages` is of type `AsyncIterableIterator<TPage>` but TPage = TElement in this case
+            yield* pages;
+        }
+    }
+    else {
+        yield* firstVal.value;
+        for await (const page of pages) {
+            // pages is of type `AsyncIterableIterator<TPage>` so `page` is of type `TPage`. In this branch,
+            // it must be the case that `TPage = TElement[]`
+            yield* page;
+        }
+    }
+}
+async function* getPageAsyncIterator(pagedResult, options = {}) {
+    const { pageLink, maxPageSize } = options;
+    let response = await pagedResult.getPage(pageLink ?? pagedResult.firstPageLink, maxPageSize);
+    if (!response) {
+        return;
+    }
+    yield response.page;
+    while (response.nextPageLink) {
+        response = await pagedResult.getPage(response.nextPageLink, maxPageSize);
+        if (!response) {
+            return;
+        }
+        yield response.page;
+    }
+}
+//# sourceMappingURL=getPagedAsyncIterator.js.map
+
+/***/ }),
+
+/***/ 7947:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const tslib_1 = __nccwpck_require__(4351);
+tslib_1.__exportStar(__nccwpck_require__(2519), exports);
+tslib_1.__exportStar(__nccwpck_require__(5002), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 2519:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+//# sourceMappingURL=models.js.map
+
+/***/ }),
+
+/***/ 7205:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.cancelablePromiseRace = void 0;
+/**
+ * promise.race() wrapper that aborts rest of promises as soon as the first promise settles.
+ */
+async function cancelablePromiseRace(abortablePromiseBuilders, options) {
+    const aborter = new AbortController();
+    function abortHandler() {
+        aborter.abort();
+    }
+    options?.abortSignal?.addEventListener("abort", abortHandler);
+    try {
+        return await Promise.race(abortablePromiseBuilders.map((p) => p({ abortSignal: aborter.signal })));
+    }
+    finally {
+        aborter.abort();
+        options?.abortSignal?.removeEventListener("abort", abortHandler);
+    }
+}
+exports.cancelablePromiseRace = cancelablePromiseRace;
+//# sourceMappingURL=aborterUtils.js.map
+
+/***/ }),
+
+/***/ 9972:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.stringToUint8Array = exports.uint8ArrayToString = void 0;
+/**
+ * The helper that transforms bytes with specific character encoding into string
+ * @param bytes - the uint8array bytes
+ * @param format - the format we use to encode the byte
+ * @returns a string of the encoded string
+ */
+function uint8ArrayToString(bytes, format) {
+    return Buffer.from(bytes).toString(format);
+}
+exports.uint8ArrayToString = uint8ArrayToString;
+/**
+ * The helper that transforms string to specific character encoded bytes array.
+ * @param value - the string to be converted
+ * @param format - the format we use to decode the value
+ * @returns a uint8array
+ */
+function stringToUint8Array(value, format) {
+    return Buffer.from(value, format);
+}
+exports.stringToUint8Array = stringToUint8Array;
+//# sourceMappingURL=bytesEncoding.js.map
+
+/***/ }),
+
+/***/ 7980:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isReactNative = exports.isNode = exports.isBun = exports.isDeno = exports.isWebWorker = exports.isBrowser = void 0;
+/**
+ * A constant that indicates whether the environment the code is running is a Web Browser.
+ */
+// eslint-disable-next-line @azure/azure-sdk/ts-no-window
+exports.isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
+/**
+ * A constant that indicates whether the environment the code is running is a Web Worker.
+ */
+exports.isWebWorker = typeof self === "object" &&
+    typeof self?.importScripts === "function" &&
+    (self.constructor?.name === "DedicatedWorkerGlobalScope" ||
+        self.constructor?.name === "ServiceWorkerGlobalScope" ||
+        self.constructor?.name === "SharedWorkerGlobalScope");
+/**
+ * A constant that indicates whether the environment the code is running is Deno.
+ */
+exports.isDeno = typeof Deno !== "undefined" &&
+    typeof Deno.version !== "undefined" &&
+    typeof Deno.version.deno !== "undefined";
+/**
+ * A constant that indicates whether the environment the code is running is Bun.sh.
+ */
+exports.isBun = typeof Bun !== "undefined" && typeof Bun.version !== "undefined";
+/**
+ * A constant that indicates whether the environment the code is running is Node.JS.
+ */
+exports.isNode = typeof globalThis.process !== "undefined" &&
+    Boolean(globalThis.process.version) &&
+    Boolean(globalThis.process.versions?.node) &&
+    // Deno thought it was a good idea to spoof process.versions.node, see https://deno.land/std@0.177.0/node/process.ts?s=versions
+    !exports.isDeno &&
+    !exports.isBun;
+/**
+ * A constant that indicates whether the environment the code is running is in React-Native.
+ */
+// https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/Core/setUpNavigator.js
+exports.isReactNative = typeof navigator !== "undefined" && navigator?.product === "ReactNative";
+//# sourceMappingURL=checkEnvironment.js.map
+
+/***/ }),
+
+/***/ 2307:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createAbortablePromise = void 0;
+const abort_controller_1 = __nccwpck_require__(4812);
+/**
+ * Creates an abortable promise.
+ * @param buildPromise - A function that takes the resolve and reject functions as parameters.
+ * @param options - The options for the abortable promise.
+ * @returns A promise that can be aborted.
+ */
+function createAbortablePromise(buildPromise, options) {
+    const { cleanupBeforeAbort, abortSignal, abortErrorMsg } = options ?? {};
+    return new Promise((resolve, reject) => {
+        function rejectOnAbort() {
+            reject(new abort_controller_1.AbortError(abortErrorMsg ?? "The operation was aborted."));
+        }
+        function removeListeners() {
+            abortSignal?.removeEventListener("abort", onAbort);
+        }
+        function onAbort() {
+            cleanupBeforeAbort?.();
+            removeListeners();
+            rejectOnAbort();
+        }
+        if (abortSignal?.aborted) {
+            return rejectOnAbort();
+        }
+        try {
+            buildPromise((x) => {
+                removeListeners();
+                resolve(x);
+            }, (x) => {
+                removeListeners();
+                reject(x);
+            });
+        }
+        catch (err) {
+            reject(err);
+        }
+        abortSignal?.addEventListener("abort", onAbort);
+    });
+}
+exports.createAbortablePromise = createAbortablePromise;
+//# sourceMappingURL=createAbortablePromise.js.map
+
+/***/ }),
+
+/***/ 9259:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.delay = void 0;
+const createAbortablePromise_js_1 = __nccwpck_require__(2307);
+const StandardAbortMessage = "The delay was aborted.";
+/**
+ * A wrapper for setTimeout that resolves a promise after timeInMs milliseconds.
+ * @param timeInMs - The number of milliseconds to be delayed.
+ * @param options - The options for delay - currently abort options
+ * @returns Promise that is resolved after timeInMs
+ */
+function delay(timeInMs, options) {
+    let token;
+    const { abortSignal, abortErrorMsg } = options ?? {};
+    return (0, createAbortablePromise_js_1.createAbortablePromise)((resolve) => {
+        token = setTimeout(resolve, timeInMs);
+    }, {
+        cleanupBeforeAbort: () => clearTimeout(token),
+        abortSignal,
+        abortErrorMsg: abortErrorMsg ?? StandardAbortMessage,
+    });
+}
+exports.delay = delay;
+//# sourceMappingURL=delay.js.map
+
+/***/ }),
+
+/***/ 6734:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getErrorMessage = exports.isError = void 0;
+const object_js_1 = __nccwpck_require__(6538);
+/**
+ * Typeguard for an error object shape (has name and message)
+ * @param e - Something caught by a catch clause.
+ */
+function isError(e) {
+    if ((0, object_js_1.isObject)(e)) {
+        const hasName = typeof e.name === "string";
+        const hasMessage = typeof e.message === "string";
+        return hasName && hasMessage;
+    }
+    return false;
+}
+exports.isError = isError;
+/**
+ * Given what is thought to be an error object, return the message if possible.
+ * If the message is missing, returns a stringified version of the input.
+ * @param e - Something thrown from a try block
+ * @returns The error message or a string of the input
+ */
+function getErrorMessage(e) {
+    if (isError(e)) {
+        return e.message;
+    }
+    else {
+        let stringified;
+        try {
+            if (typeof e === "object" && e) {
+                stringified = JSON.stringify(e);
+            }
+            else {
+                stringified = String(e);
+            }
+        }
+        catch (err) {
+            stringified = "[unable to stringify input]";
+        }
+        return `Unknown error ${stringified}`;
+    }
+}
+exports.getErrorMessage = getErrorMessage;
+//# sourceMappingURL=error.js.map
+
+/***/ }),
+
+/***/ 637:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.stringToUint8Array = exports.uint8ArrayToString = exports.isWebWorker = exports.isReactNative = exports.isDeno = exports.isNode = exports.isBun = exports.isBrowser = exports.randomUUID = exports.objectHasProperty = exports.isObjectWithProperties = exports.isDefined = exports.computeSha256Hmac = exports.computeSha256Hash = exports.getErrorMessage = exports.isError = exports.isObject = exports.getRandomIntegerInclusive = exports.createAbortablePromise = exports.cancelablePromiseRace = exports.delay = void 0;
+var delay_js_1 = __nccwpck_require__(9259);
+Object.defineProperty(exports, "delay", ({ enumerable: true, get: function () { return delay_js_1.delay; } }));
+var aborterUtils_js_1 = __nccwpck_require__(7205);
+Object.defineProperty(exports, "cancelablePromiseRace", ({ enumerable: true, get: function () { return aborterUtils_js_1.cancelablePromiseRace; } }));
+var createAbortablePromise_js_1 = __nccwpck_require__(2307);
+Object.defineProperty(exports, "createAbortablePromise", ({ enumerable: true, get: function () { return createAbortablePromise_js_1.createAbortablePromise; } }));
+var random_js_1 = __nccwpck_require__(3710);
+Object.defineProperty(exports, "getRandomIntegerInclusive", ({ enumerable: true, get: function () { return random_js_1.getRandomIntegerInclusive; } }));
+var object_js_1 = __nccwpck_require__(6538);
+Object.defineProperty(exports, "isObject", ({ enumerable: true, get: function () { return object_js_1.isObject; } }));
+var error_js_1 = __nccwpck_require__(6734);
+Object.defineProperty(exports, "isError", ({ enumerable: true, get: function () { return error_js_1.isError; } }));
+Object.defineProperty(exports, "getErrorMessage", ({ enumerable: true, get: function () { return error_js_1.getErrorMessage; } }));
+var sha256_js_1 = __nccwpck_require__(4793);
+Object.defineProperty(exports, "computeSha256Hash", ({ enumerable: true, get: function () { return sha256_js_1.computeSha256Hash; } }));
+Object.defineProperty(exports, "computeSha256Hmac", ({ enumerable: true, get: function () { return sha256_js_1.computeSha256Hmac; } }));
+var typeGuards_js_1 = __nccwpck_require__(1187);
+Object.defineProperty(exports, "isDefined", ({ enumerable: true, get: function () { return typeGuards_js_1.isDefined; } }));
+Object.defineProperty(exports, "isObjectWithProperties", ({ enumerable: true, get: function () { return typeGuards_js_1.isObjectWithProperties; } }));
+Object.defineProperty(exports, "objectHasProperty", ({ enumerable: true, get: function () { return typeGuards_js_1.objectHasProperty; } }));
+var uuidUtils_js_1 = __nccwpck_require__(7658);
+Object.defineProperty(exports, "randomUUID", ({ enumerable: true, get: function () { return uuidUtils_js_1.randomUUID; } }));
+var checkEnvironment_js_1 = __nccwpck_require__(7980);
+Object.defineProperty(exports, "isBrowser", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isBrowser; } }));
+Object.defineProperty(exports, "isBun", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isBun; } }));
+Object.defineProperty(exports, "isNode", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isNode; } }));
+Object.defineProperty(exports, "isDeno", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isDeno; } }));
+Object.defineProperty(exports, "isReactNative", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isReactNative; } }));
+Object.defineProperty(exports, "isWebWorker", ({ enumerable: true, get: function () { return checkEnvironment_js_1.isWebWorker; } }));
+var bytesEncoding_js_1 = __nccwpck_require__(9972);
+Object.defineProperty(exports, "uint8ArrayToString", ({ enumerable: true, get: function () { return bytesEncoding_js_1.uint8ArrayToString; } }));
+Object.defineProperty(exports, "stringToUint8Array", ({ enumerable: true, get: function () { return bytesEncoding_js_1.stringToUint8Array; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 6538:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isObject = void 0;
+/**
+ * Helper to determine when an input is a generic JS object.
+ * @returns true when input is an object type that is not null, Array, RegExp, or Date.
+ */
+function isObject(input) {
+    return (typeof input === "object" &&
+        input !== null &&
+        !Array.isArray(input) &&
+        !(input instanceof RegExp) &&
+        !(input instanceof Date));
+}
+exports.isObject = isObject;
+//# sourceMappingURL=object.js.map
+
+/***/ }),
+
+/***/ 3710:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getRandomIntegerInclusive = void 0;
+/**
+ * Returns a random integer value between a lower and upper bound,
+ * inclusive of both bounds.
+ * Note that this uses Math.random and isn't secure. If you need to use
+ * this for any kind of security purpose, find a better source of random.
+ * @param min - The smallest integer value allowed.
+ * @param max - The largest integer value allowed.
+ */
+function getRandomIntegerInclusive(min, max) {
+    // Make sure inputs are integers.
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    // Pick a random offset from zero to the size of the range.
+    // Since Math.random() can never return 1, we have to make the range one larger
+    // in order to be inclusive of the maximum value after we take the floor.
+    const offset = Math.floor(Math.random() * (max - min + 1));
+    return offset + min;
+}
+exports.getRandomIntegerInclusive = getRandomIntegerInclusive;
+//# sourceMappingURL=random.js.map
+
+/***/ }),
+
+/***/ 4793:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.computeSha256Hash = exports.computeSha256Hmac = void 0;
+const crypto_1 = __nccwpck_require__(6113);
+/**
+ * Generates a SHA-256 HMAC signature.
+ * @param key - The HMAC key represented as a base64 string, used to generate the cryptographic HMAC hash.
+ * @param stringToSign - The data to be signed.
+ * @param encoding - The textual encoding to use for the returned HMAC digest.
+ */
+async function computeSha256Hmac(key, stringToSign, encoding) {
+    const decodedKey = Buffer.from(key, "base64");
+    return (0, crypto_1.createHmac)("sha256", decodedKey).update(stringToSign).digest(encoding);
+}
+exports.computeSha256Hmac = computeSha256Hmac;
+/**
+ * Generates a SHA-256 hash.
+ * @param content - The data to be included in the hash.
+ * @param encoding - The textual encoding to use for the returned hash.
+ */
+async function computeSha256Hash(content, encoding) {
+    return (0, crypto_1.createHash)("sha256").update(content).digest(encoding);
+}
+exports.computeSha256Hash = computeSha256Hash;
+//# sourceMappingURL=sha256.js.map
+
+/***/ }),
+
+/***/ 1187:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.objectHasProperty = exports.isObjectWithProperties = exports.isDefined = void 0;
+/**
+ * Helper TypeGuard that checks if something is defined or not.
+ * @param thing - Anything
+ */
+function isDefined(thing) {
+    return typeof thing !== "undefined" && thing !== null;
+}
+exports.isDefined = isDefined;
+/**
+ * Helper TypeGuard that checks if the input is an object with the specified properties.
+ * @param thing - Anything.
+ * @param properties - The name of the properties that should appear in the object.
+ */
+function isObjectWithProperties(thing, properties) {
+    if (!isDefined(thing) || typeof thing !== "object") {
+        return false;
+    }
+    for (const property of properties) {
+        if (!objectHasProperty(thing, property)) {
+            return false;
+        }
+    }
+    return true;
+}
+exports.isObjectWithProperties = isObjectWithProperties;
+/**
+ * Helper TypeGuard that checks if the input is an object with the specified property.
+ * @param thing - Any object.
+ * @param property - The name of the property that should appear in the object.
+ */
+function objectHasProperty(thing, property) {
+    return (isDefined(thing) && typeof thing === "object" && property in thing);
+}
+exports.objectHasProperty = objectHasProperty;
+//# sourceMappingURL=typeGuards.js.map
+
+/***/ }),
+
+/***/ 7658:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.randomUUID = void 0;
+const crypto_1 = __nccwpck_require__(6113);
+// NOTE: This is a workaround until we can use `globalThis.crypto.randomUUID` in Node.js 19+.
+const uuidFunction = typeof globalThis?.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
+    : crypto_1.randomUUID;
+/**
+ * Generated Universally Unique Identifier
+ *
+ * @returns RFC4122 v4 UUID.
+ */
+function randomUUID() {
+    return uuidFunction();
+}
+exports.randomUUID = randomUUID;
+//# sourceMappingURL=uuidUtils.js.map
+
+/***/ }),
+
+/***/ 2118:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AbortError = void 0;
+/**
+ * This error is thrown when an asynchronous operation has been aborted.
+ * Check for this error by testing the `name` that the name property of the
+ * error matches `"AbortError"`.
+ *
+ * @example
+ * ```ts
+ * const controller = new AbortController();
+ * controller.abort();
+ * try {
+ *   doAsyncWork(controller.signal)
+ * } catch (e) {
+ *   if (e.name === 'AbortError') {
+ *     // handle abort error here.
+ *   }
+ * }
+ * ```
+ */
+class AbortError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "AbortError";
+    }
+}
+exports.AbortError = AbortError;
+//# sourceMappingURL=AbortError.js.map
+
+/***/ }),
+
+/***/ 4812:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AbortError = void 0;
+var AbortError_js_1 = __nccwpck_require__(2118);
+Object.defineProperty(exports, "AbortError", ({ enumerable: true, get: function () { return AbortError_js_1.AbortError; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 162:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const log_js_1 = __nccwpck_require__(8898);
+const debugEnvVariable = (typeof process !== "undefined" && process.env && process.env.DEBUG) || undefined;
+let enabledString;
+let enabledNamespaces = [];
+let skippedNamespaces = [];
+const debuggers = [];
+if (debugEnvVariable) {
+    enable(debugEnvVariable);
+}
+const debugObj = Object.assign((namespace) => {
+    return createDebugger(namespace);
+}, {
+    enable,
+    enabled,
+    disable,
+    log: log_js_1.log,
+});
+function enable(namespaces) {
+    enabledString = namespaces;
+    enabledNamespaces = [];
+    skippedNamespaces = [];
+    const wildcard = /\*/g;
+    const namespaceList = namespaces.split(",").map((ns) => ns.trim().replace(wildcard, ".*?"));
+    for (const ns of namespaceList) {
+        if (ns.startsWith("-")) {
+            skippedNamespaces.push(new RegExp(`^${ns.substr(1)}$`));
+        }
+        else {
+            enabledNamespaces.push(new RegExp(`^${ns}$`));
+        }
+    }
+    for (const instance of debuggers) {
+        instance.enabled = enabled(instance.namespace);
+    }
+}
+function enabled(namespace) {
+    if (namespace.endsWith("*")) {
+        return true;
+    }
+    for (const skipped of skippedNamespaces) {
+        if (skipped.test(namespace)) {
+            return false;
+        }
+    }
+    for (const enabledNamespace of enabledNamespaces) {
+        if (enabledNamespace.test(namespace)) {
+            return true;
+        }
+    }
+    return false;
+}
+function disable() {
+    const result = enabledString || "";
+    enable("");
+    return result;
+}
+function createDebugger(namespace) {
+    const newDebugger = Object.assign(debug, {
+        enabled: enabled(namespace),
+        destroy,
+        log: debugObj.log,
+        namespace,
+        extend,
+    });
+    function debug(...args) {
+        if (!newDebugger.enabled) {
+            return;
+        }
+        if (args.length > 0) {
+            args[0] = `${namespace} ${args[0]}`;
+        }
+        newDebugger.log(...args);
+    }
+    debuggers.push(newDebugger);
+    return newDebugger;
+}
+function destroy() {
+    const index = debuggers.indexOf(this);
+    if (index >= 0) {
+        debuggers.splice(index, 1);
+        return true;
+    }
+    return false;
+}
+function extend(namespace) {
+    const newDebugger = createDebugger(`${this.namespace}:${namespace}`);
+    newDebugger.log = this.log;
+    return newDebugger;
+}
+exports["default"] = debugObj;
+//# sourceMappingURL=debug.js.map
+
+/***/ }),
+
+/***/ 9497:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createClientLogger = exports.getLogLevel = exports.setLogLevel = exports.AzureLogger = void 0;
+const tslib_1 = __nccwpck_require__(4351);
+const debug_js_1 = tslib_1.__importDefault(__nccwpck_require__(162));
+const registeredLoggers = new Set();
+const logLevelFromEnv = (typeof process !== "undefined" && process.env && process.env.AZURE_LOG_LEVEL) || undefined;
+let azureLogLevel;
+/**
+ * The AzureLogger provides a mechanism for overriding where logs are output to.
+ * By default, logs are sent to stderr.
+ * Override the `log` method to redirect logs to another location.
+ */
+exports.AzureLogger = (0, debug_js_1.default)("azure");
+exports.AzureLogger.log = (...args) => {
+    debug_js_1.default.log(...args);
+};
+const AZURE_LOG_LEVELS = ["verbose", "info", "warning", "error"];
+if (logLevelFromEnv) {
+    // avoid calling setLogLevel because we don't want a mis-set environment variable to crash
+    if (isAzureLogLevel(logLevelFromEnv)) {
+        setLogLevel(logLevelFromEnv);
+    }
+    else {
+        console.error(`AZURE_LOG_LEVEL set to unknown log level '${logLevelFromEnv}'; logging is not enabled. Acceptable values: ${AZURE_LOG_LEVELS.join(", ")}.`);
+    }
+}
+/**
+ * Immediately enables logging at the specified log level. If no level is specified, logging is disabled.
+ * @param level - The log level to enable for logging.
+ * Options from most verbose to least verbose are:
+ * - verbose
+ * - info
+ * - warning
+ * - error
+ */
+function setLogLevel(level) {
+    if (level && !isAzureLogLevel(level)) {
+        throw new Error(`Unknown log level '${level}'. Acceptable values: ${AZURE_LOG_LEVELS.join(",")}`);
+    }
+    azureLogLevel = level;
+    const enabledNamespaces = [];
+    for (const logger of registeredLoggers) {
+        if (shouldEnable(logger)) {
+            enabledNamespaces.push(logger.namespace);
+        }
+    }
+    debug_js_1.default.enable(enabledNamespaces.join(","));
+}
+exports.setLogLevel = setLogLevel;
+/**
+ * Retrieves the currently specified log level.
+ */
+function getLogLevel() {
+    return azureLogLevel;
+}
+exports.getLogLevel = getLogLevel;
+const levelMap = {
+    verbose: 400,
+    info: 300,
+    warning: 200,
+    error: 100,
+};
+/**
+ * Creates a logger for use by the Azure SDKs that inherits from `AzureLogger`.
+ * @param namespace - The name of the SDK package.
+ * @hidden
+ */
+function createClientLogger(namespace) {
+    const clientRootLogger = exports.AzureLogger.extend(namespace);
+    patchLogMethod(exports.AzureLogger, clientRootLogger);
+    return {
+        error: createLogger(clientRootLogger, "error"),
+        warning: createLogger(clientRootLogger, "warning"),
+        info: createLogger(clientRootLogger, "info"),
+        verbose: createLogger(clientRootLogger, "verbose"),
+    };
+}
+exports.createClientLogger = createClientLogger;
+function patchLogMethod(parent, child) {
+    child.log = (...args) => {
+        parent.log(...args);
+    };
+}
+function createLogger(parent, level) {
+    const logger = Object.assign(parent.extend(level), {
+        level,
+    });
+    patchLogMethod(parent, logger);
+    if (shouldEnable(logger)) {
+        const enabledNamespaces = debug_js_1.default.disable();
+        debug_js_1.default.enable(enabledNamespaces + "," + logger.namespace);
+    }
+    registeredLoggers.add(logger);
+    return logger;
+}
+function shouldEnable(logger) {
+    return Boolean(azureLogLevel && levelMap[logger.level] <= levelMap[azureLogLevel]);
+}
+function isAzureLogLevel(logLevel) {
+    return AZURE_LOG_LEVELS.includes(logLevel);
+}
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 8898:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.log = void 0;
+const tslib_1 = __nccwpck_require__(4351);
+const node_os_1 = __nccwpck_require__(612);
+const node_util_1 = tslib_1.__importDefault(__nccwpck_require__(7261));
+const process = tslib_1.__importStar(__nccwpck_require__(7742));
+function log(message, ...args) {
+    process.stderr.write(`${node_util_1.default.format(message, ...args)}${node_os_1.EOL}`);
+}
+exports.log = log;
+//# sourceMappingURL=log.js.map
+
+/***/ }),
+
 /***/ 2960:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -85077,7 +85472,7 @@ Dicer.prototype._write = function (data, encoding, cb) {
   if (this._headerFirst && this._isPreamble) {
     if (!this._part) {
       this._part = new PartStream(this._partOpts)
-      if (this._events.preamble) { this.emit('preamble', this._part) } else { this._ignore() }
+      if (this.listenerCount('preamble') !== 0) { this.emit('preamble', this._part) } else { this._ignore() }
     }
     const r = this._hparser.push(data)
     if (!this._inHeader && r !== undefined && r < data.length) { data = data.slice(r) } else { return cb() }
@@ -85134,7 +85529,7 @@ Dicer.prototype._oninfo = function (isMatch, data, start, end) {
       }
     }
     if (this._dashes === 2) {
-      if ((start + i) < end && this._events.trailer) { this.emit('trailer', data.slice(start + i, end)) }
+      if ((start + i) < end && this.listenerCount('trailer') !== 0) { this.emit('trailer', data.slice(start + i, end)) }
       this.reset()
       this._finished = true
       // no more parts will be added
@@ -85152,7 +85547,13 @@ Dicer.prototype._oninfo = function (isMatch, data, start, end) {
     this._part._read = function (n) {
       self._unpause()
     }
-    if (this._isPreamble && this._events.preamble) { this.emit('preamble', this._part) } else if (this._isPreamble !== true && this._events.part) { this.emit('part', this._part) } else { this._ignore() }
+    if (this._isPreamble && this.listenerCount('preamble') !== 0) {
+      this.emit('preamble', this._part)
+    } else if (this._isPreamble !== true && this.listenerCount('part') !== 0) {
+      this.emit('part', this._part)
+    } else {
+      this._ignore()
+    }
     if (!this._isPreamble) { this._inHeader = true }
   }
   if (data && start < end && !this._ignoreData) {
@@ -85835,7 +86236,7 @@ function Multipart (boy, cfg) {
 
         ++nfiles
 
-        if (!boy._events.file) {
+        if (boy.listenerCount('file') === 0) {
           self.parser._ignore()
           return
         }
@@ -86364,7 +86765,7 @@ const decoders = {
     if (textDecoders.has(this.toString())) {
       try {
         return textDecoders.get(this).decode(data)
-      } catch (e) { }
+      } catch {}
     }
     return typeof data === 'string'
       ? data
