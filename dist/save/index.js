@@ -143,13 +143,20 @@ function restoreCache(paths, primaryKey, restoreKeys, options, enableCrossOsArch
             }
             else {
                 // Supress all non-validation cache related errors because caching should be optional
-                core.warning(`Failed to restore: ${error.message}`);
+                if (error.message.includes(`Cache service responded with 404`)) {
+                    core.info(`Did not get a cache hit; proceeding as an uncached run`);
+                }
+                else {
+                    core.warning(`Failed to restore: ${error.message}`);
+                }
             }
         }
         finally {
             // Try to delete the archive to save space
             try {
-                yield utils.unlinkFile(archivePath);
+                const before = Date.now();
+                yield unlinkWithTimeout(archivePath, 5000);
+                core.info(`cleaning up archive took ${Date.now() - before}ms`);
             }
             catch (error) {
                 core.debug(`Failed to delete archive: ${error}`);
@@ -159,6 +166,27 @@ function restoreCache(paths, primaryKey, restoreKeys, options, enableCrossOsArch
     });
 }
 exports.restoreCache = restoreCache;
+function unlinkWithTimeout(path, timeoutMs) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const timeout = new Promise((_, reject) => {
+            setTimeout(() => {
+                reject(new Error('Unlink operation timed out'));
+            }, timeoutMs);
+        });
+        try {
+            yield Promise.race([utils.unlinkFile(path), timeout]);
+        }
+        catch (error) {
+            if (error.message === 'Unlink operation timed out') {
+                core.warning(`Unlink operation exceeded the timeout of ${timeoutMs}ms`);
+            }
+            else {
+                core.debug(`Failed to delete archive: ${error}`);
+            }
+            throw error;
+        }
+    });
+}
 /**
  * Saves a list of files with the specified key
  *
@@ -318,7 +346,6 @@ function getRequestOptions() {
 }
 function createHttpClient() {
     const token = process.env['BLACKSMITH_CACHE_TOKEN'];
-    core.debug(`BLACKSMITH_CACHE_TOKEN: ${token}`);
     const bearerCredentialHandler = new auth_1.BearerCredentialHandler(token !== null && token !== void 0 ? token : '');
     return new http_client_1.HttpClient('useblacksmith/cache', [bearerCredentialHandler], getRequestOptions());
 }
@@ -992,6 +1019,7 @@ function downloadCacheHttpClient(archiveLocation, archivePath) {
             yield fdesc.sync();
             progressLogger = new DownloadProgress(fileSize);
             progressLogger.startDisplayTimer();
+            core.info(`Downloading ${archivePath}`);
             // Divvy up the download into chunks based on CONCURRENCY
             const chunkSize = Math.ceil(fileSize / CONCURRENCY);
             const chunkRanges = [];
@@ -1017,9 +1045,21 @@ function downloadCacheHttpClient(archiveLocation, archivePath) {
             }));
             yield Promise.all(downloads);
         }
+        catch (err) {
+            core.warning(`Failed to download cache: ${err}`);
+            throw err;
+        }
         finally {
-            yield fdesc.close();
+            // Stop the progress logger regardless of whether the download succeeded or failed.
+            // Not doing this will cause the entire action to halt if the download fails.
             progressLogger === null || progressLogger === void 0 ? void 0 : progressLogger.stopDisplayTimer();
+            try {
+                yield fdesc.close();
+            }
+            catch (err) {
+                // Intentionally swallow any errors in closing the file descriptor.
+                core.warning(`Failed to close file descriptor: ${err}`);
+            }
         }
     });
 }
