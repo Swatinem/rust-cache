@@ -88832,7 +88832,9 @@ async function run() {
         config.printInfo(cacheProvider);
         core.info("");
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
-        await macOsWorkaround();
+        if (process.env["RUNNER_OS"] == "macOS") {
+            await macOsWorkaround();
+        }
         const allPackages = [];
         for (const workspace of config.workspaces) {
             const packages = await workspace.getPackagesOutsideWorkspaceRoot();
