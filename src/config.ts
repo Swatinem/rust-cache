@@ -197,7 +197,7 @@ export class CacheConfig {
           const content = await fs_promises.readFile(cargo_lock, { encoding: "utf8" });
           const parsed = toml.parse(content);
 
-          if (parsed.version !== 3 || !("package" in parsed)) {
+          if ((parsed.version !== 3 && parsed.version !== 4) || !("package" in parsed)) {
             // Fallback to caching them as regular file since this action
             // can only handle Cargo.lock format version 3
             core.warning('Unsupported Cargo.lock format, fallback to caching entire file');
