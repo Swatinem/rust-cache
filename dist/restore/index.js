@@ -77876,20 +77876,21 @@ async function run() {
         if (cacheOnFailure !== "true") {
             cacheOnFailure = "false";
         }
+        var lookupOnly = lib_core.getInput("lookup-only").toLowerCase() === "true";
         lib_core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
         lib_core.exportVariable("CARGO_INCREMENTAL", 0);
         const config = await CacheConfig.new();
         config.printInfo(cacheProvider);
         lib_core.info("");
-        lib_core.info(`... Restoring cache ...`);
+        lib_core.info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
         const key = config.cacheKey;
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
         // https://github.com/actions/toolkit/pull/1378
         // TODO: remove this once the underlying bug is fixed.
-        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey]);
+        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], { lookupOnly });
         if (restoreKey) {
             const match = restoreKey === key;
-            lib_core.info(`Restored from cache key "${restoreKey}" full match: ${match}.`);
+            lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
             if (!match) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
