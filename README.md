@@ -60,7 +60,7 @@ sensible defaults.
     # default: "false"
     cache-all-crates: ""
 
-    # Determiners whether the cache should be saved.
+    # Determines whether the cache should be saved.
     # If `false`, the cache is only restored.
     # Useful for jobs where the matrix is additive e.g. additional Cargo features,
     # or when only runs from `master` should be saved to the cache.
@@ -68,6 +68,12 @@ sensible defaults.
     save-if: ""
     # To only cache runs from `master`:
     save-if: ${{ github.ref == 'refs/heads/master' }}
+
+    # Determines whether the cache should be restored.
+    # If `true` the cache key will be checked and the `cache-hit` output will be set
+    # but the cache itself won't be restored
+    # default: "false"
+    lookup-only: ""
 
     # Specifies what to use as the backend providing cache
     # Can be set to either "github" or "buildjet"
