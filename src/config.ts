@@ -71,6 +71,10 @@ export class CacheConfig {
       }
     }
 
+    // Add runner OS to the key to avoid cross-contamination of cache
+    const runnerOS = os.type();
+    key += `-${runnerOS}`;
+
     self.keyPrefix = key;
 
     // Construct environment portion of the key:
