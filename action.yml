@@ -41,8 +41,9 @@ inputs:
     required: false
     default: "github"
   cache-bin:
-    description: "A boolean value indicating whether to cache ${CARGO_HOME}/bin (default: true)"
+    description: "Determines whether to cache ${CARGO_HOME}/bin."
     required: false
+    default: "true"
   lookup-only:
     description: "Check if a cache entry exists without downloading the cache"
     required: false

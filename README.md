@@ -180,6 +180,6 @@ to see those details as well as further details related to caching operations.
 
 - The cache cleaning process currently removes all the files from `~/.cargo/bin`
   that were present before the action ran (for example `rustc`), by default.
-  This can be an issue on long-running self-hosted runners, where such state 
+  This can be an issue on long-running self-hosted runners, where such state
   is expected to be preserved across runs.  You can work around this by setting
   `cache-bin: "false"`.

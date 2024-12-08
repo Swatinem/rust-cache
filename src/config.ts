@@ -133,7 +133,7 @@ export class CacheConfig {
       workspaces.push(new Workspace(root, target));
     }
     self.workspaces = workspaces;
-    
+
     let keyFiles = await globFiles(".cargo/config.toml\nrust-toolchain\nrust-toolchain.toml");
     const parsedKeyFiles = []; // keyFiles that are parsed, pre-processed and hashed
 
