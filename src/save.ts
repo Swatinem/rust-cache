@@ -56,11 +56,13 @@ async function run() {
       core.debug(`${(e as any).stack}`);
     }
 
-    try {
-      core.info(`... Cleaning cargo/bin ...`);
-      await cleanBin(config.cargoBins);
-    } catch (e) {
-      core.debug(`${(e as any).stack}`);
+    if (config.cacheBin) {
+      try {
+        core.info(`... Cleaning cargo/bin ...`);
+        await cleanBin(config.cargoBins);
+      } catch (e) {
+        core.debug(`${(e as any).stack}`);
+      }
     }
 
     try {
