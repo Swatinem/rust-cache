@@ -40,6 +40,10 @@ inputs:
     description: "Determines which provider to use for caching. Options are github or buildjet, defaults to github."
     required: false
     default: "github"
+  cache-bin:
+    description: "Determines whether to cache ${CARGO_HOME}/bin."
+    required: false
+    default: "true"
   lookup-only:
     description: "Check if a cache entry exists without downloading the cache"
     required: false

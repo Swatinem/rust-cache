@@ -77276,6 +77276,8 @@ class CacheConfig {
         this.cacheKey = "";
         /** The secondary (restore) key that only contains the prefix and environment */
         this.restoreKey = "";
+        /** Whether to cache CARGO_HOME/.bin */
+        this.cacheBin = true;
         /** The workspace configurations */
         this.workspaces = [];
         /** The cargo binaries present during main step */
@@ -77351,6 +77353,7 @@ class CacheConfig {
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
         // and lockfiles.
+        self.cacheBin = lib_core.getInput("cache-bin").toLowerCase() == "true";
         // Constructs the workspace config and paths to restore:
         // The workspaces are given using a `$workspace -> $target` syntax.
         const workspaces = [];
@@ -77445,7 +77448,13 @@ class CacheConfig {
         self.keyFiles = sort_and_uniq(keyFiles);
         key += `-${lockHash}`;
         self.cacheKey = key;
-        self.cachePaths = [config_CARGO_HOME];
+        self.cachePaths = [
+            external_path_default().join(config_CARGO_HOME, "registry"),
+            external_path_default().join(config_CARGO_HOME, "git"),
+        ];
+        if (self.cacheBin) {
+            self.cachePaths = [external_path_default().join(config_CARGO_HOME, "bin"), ...self.cachePaths];
+        }
         const cacheTargets = lib_core.getInput("cache-targets").toLowerCase() || "true";
         if (cacheTargets === "true") {
             self.cachePaths.push(...workspaces.map((ws) => ws.target));
