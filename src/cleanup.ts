@@ -43,16 +43,16 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
       // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
       // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
       cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp);
-    } catch { }
+    } catch {}
     try {
       // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
       cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp);
-    } catch { }
+    } catch {}
 
     // Delete everything else.
     await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
 
-    return
+    return;
   }
 
   let keepProfile = new Set(["build", ".fingerprint", "deps"]);

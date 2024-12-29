@@ -86684,10 +86684,10 @@ class Workspace {
         return packages;
     }
     async getPackagesOutsideWorkspaceRoot() {
-        return await this.getPackages(pkg => !pkg.manifest_path.startsWith(this.root));
+        return await this.getPackages((pkg) => !pkg.manifest_path.startsWith(this.root));
     }
     async getWorkspaceMembers() {
-        return await this.getPackages(_ => true, "--no-deps");
+        return await this.getPackages((_) => true, "--no-deps");
     }
 }
 
@@ -86811,7 +86811,7 @@ class CacheConfig {
             const root = workspace.root;
             keyFiles.push(...(await globFiles(`${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
             const workspaceMembers = await workspace.getWorkspaceMembers();
-            const cargo_manifests = sort_and_uniq(workspaceMembers.map(member => external_path_default().join(member.path, "Cargo.toml")));
+            const cargo_manifests = sort_and_uniq(workspaceMembers.map((member) => external_path_default().join(member.path, "Cargo.toml")));
             for (const cargo_manifest of cargo_manifests) {
                 try {
                     const content = await promises_default().readFile(cargo_manifest, { encoding: "utf8" });
@@ -86847,7 +86847,8 @@ class CacheConfig {
                     hasher.update(JSON.stringify(parsed));
                     parsedKeyFiles.push(cargo_manifest);
                 }
-                catch (e) { // Fallback to caching them as regular file
+                catch (e) {
+                    // Fallback to caching them as regular file
                     core.warning(`Error parsing Cargo.toml manifest, fallback to caching entire file: ${e}`);
                     keyFiles.push(cargo_manifest);
                 }
@@ -86860,7 +86861,7 @@ class CacheConfig {
                     if ((parsed.version !== 3 && parsed.version !== 4) || !("package" in parsed)) {
                         // Fallback to caching them as regular file since this action
                         // can only handle Cargo.lock format version 3
-                        core.warning('Unsupported Cargo.lock format, fallback to caching entire file');
+                        core.warning("Unsupported Cargo.lock format, fallback to caching entire file");
                         keyFiles.push(cargo_lock);
                         continue;
                     }
@@ -86870,7 +86871,8 @@ class CacheConfig {
                     hasher.update(JSON.stringify(packages));
                     parsedKeyFiles.push(cargo_lock);
                 }
-                catch (e) { // Fallback to caching them as regular file
+                catch (e) {
+                    // Fallback to caching them as regular file
                     core.warning(`Error parsing Cargo.lock manifest, fallback to caching entire file: ${e}`);
                     keyFiles.push(cargo_lock);
                 }
@@ -86887,12 +86889,14 @@ class CacheConfig {
         self.keyFiles = sort_and_uniq(keyFiles);
         key += `-${lockHash}`;
         self.cacheKey = key;
-        self.cachePaths = [
-            external_path_default().join(CARGO_HOME, "registry"),
-            external_path_default().join(CARGO_HOME, "git"),
-        ];
+        self.cachePaths = [external_path_default().join(CARGO_HOME, "registry"), external_path_default().join(CARGO_HOME, "git")];
         if (self.cacheBin) {
-            self.cachePaths = [external_path_default().join(CARGO_HOME, "bin"), ...self.cachePaths];
+            self.cachePaths = [
+                external_path_default().join(CARGO_HOME, "bin"),
+                external_path_default().join(CARGO_HOME, ".crates.toml"),
+                external_path_default().join(CARGO_HOME, ".crates2.json"),
+                ...self.cachePaths,
+            ];
         }
         const cacheTargets = core.getInput("cache-targets").toLowerCase() || "true";
         if (cacheTargets === "true") {

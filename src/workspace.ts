@@ -8,7 +8,7 @@ const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
 export class Workspace {
   constructor(public root: string, public target: string) {}
 
-  async getPackages(filter: ((p: Meta['packages'][0]) => boolean), ...extraArgs: string[]): Promise<Packages> {
+  async getPackages(filter: (p: Meta["packages"][0]) => boolean, ...extraArgs: string[]): Promise<Packages> {
     let packages: Packages = [];
     try {
       core.debug(`collecting metadata for "${this.root}"`);
@@ -29,11 +29,11 @@ export class Workspace {
   }
 
   public async getPackagesOutsideWorkspaceRoot(): Promise<Packages> {
-    return await this.getPackages(pkg => !pkg.manifest_path.startsWith(this.root));
+    return await this.getPackages((pkg) => !pkg.manifest_path.startsWith(this.root));
   }
 
   public async getWorkspaceMembers(): Promise<Packages> {
-    return await this.getPackages(_ => true, "--no-deps");
+    return await this.getPackages((_) => true, "--no-deps");
   }
 }
 

@@ -153,7 +153,7 @@ export class CacheConfig {
 
       const workspaceMembers = await workspace.getWorkspaceMembers();
 
-      const cargo_manifests = sort_and_uniq(workspaceMembers.map(member => path.join(member.path, "Cargo.toml")));
+      const cargo_manifests = sort_and_uniq(workspaceMembers.map((member) => path.join(member.path, "Cargo.toml")));
 
       for (const cargo_manifest of cargo_manifests) {
         try {
@@ -194,7 +194,8 @@ export class CacheConfig {
           hasher.update(JSON.stringify(parsed));
 
           parsedKeyFiles.push(cargo_manifest);
-        } catch (e) { // Fallback to caching them as regular file
+        } catch (e) {
+          // Fallback to caching them as regular file
           core.warning(`Error parsing Cargo.toml manifest, fallback to caching entire file: ${e}`);
           keyFiles.push(cargo_manifest);
         }
@@ -209,7 +210,7 @@ export class CacheConfig {
           if ((parsed.version !== 3 && parsed.version !== 4) || !("package" in parsed)) {
             // Fallback to caching them as regular file since this action
             // can only handle Cargo.lock format version 3
-            core.warning('Unsupported Cargo.lock format, fallback to caching entire file');
+            core.warning("Unsupported Cargo.lock format, fallback to caching entire file");
             keyFiles.push(cargo_lock);
             continue;
           }
@@ -221,7 +222,8 @@ export class CacheConfig {
           hasher.update(JSON.stringify(packages));
 
           parsedKeyFiles.push(cargo_lock);
-        } catch (e) { // Fallback to caching them as regular file
+        } catch (e) {
+          // Fallback to caching them as regular file
           core.warning(`Error parsing Cargo.lock manifest, fallback to caching entire file: ${e}`);
           keyFiles.push(cargo_lock);
         }
@@ -243,12 +245,14 @@ export class CacheConfig {
     key += `-${lockHash}`;
     self.cacheKey = key;
 
-    self.cachePaths = [
-      path.join(CARGO_HOME, "registry"),
-      path.join(CARGO_HOME, "git"),
-    ];
+    self.cachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
     if (self.cacheBin) {
-      self.cachePaths = [path.join(CARGO_HOME, "bin"), ...self.cachePaths];
+      self.cachePaths = [
+        path.join(CARGO_HOME, "bin"),
+        path.join(CARGO_HOME, ".crates.toml"),
+        path.join(CARGO_HOME, ".crates2.json"),
+        ...self.cachePaths,
+      ];
     }
     const cacheTargets = core.getInput("cache-targets").toLowerCase() || "true";
     if (cacheTargets === "true") {
