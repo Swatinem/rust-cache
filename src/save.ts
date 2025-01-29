@@ -77,6 +77,11 @@ async function run() {
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
     await cacheProvider.cache.saveCache(config.cachePaths.slice(), config.cacheKey);
+
+    if (config.incremental) {
+      core.info(`... Saving incremental cache ...`);
+      await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
+    }
   } catch (e) {
     reportError(e);
   }
