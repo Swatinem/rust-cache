@@ -42,7 +42,7 @@ async function run() {
       allPackages.push(...packages);
       try {
         core.info(`... Cleaning ${workspace.target} ...`);
-        await cleanTargetDir(workspace.target, packages);
+        await cleanTargetDir(workspace.target, packages, false, config.incremental);
       } catch (e) {
         core.debug(`${(e as any).stack}`);
       }
@@ -90,5 +90,5 @@ async function macOsWorkaround() {
     // Workaround for https://github.com/actions/cache/issues/403
     // Also see https://github.com/rust-lang/cargo/issues/8603
     await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
-  } catch {}
+  } catch { }
 }

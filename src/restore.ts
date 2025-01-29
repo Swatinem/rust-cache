@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 import { cleanTargetDir } from "./cleanup";
 import { CacheConfig } from "./config";
 import { getCacheProvider, reportError } from "./utils";
+import { restoreIncremental } from "./incremental";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -27,11 +28,14 @@ async function run() {
     var lookupOnly = core.getInput("lookup-only").toLowerCase() === "true";
 
     core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
-    core.exportVariable("CARGO_INCREMENTAL", 0);
 
     const config = await CacheConfig.new();
     config.printInfo(cacheProvider);
     core.info("");
+
+    if (!config.incremental) {
+      core.exportVariable("CARGO_INCREMENTAL", 0);
+    }
 
     core.info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
     const key = config.cacheKey;
@@ -44,12 +48,19 @@ async function run() {
     if (restoreKey) {
       const match = restoreKey === key;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
+
+      if (config.incremental) {
+        for (const workspace of config.workspaces) {
+          await restoreIncremental(workspace.target);
+        }
+      }
+
       if (!match) {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
           try {
-            await cleanTargetDir(workspace.target, [], true);
-          } catch {}
+            await cleanTargetDir(workspace.target, [], true, false);
+          } catch { }
         }
 
         // We restored the cache but it is not a full match.

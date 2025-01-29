@@ -34,6 +34,9 @@ export class CacheConfig {
   /** The cargo binaries present during main step */
   public cargoBins: Array<string> = [];
 
+  /** Whether to cache incremental builds */
+  public incremental: boolean = false;
+
   /** The prefix portion of the cache key */
   private keyPrefix = "";
   /** The rust version considered for the cache key */
@@ -43,7 +46,7 @@ export class CacheConfig {
   /** The files considered for the cache key */
   private keyFiles: Array<string> = [];
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Constructs a [`CacheConfig`] with all the paths and keys.

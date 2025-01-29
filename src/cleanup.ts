@@ -7,7 +7,7 @@ import { CARGO_HOME } from "./config";
 import { exists } from "./utils";
 import { Packages } from "./workspace";
 
-export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
+export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp: boolean, incremental: boolean) {
   core.debug(`cleaning target directory "${targetDir}"`);
 
   // remove all *files* from the profile directory
@@ -21,18 +21,18 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
 
       try {
         if (isNestedTarget) {
-          await cleanTargetDir(dirName, packages, checkTimestamp);
+          await cleanTargetDir(dirName, packages, checkTimestamp, incremental);
         } else {
-          await cleanProfileTarget(dirName, packages, checkTimestamp);
+          await cleanProfileTarget(dirName, packages, checkTimestamp, incremental);
         }
-      } catch {}
+      } catch { }
     } else if (dirent.name !== "CACHEDIR.TAG") {
       await rm(dir.path, dirent);
     }
   }
 }
 
-async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp = false) {
+async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp: boolean, incremental: boolean) {
   core.debug(`cleaning profile directory "${profileDir}"`);
 
   // Quite a few testing utility crates store compilation artifacts as nested
@@ -42,15 +42,44 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
     try {
       // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
       // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-      cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp);
-    } catch {}
+      cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp, incremental);
+    } catch { }
+
     try {
       // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-      cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp);
-    } catch {}
+      cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp, incremental);
+    } catch { }
 
     // Delete everything else.
-    await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+    let except = new Set(["target", "trybuild"]);
+
+    // Keep the incremental folder if incremental builds are enabled
+    if (incremental) {
+      except.add("incremental");
+
+      // Traverse the incremental folder recursively and collect the modified times in a map
+      const incrementalDir = path.join(profileDir, "incremental");
+      const modifiedTimes = new Map<string, number>();
+      const fillModifiedTimes = async (dir: string) => {
+        const dirEntries = await fs.promises.opendir(dir);
+        for await (const dirent of dirEntries) {
+          if (dirent.isDirectory()) {
+            await fillModifiedTimes(path.join(dir, dirent.name));
+          } else {
+            const fileName = path.join(dir, dirent.name);
+            const { mtime } = await fs.promises.stat(fileName);
+            modifiedTimes.set(fileName, mtime.getTime());
+          }
+        }
+      };
+      await fillModifiedTimes(incrementalDir);
+
+      // Write the modified times to the incremental folder
+      const contents = JSON.stringify({ modifiedTimes });
+      await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
+    }
+
+    await rmExcept(profileDir, except, checkTimestamp);
 
     return;
   }
@@ -86,7 +115,7 @@ export async function getCargoBins(): Promise<Set<string>> {
         bins.add(bin);
       }
     }
-  } catch {}
+  } catch { }
   return bins;
 }
 
@@ -117,7 +146,7 @@ export async function cleanRegistry(packages: Packages, crates = true) {
     const credentials = path.join(CARGO_HOME, ".cargo", "credentials.toml");
     core.debug(`deleting "${credentials}"`);
     await fs.promises.unlink(credentials);
-  } catch {}
+  } catch { }
 
   // `.cargo/registry/index`
   let pkgSet = new Set(packages.map((p) => p.name));
@@ -229,7 +258,7 @@ export async function cleanGit(packages: Packages) {
         await rm(dir.path, dirent);
       }
     }
-  } catch {}
+  } catch { }
 
   // clean the checkouts
   try {
@@ -250,7 +279,7 @@ export async function cleanGit(packages: Packages) {
         }
       }
     }
-  } catch {}
+  } catch { }
 }
 
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
@@ -302,7 +331,7 @@ async function rm(parent: string, dirent: fs.Dirent) {
     } else if (dirent.isDirectory()) {
       await io.rmRF(fileName);
     }
-  } catch {}
+  } catch { }
 }
 
 async function rmRF(dirName: string) {
