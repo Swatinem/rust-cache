@@ -87340,8 +87340,11 @@ async function rmRF(dirName) {
 
 
 async function saveMtimes(targetDirs) {
-    let times = new Map();
-    let stack = new Array();
+    let data = {
+        roots: [],
+        times: {},
+    };
+    let stack = [];
     // Collect all the incremental files
     for (const dir of targetDirs) {
         for (const maybeProfile of await external_fs_default().promises.readdir(dir)) {
@@ -87353,7 +87356,7 @@ async function saveMtimes(targetDirs) {
         }
     }
     // Save the stack as the roots - we cache these directly
-    let roots = stack.slice();
+    data.roots = stack.slice();
     while (stack.length > 0) {
         const dirName = stack.pop();
         const dir = await external_fs_default().promises.opendir(dirName);
@@ -87364,11 +87367,11 @@ async function saveMtimes(targetDirs) {
             else {
                 const fileName = external_path_default().join(dirName, dirent.name);
                 const { mtime } = await external_fs_default().promises.stat(fileName);
-                times.set(fileName, mtime.getTime());
+                data.times[fileName] = mtime.getTime();
             }
         }
     }
-    return { roots, times: times };
+    return data;
 }
 
 ;// CONCATENATED MODULE: ./src/save.ts

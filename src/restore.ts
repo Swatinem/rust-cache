@@ -71,6 +71,8 @@ async function run() {
           const restoreString = await fs.promises.readFile(restoreJson, "utf8");
           const restoreData: MtimeData = JSON.parse(restoreString);
 
+          core.debug(`restoreData: ${JSON.stringify(restoreData)}`);
+
           if (restoreData.roots.length == 0) {
             throw new Error("No incremental roots found");
           }

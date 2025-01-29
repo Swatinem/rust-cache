@@ -87392,6 +87392,7 @@ async function run() {
                     const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
                     const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
                     const restoreData = JSON.parse(restoreString);
+                    lib_core.debug(`restoreData: ${JSON.stringify(restoreData)}`);
                     if (restoreData.roots.length == 0) {
                         throw new Error("No incremental roots found");
                     }
