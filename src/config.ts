@@ -21,8 +21,16 @@ const HASH_LENGTH = 8;
 export class CacheConfig {
   /** All the paths we want to cache */
   public cachePaths: Array<string> = [];
+
+  /** All the paths we want to cache for incremental builds */
+  public incrementalPaths: Array<string> = [];
+
   /** The primary cache key */
   public cacheKey = "";
+
+  /** The primary cache key for incremental builds */
+  public incrementalKey = "";
+
   /**
    *  The secondary (restore) key that only contains the prefix and environment
    *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
@@ -255,14 +263,15 @@ export class CacheConfig {
     keyFiles.push(...parsedKeyFiles);
     self.keyFiles = sort_and_uniq(keyFiles);
 
-    // todo(jon): make sure we differentiate incrementals on different branches
-    // we can use just a single cache per incremental branch
-    if (self.incremental) {
-      key += `-incremental`;
-    }
-
     key += `-${lockHash}`;
     self.cacheKey = key;
+
+    if (self.incremental) {
+      // wire the incremental key to be just for this branch
+      const branchName = core.getInput("incremental-key") || "-shared";
+      const incrementalKey = key + `-incremental` + branchName;
+      self.incrementalKey = incrementalKey;
+    }
 
     self.cachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
     if (self.cacheBin) {
@@ -286,7 +295,7 @@ export class CacheConfig {
     if (self.incremental) {
       if (cacheTargets === "true") {
         for (const target of self.workspaces.map((ws) => ws.target)) {
-          self.cachePaths.push(path.join(target, "incremental"));
+          self.incrementalPaths.push(path.join(target, "incremental"));
         }
       }
     }

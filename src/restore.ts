@@ -39,20 +39,24 @@ async function run() {
 
     core.info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
     const key = config.cacheKey;
+
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
-    const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], {
-      lookupOnly,
-    });
+    const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], { lookupOnly });
+
     if (restoreKey) {
       const match = restoreKey === key;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
 
       if (config.incremental) {
-        core.debug("restoring incremental builds");
-        for (const workspace of config.workspaces) {
-          await restoreIncremental(workspace.target);
+        const incrementalKey = await cacheProvider.cache.restoreCache(config.incrementalPaths.slice(), config.incrementalKey, [config.restoreKey], { lookupOnly });
+        core.debug(`restoring incremental builds from ${incrementalKey}`);
+
+        if (incrementalKey) {
+          for (const workspace of config.workspaces) {
+            await restoreIncremental(workspace.target);
+          }
         }
       }
 
