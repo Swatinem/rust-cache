@@ -62,7 +62,7 @@ export class CacheConfig {
 
     let key = core.getInput("prefix-key") || "v0-rust";
 
-    self.incremental = core.getInput("incremental").toLowerCase() == "true";
+
 
     const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
@@ -123,6 +123,10 @@ export class CacheConfig {
     key += `-${digest(hasher)}`;
 
     self.restoreKey = key;
+
+    // Make sure we consider incremental builds
+    self.incremental = core.getInput("incremental").toLowerCase() == "true";
+    hasher.update(`incremental=${self.incremental}`);
 
     // Construct the lockfiles portion of the key:
     // This considers all the files found via globbing for various manifests
