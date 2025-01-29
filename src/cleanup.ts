@@ -57,36 +57,6 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
 
   let keepProfile = new Set(["build", ".fingerprint", "deps"]);
 
-  // Keep the incremental folder if incremental builds are enabled
-  if (incremental) {
-    keepProfile.add("incremental");
-
-    // Traverse the incremental folder recursively and collect the modified times in a map
-    const incrementalDir = path.join(profileDir, "incremental");
-    const modifiedTimes = new Map<string, number>();
-    const fillModifiedTimes = async (dir: string) => {
-      const dirEntries = await fs.promises.opendir(dir);
-      for await (const dirent of dirEntries) {
-        if (dirent.isDirectory()) {
-          await fillModifiedTimes(path.join(dir, dirent.name));
-        } else {
-          const fileName = path.join(dir, dirent.name);
-          const { mtime } = await fs.promises.stat(fileName);
-          modifiedTimes.set(fileName, mtime.getTime());
-        }
-      }
-    };
-    await fillModifiedTimes(incrementalDir);
-
-    // Write the modified times to the incremental folder
-    core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
-    for (const file of modifiedTimes.keys()) {
-      core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
-    }
-    const contents = JSON.stringify({ modifiedTimes });
-    await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
-  }
-
 
   await rmExcept(profileDir, keepProfile);
 

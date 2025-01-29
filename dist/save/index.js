@@ -87160,34 +87160,6 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremen
         return;
     }
     let keepProfile = new Set(["build", ".fingerprint", "deps"]);
-    // Keep the incremental folder if incremental builds are enabled
-    if (incremental) {
-        keepProfile.add("incremental");
-        // Traverse the incremental folder recursively and collect the modified times in a map
-        const incrementalDir = external_path_default().join(profileDir, "incremental");
-        const modifiedTimes = new Map();
-        const fillModifiedTimes = async (dir) => {
-            const dirEntries = await external_fs_default().promises.opendir(dir);
-            for await (const dirent of dirEntries) {
-                if (dirent.isDirectory()) {
-                    await fillModifiedTimes(external_path_default().join(dir, dirent.name));
-                }
-                else {
-                    const fileName = external_path_default().join(dir, dirent.name);
-                    const { mtime } = await external_fs_default().promises.stat(fileName);
-                    modifiedTimes.set(fileName, mtime.getTime());
-                }
-            }
-        };
-        await fillModifiedTimes(incrementalDir);
-        // Write the modified times to the incremental folder
-        lib_core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
-        for (const file of modifiedTimes.keys()) {
-            lib_core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
-        }
-        const contents = JSON.stringify({ modifiedTimes });
-        await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
-    }
     await rmExcept(profileDir, keepProfile);
     const keepPkg = new Set(packages.map((p) => p.name));
     await rmExcept(external_path_default().join(profileDir, "build"), keepPkg, checkTimestamp);
@@ -87431,6 +87403,8 @@ async function rmRF(dirName) {
 
 
 
+
+
 process.on("uncaughtException", (e) => {
     lib_core.error(e.message);
     if (e.stack) {
@@ -87454,6 +87428,19 @@ async function run() {
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         if (process.env["RUNNER_OS"] == "macOS") {
             await macOsWorkaround();
+        }
+        // Save the incremental cache before we delete it
+        if (config.incremental) {
+            lib_core.info(`... Saving incremental cache ...`);
+            lib_core.debug(`paths include ${config.incrementalPaths} with key ${config.incrementalKey}`);
+            for (const paths of config.incrementalPaths) {
+                await saveIncrementalDirs(paths);
+            }
+            await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
+            for (const path of config.incrementalPaths) {
+                lib_core.debug(`  deleting ${path}`);
+                await (0,promises_.rm)(path);
+            }
         }
         const allPackages = [];
         for (const workspace of config.workspaces) {
@@ -87491,15 +87478,6 @@ async function run() {
         catch (e) {
             lib_core.debug(`${e.stack}`);
         }
-        // Save the incremental cache before we delete it
-        if (config.incremental) {
-            lib_core.info(`... Saving incremental cache ...`);
-            await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
-            for (const path of config.incrementalPaths) {
-                lib_core.debug(`  deleting ${path}`);
-                await (0,promises_.rm)(path);
-            }
-        }
         lib_core.info(`... Saving cache ...`);
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
         // https://github.com/actions/toolkit/pull/1378
@@ -87519,6 +87497,32 @@ async function macOsWorkaround() {
         await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
     }
     catch { }
+}
+async function saveIncrementalDirs(profileDir) {
+    // Traverse the incremental folder recursively and collect the modified times in a map
+    const incrementalDir = external_path_default().join(profileDir, "incremental");
+    const modifiedTimes = new Map();
+    const fillModifiedTimes = async (dir) => {
+        const dirEntries = await external_fs_default().promises.opendir(dir);
+        for await (const dirent of dirEntries) {
+            if (dirent.isDirectory()) {
+                await fillModifiedTimes(external_path_default().join(dir, dirent.name));
+            }
+            else {
+                const fileName = external_path_default().join(dir, dirent.name);
+                const { mtime } = await external_fs_default().promises.stat(fileName);
+                modifiedTimes.set(fileName, mtime.getTime());
+            }
+        }
+    };
+    await fillModifiedTimes(incrementalDir);
+    // Write the modified times to the incremental folder
+    lib_core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
+    for (const file of modifiedTimes.keys()) {
+        lib_core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
+    }
+    const contents = JSON.stringify({ modifiedTimes });
+    await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
 }
 
 })();
