@@ -87336,12 +87336,21 @@ async function rmRF(dirName) {
 // import * as io from "@actions/io";
 
 
-// import { CARGO_HOME } from "./config";
-// import { exists } from "./utils";
-// import { Packages } from "./workspace";
 async function saveMtimes(targetDirs) {
-    let cache = new Map();
-    let stack = targetDirs.slice();
+    let times = new Map();
+    let stack = new Array();
+    // Collect all the incremental files
+    for (const dir of targetDirs) {
+        for (const maybeProfile of await external_fs_default().promises.readdir(dir)) {
+            const profileDir = external_path_default().join(dir, maybeProfile);
+            const incrementalDir = external_path_default().join(profileDir, "incremental");
+            if (external_fs_default().existsSync(incrementalDir)) {
+                stack.push(incrementalDir);
+            }
+        }
+    }
+    // Save the stack as the roots - we cache these directly
+    let roots = stack.slice();
     while (stack.length > 0) {
         const dirName = stack.pop();
         const dir = await external_fs_default().promises.opendir(dirName);
@@ -87352,11 +87361,11 @@ async function saveMtimes(targetDirs) {
             else {
                 const fileName = external_path_default().join(dirName, dirent.name);
                 const { mtime } = await external_fs_default().promises.stat(fileName);
-                cache.set(fileName, mtime.getTime());
+                times.set(fileName, mtime.getTime());
             }
         }
     }
-    return cache;
+    return { roots, times: times };
 }
 
 ;// CONCATENATED MODULE: ./src/save.ts
@@ -87399,14 +87408,13 @@ async function run() {
             try {
                 const targetDirs = config.workspaces.map((ws) => ws.target);
                 const cache = await saveMtimes(targetDirs);
-                const paths = Array.from(cache.keys());
-                const saved = await cacheProvider.cache.saveCache(paths, config.incrementalKey);
-                core.debug(`saved incremental cache with key ${saved} with contents ${paths}`);
+                const saved = await cacheProvider.cache.saveCache(cache.roots, config.incrementalKey);
+                core.debug(`saved incremental cache with key ${saved} with contents ${cache.roots}, ${cache.times}`);
                 // write the incremental-restore.json file
                 const serialized = JSON.stringify(cache);
                 await external_fs_default().promises.writeFile(external_path_default().join(CARGO_HOME, "incremental-restore.json"), serialized);
                 // Delete the incremental cache before proceeding
-                for (const [path, _mtime] of cache) {
+                for (const [path, _mtime] of cache.roots) {
                     core.debug(`  deleting ${path}`);
                     await (0,promises_.rm)(path);
                 }

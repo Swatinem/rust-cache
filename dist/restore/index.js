@@ -87381,7 +87381,10 @@ async function run() {
                     const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
                     const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
                     const restoreData = JSON.parse(restoreString);
-                    for (const [file, mtime] of Object.entries(restoreData)) {
+                    const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
+                    lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
+                    for (const [file, mtime] of Object.entries(restoreData.times)) {
+                        lib_core.debug(`restoring ${file} with mtime ${mtime}`);
                         await external_fs_default().promises.utimes(file, new Date(mtime), new Date(mtime));
                     }
                 }

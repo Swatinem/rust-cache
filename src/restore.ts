@@ -6,6 +6,7 @@ import { getCacheProvider, reportError } from "./utils";
 // import { saveMtimes } from "./incremental";
 import path from "path";
 import fs from "fs";
+import { MtimeData } from "./incremental";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -54,12 +55,18 @@ async function run() {
       // Restore the incremental-restore.json file and write the mtimes to all the files in the list
       if (config.incremental) {
         try {
-          const restoreJson = path.join(CARGO_HOME, "incremental-restore.json")
+          const restoreJson = path.join(CARGO_HOME, "incremental-restore.json");
           const restoreString = await fs.promises.readFile(restoreJson, "utf8");
-          const restoreData: Map<String, number> = JSON.parse(restoreString);
-          for (const [file, mtime] of Object.entries(restoreData)) {
+          const restoreData: MtimeData = JSON.parse(restoreString);
+
+          const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
+          core.debug(`restoring incremental builds from ${incrementalKey}`);
+
+          for (const [file, mtime] of Object.entries(restoreData.times)) {
+            core.debug(`restoring ${file} with mtime ${mtime}`);
             await fs.promises.utimes(file, new Date(mtime), new Date(mtime));
           }
+
         } catch (err) {
           core.debug(`Could not restore incremental cache - ${err}`);
           core.debug(`${(err as any).stack}`);

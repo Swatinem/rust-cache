@@ -7,9 +7,28 @@ import path from "path";
 // import { exists } from "./utils";
 // import { Packages } from "./workspace";
 
-export async function saveMtimes(targetDirs: string[]): Promise<Map<string, number>> {
-  let cache = new Map<string, number>();
-  let stack = targetDirs.slice();
+export type MtimeData = {
+  roots: Array<string>,
+  times: Map<string, number>
+};
+
+export async function saveMtimes(targetDirs: string[]): Promise<MtimeData> {
+  let times = new Map<string, number>();
+  let stack = new Array<string>();
+
+  // Collect all the incremental files
+  for (const dir of targetDirs) {
+    for (const maybeProfile of await fs.promises.readdir(dir)) {
+      const profileDir = path.join(dir, maybeProfile);
+      const incrementalDir = path.join(profileDir, "incremental");
+      if (fs.existsSync(incrementalDir)) {
+        stack.push(incrementalDir);
+      }
+    }
+  }
+
+  // Save the stack as the roots - we cache these directly
+  let roots = stack.slice();
 
   while (stack.length > 0) {
     const dirName = stack.pop()!;
@@ -21,10 +40,10 @@ export async function saveMtimes(targetDirs: string[]): Promise<Map<string, numb
       } else {
         const fileName = path.join(dirName, dirent.name);
         const { mtime } = await fs.promises.stat(fileName);
-        cache.set(fileName, mtime.getTime());
+        times.set(fileName, mtime.getTime());
       }
     }
   }
 
-  return cache;
+  return { roots, times: times };
 }

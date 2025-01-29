@@ -46,16 +46,15 @@ async function run() {
       try {
         const targetDirs = config.workspaces.map((ws) => ws.target);
         const cache = await saveMtimes(targetDirs);
-        const paths = Array.from(cache.keys());
-        const saved = await cacheProvider.cache.saveCache(paths, config.incrementalKey);
-        core.debug(`saved incremental cache with key ${saved} with contents ${paths}`);
+        const saved = await cacheProvider.cache.saveCache(cache.roots, config.incrementalKey);
+        core.debug(`saved incremental cache with key ${saved} with contents ${cache.roots}, ${cache.times}`);
 
         // write the incremental-restore.json file
         const serialized = JSON.stringify(cache);
         await fs.promises.writeFile(path.join(CARGO_HOME, "incremental-restore.json"), serialized);
 
         // Delete the incremental cache before proceeding
-        for (const [path, _mtime] of cache) {
+        for (const [path, _mtime] of cache.roots) {
           core.debug(`  deleting ${path}`);
           await rm(path);
         }
