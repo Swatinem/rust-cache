@@ -62,6 +62,8 @@ export class CacheConfig {
 
     let key = core.getInput("prefix-key") || "v0-rust";
 
+    self.incremental = core.getInput("incremental").toLowerCase() == "true";
+
     const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
       key += `-${sharedKey}`;
