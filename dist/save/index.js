@@ -86721,6 +86721,8 @@ class CacheConfig {
         this.workspaces = [];
         /** The cargo binaries present during main step */
         this.cargoBins = [];
+        /** Whether to cache incremental builds */
+        this.incremental = false;
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -86789,6 +86791,9 @@ class CacheConfig {
         self.keyEnvs = keyEnvs;
         key += `-${digest(hasher)}`;
         self.restoreKey = key;
+        // Make sure we consider incremental builds
+        self.incremental = core.getInput("incremental").toLowerCase() == "true";
+        hasher.update(`incremental=${self.incremental}`);
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
         // and lockfiles.
@@ -86958,6 +86963,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             core.info(`  - ${file}`);
         }
+        core.info(`.. Incremental: ${this.incremental}`);
         core.endGroup();
     }
     /**
@@ -87027,7 +87033,7 @@ function sort_and_uniq(a) {
 
 
 
-async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
+async function cleanTargetDir(targetDir, packages, checkTimestamp, incremental) {
     core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
     let dir = await external_fs_default().promises.opendir(targetDir);
@@ -87038,10 +87044,10 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
             let isNestedTarget = (await exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
-                    await cleanTargetDir(dirName, packages, checkTimestamp);
+                    await cleanTargetDir(dirName, packages, checkTimestamp, incremental);
                 }
                 else {
-                    await cleanProfileTarget(dirName, packages, checkTimestamp);
+                    await cleanProfileTarget(dirName, packages, checkTimestamp, incremental);
                 }
             }
             catch { }
@@ -87051,7 +87057,7 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
         }
     }
 }
-async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
+async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremental) {
     core.debug(`cleaning profile directory "${profileDir}"`);
     // Quite a few testing utility crates store compilation artifacts as nested
     // workspaces under `target/tests`. Notably, `target/tests/target` and
@@ -87060,16 +87066,41 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) 
         try {
             // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
             // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp);
+            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp, incremental);
         }
         catch { }
         try {
             // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp);
+            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp, incremental);
         }
         catch { }
         // Delete everything else.
-        await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+        let except = new Set(["target", "trybuild"]);
+        // Keep the incremental folder if incremental builds are enabled
+        if (incremental) {
+            except.add("incremental");
+            // Traverse the incremental folder recursively and collect the modified times in a map
+            const incrementalDir = external_path_default().join(profileDir, "incremental");
+            const modifiedTimes = new Map();
+            const fillModifiedTimes = async (dir) => {
+                const dirEntries = await external_fs_default().promises.opendir(dir);
+                for await (const dirent of dirEntries) {
+                    if (dirent.isDirectory()) {
+                        await fillModifiedTimes(external_path_default().join(dir, dirent.name));
+                    }
+                    else {
+                        const fileName = external_path_default().join(dir, dirent.name);
+                        const { mtime } = await external_fs_default().promises.stat(fileName);
+                        modifiedTimes.set(fileName, mtime.getTime());
+                    }
+                }
+            };
+            await fillModifiedTimes(incrementalDir);
+            // Write the modified times to the incremental folder
+            const contents = JSON.stringify({ modifiedTimes });
+            await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
+        }
+        await rmExcept(profileDir, except, checkTimestamp);
         return;
     }
     let keepProfile = new Set(["build", ".fingerprint", "deps"]);
@@ -87345,7 +87376,7 @@ async function run() {
             allPackages.push(...packages);
             try {
                 core.info(`... Cleaning ${workspace.target} ...`);
-                await cleanTargetDir(workspace.target, packages);
+                await cleanTargetDir(workspace.target, packages, false, config.incremental);
             }
             catch (e) {
                 core.debug(`${e.stack}`);

@@ -86721,6 +86721,8 @@ class CacheConfig {
         this.workspaces = [];
         /** The cargo binaries present during main step */
         this.cargoBins = [];
+        /** Whether to cache incremental builds */
+        this.incremental = false;
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -86789,6 +86791,9 @@ class CacheConfig {
         self.keyEnvs = keyEnvs;
         key += `-${digest(hasher)}`;
         self.restoreKey = key;
+        // Make sure we consider incremental builds
+        self.incremental = lib_core.getInput("incremental").toLowerCase() == "true";
+        hasher.update(`incremental=${self.incremental}`);
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
         // and lockfiles.
@@ -86958,6 +86963,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             lib_core.info(`  - ${file}`);
         }
+        lib_core.info(`.. Incremental: ${this.incremental}`);
         lib_core.endGroup();
     }
     /**
@@ -87027,7 +87033,7 @@ function sort_and_uniq(a) {
 
 
 
-async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
+async function cleanTargetDir(targetDir, packages, checkTimestamp, incremental) {
     lib_core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
     let dir = await external_fs_default().promises.opendir(targetDir);
@@ -87038,10 +87044,10 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
             let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
-                    await cleanTargetDir(dirName, packages, checkTimestamp);
+                    await cleanTargetDir(dirName, packages, checkTimestamp, incremental);
                 }
                 else {
-                    await cleanProfileTarget(dirName, packages, checkTimestamp);
+                    await cleanProfileTarget(dirName, packages, checkTimestamp, incremental);
                 }
             }
             catch { }
@@ -87051,7 +87057,7 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
         }
     }
 }
-async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
+async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremental) {
     lib_core.debug(`cleaning profile directory "${profileDir}"`);
     // Quite a few testing utility crates store compilation artifacts as nested
     // workspaces under `target/tests`. Notably, `target/tests/target` and
@@ -87060,16 +87066,41 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) 
         try {
             // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
             // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp);
+            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp, incremental);
         }
         catch { }
         try {
             // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp);
+            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp, incremental);
         }
         catch { }
         // Delete everything else.
-        await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+        let except = new Set(["target", "trybuild"]);
+        // Keep the incremental folder if incremental builds are enabled
+        if (incremental) {
+            except.add("incremental");
+            // Traverse the incremental folder recursively and collect the modified times in a map
+            const incrementalDir = external_path_default().join(profileDir, "incremental");
+            const modifiedTimes = new Map();
+            const fillModifiedTimes = async (dir) => {
+                const dirEntries = await external_fs_default().promises.opendir(dir);
+                for await (const dirent of dirEntries) {
+                    if (dirent.isDirectory()) {
+                        await fillModifiedTimes(external_path_default().join(dir, dirent.name));
+                    }
+                    else {
+                        const fileName = external_path_default().join(dir, dirent.name);
+                        const { mtime } = await external_fs_default().promises.stat(fileName);
+                        modifiedTimes.set(fileName, mtime.getTime());
+                    }
+                }
+            };
+            await fillModifiedTimes(incrementalDir);
+            // Write the modified times to the incremental folder
+            const contents = JSON.stringify({ modifiedTimes });
+            await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
+        }
+        await rmExcept(profileDir, except, checkTimestamp);
         return;
     }
     let keepProfile = new Set(["build", ".fingerprint", "deps"]);
@@ -87309,7 +87340,53 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
+;// CONCATENATED MODULE: ./src/incremental.ts
+
+// import * as io from "@actions/io";
+
+
+// import { CARGO_HOME } from "./config";
+
+// import { Packages } from "./workspace";
+async function restoreIncremental(targetDir) {
+    lib_core.debug(`restoring incremental directory "${targetDir}"`);
+    let dir = await external_fs_default().promises.opendir(targetDir);
+    for await (const dirent of dir) {
+        if (dirent.isDirectory()) {
+            let dirName = external_path_default().join(dir.path, dirent.name);
+            // is it a profile dir, or a nested target dir?
+            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
+            try {
+                if (isNestedTarget) {
+                    await restoreIncremental(dirName);
+                }
+                else {
+                    await restoreIncrementalProfile(dirName);
+                }
+                restoreIncrementalProfile;
+            }
+            catch { }
+        }
+    }
+}
+async function restoreIncrementalProfile(dirName) {
+    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
+    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
+    if (await utils_exists(incrementalJson)) {
+        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
+        const { modifiedTimes } = JSON.parse(contents);
+        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
+        // Write the mtimes to all the files in the profile directory
+        for (const fileName of Object.keys(modifiedTimes)) {
+            const mtime = modifiedTimes[fileName];
+            const filePath = external_path_default().join(dirName, fileName);
+            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
+        }
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/restore.ts
+
 
 
 
@@ -87333,10 +87410,12 @@ async function run() {
         }
         var lookupOnly = lib_core.getInput("lookup-only").toLowerCase() === "true";
         lib_core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
-        lib_core.exportVariable("CARGO_INCREMENTAL", 0);
         const config = await CacheConfig.new();
         config.printInfo(cacheProvider);
         lib_core.info("");
+        if (!config.incremental) {
+            lib_core.exportVariable("CARGO_INCREMENTAL", 0);
+        }
         lib_core.info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
         const key = config.cacheKey;
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
@@ -87348,11 +87427,17 @@ async function run() {
         if (restoreKey) {
             const match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
+            if (config.incremental) {
+                lib_core.debug("restoring incremental builds");
+                for (const workspace of config.workspaces) {
+                    await restoreIncremental(workspace.target);
+                }
+            }
             if (!match) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
                     try {
-                        await cleanTargetDir(workspace.target, [], true);
+                        await cleanTargetDir(workspace.target, [], true, false);
                     }
                     catch { }
                 }

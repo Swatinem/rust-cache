@@ -1,11 +1,11 @@
 import * as core from "@actions/core";
-import * as io from "@actions/io";
+// import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
 
-import { CARGO_HOME } from "./config";
+// import { CARGO_HOME } from "./config";
 import { exists } from "./utils";
-import { Packages } from "./workspace";
+// import { Packages } from "./workspace";
 
 
 export async function restoreIncremental(targetDir: string) {
