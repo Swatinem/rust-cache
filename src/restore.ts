@@ -74,7 +74,7 @@ async function run() {
 
       setCacheHitOutput(match);
     } else {
-      core.info("No cache found.");
+      core.info(`No cache found for ${config.cacheKey} - this key was found ${restoreKey}`);
       config.saveState();
 
       setCacheHitOutput(false);

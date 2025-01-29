@@ -86956,12 +86956,6 @@ class CacheConfig {
         self.keyFiles = sort_and_uniq(keyFiles);
         key += `-${lockHash}`;
         self.cacheKey = key;
-        if (self.incremental) {
-            // wire the incremental key to be just for this branch
-            const branchName = lib_core.getInput("incremental-key") || "-shared";
-            const incrementalKey = key + `-incremental` + branchName;
-            self.incrementalKey = incrementalKey;
-        }
         self.cachePaths = [external_path_default().join(CARGO_HOME, "registry"), external_path_default().join(CARGO_HOME, "git")];
         if (self.cacheBin) {
             self.cachePaths = [
@@ -86979,15 +86973,19 @@ class CacheConfig {
         for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
             self.cachePaths.push(dir);
         }
+        const bins = await getCargoBins();
+        self.cargoBins = Array.from(bins.values());
         if (self.incremental) {
+            // wire the incremental key to be just for this branch
+            const branchName = lib_core.getInput("incremental-key") || "-shared";
+            const incrementalKey = key + `-incremental--` + branchName;
+            self.incrementalKey = incrementalKey;
             if (cacheTargets === "true") {
                 for (const target of self.workspaces.map((ws) => ws.target)) {
                     self.incrementalPaths.push(external_path_default().join(target, "incremental"));
                 }
             }
         }
-        const bins = await getCargoBins();
-        self.cargoBins = Array.from(bins.values());
         return self;
     }
     /**

@@ -139,7 +139,6 @@ export class CacheConfig {
 
     self.restoreKey = key;
 
-
     // Construct the lockfiles portion of the key:
     // This considers all the files found via globbing for various manifests
     // and lockfiles.
@@ -266,13 +265,6 @@ export class CacheConfig {
     key += `-${lockHash}`;
     self.cacheKey = key;
 
-    if (self.incremental) {
-      // wire the incremental key to be just for this branch
-      const branchName = core.getInput("incremental-key") || "-shared";
-      const incrementalKey = key + `-incremental` + branchName;
-      self.incrementalKey = incrementalKey;
-    }
-
     self.cachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
     if (self.cacheBin) {
       self.cachePaths = [
@@ -292,16 +284,21 @@ export class CacheConfig {
       self.cachePaths.push(dir);
     }
 
+    const bins = await getCargoBins();
+    self.cargoBins = Array.from(bins.values());
+
     if (self.incremental) {
+      // wire the incremental key to be just for this branch
+      const branchName = core.getInput("incremental-key") || "-shared";
+      const incrementalKey = key + `-incremental--` + branchName;
+      self.incrementalKey = incrementalKey;
+
       if (cacheTargets === "true") {
         for (const target of self.workspaces.map((ws) => ws.target)) {
           self.incrementalPaths.push(path.join(target, "incremental"));
         }
       }
     }
-
-    const bins = await getCargoBins();
-    self.cargoBins = Array.from(bins.values());
 
     return self;
   }
