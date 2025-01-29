@@ -86789,11 +86789,11 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
-        key += `-${digest(hasher)}`;
-        self.restoreKey = key;
         // Make sure we consider incremental builds
         self.incremental = core.getInput("incremental").toLowerCase() == "true";
         hasher.update(`incremental=${self.incremental}`);
+        key += `-${digest(hasher)}`;
+        self.restoreKey = key;
         // Construct the lockfiles portion of the key:
         // This considers all the files found via globbing for various manifests
         // and lockfiles.
