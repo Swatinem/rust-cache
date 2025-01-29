@@ -60,11 +60,11 @@ async function run() {
         }
       }
 
-      if (!match || config.isIncrementalMissing()) {
+      if (!match) {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
           try {
-            await cleanTargetDir(workspace.target, [], true, config.incremental);
+            await cleanTargetDir(workspace.target, [], true);
           } catch { }
         }
 

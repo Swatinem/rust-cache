@@ -87114,7 +87114,7 @@ function sort_and_uniq(a) {
 
 
 
-async function cleanTargetDir(targetDir, packages, checkTimestamp, incremental) {
+async function cleanTargetDir(targetDir, packages, checkTimestamp) {
     lib_core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
     let dir = await external_fs_default().promises.opendir(targetDir);
@@ -87125,10 +87125,10 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp, incremental) 
             let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
             try {
                 if (isNestedTarget) {
-                    await cleanTargetDir(dirName, packages, checkTimestamp, incremental);
+                    await cleanTargetDir(dirName, packages, checkTimestamp);
                 }
                 else {
-                    await cleanProfileTarget(dirName, packages, checkTimestamp, incremental);
+                    await cleanProfileTarget(dirName, packages, checkTimestamp);
                 }
             }
             catch { }
@@ -87138,7 +87138,7 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp, incremental) 
         }
     }
 }
-async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremental) {
+async function cleanProfileTarget(profileDir, packages, checkTimestamp) {
     lib_core.debug(`cleaning profile directory "${profileDir}"`);
     // Quite a few testing utility crates store compilation artifacts as nested
     // workspaces under `target/tests`. Notably, `target/tests/target` and
@@ -87147,12 +87147,12 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremen
         try {
             // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
             // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp, incremental);
+            cleanTargetDir(external_path_default().join(profileDir, "target"), packages, checkTimestamp);
         }
         catch { }
         try {
             // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp, incremental);
+            cleanTargetDir(external_path_default().join(profileDir, "trybuild"), packages, checkTimestamp);
         }
         catch { }
         // Delete everything else.
@@ -87445,11 +87445,11 @@ async function run() {
                     }
                 }
             }
-            if (!match || config.isIncrementalMissing()) {
+            if (!match) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
                     try {
-                        await cleanTargetDir(workspace.target, [], true, config.incremental);
+                        await cleanTargetDir(workspace.target, [], true);
                     }
                     catch { }
                 }

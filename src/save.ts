@@ -59,7 +59,7 @@ async function run() {
       allPackages.push(...packages);
       try {
         core.info(`... Cleaning ${workspace.target} ...`);
-        await cleanTargetDir(workspace.target, packages, false, config.incremental);
+        await cleanTargetDir(workspace.target, packages, false);
       } catch (e) {
         core.debug(`${(e as any).stack}`);
       }
