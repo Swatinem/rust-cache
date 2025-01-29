@@ -330,6 +330,7 @@ export class CacheConfig {
     for (const file of this.keyFiles) {
       core.info(`  - ${file}`);
     }
+    core.info(`.. Incremental: ${this.incremental}`);
     core.endGroup();
   }
 
