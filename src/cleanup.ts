@@ -79,10 +79,14 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
     await fillModifiedTimes(incrementalDir);
 
     // Write the modified times to the incremental folder
-    core.debug(`writing incremental-restore.json for ${incrementalDir} with ${modifiedTimes} files`);
+    core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
+    for (const file of modifiedTimes.keys()) {
+      core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
+    }
     const contents = JSON.stringify({ modifiedTimes });
     await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
   }
+
 
   await rmExcept(profileDir, keepProfile);
 

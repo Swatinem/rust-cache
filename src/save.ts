@@ -4,6 +4,7 @@ import * as exec from "@actions/exec";
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, isCacheUpToDate } from "./config";
 import { getCacheProvider, reportError } from "./utils";
+import { rm } from "fs/promises";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -72,16 +73,22 @@ async function run() {
       core.debug(`${(e as any).stack}`);
     }
 
+    // Save the incremental cache before we delete it
+    if (config.incremental) {
+      core.info(`... Saving incremental cache ...`);
+      await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
+      for (const path of config.incrementalPaths) {
+        core.debug(`  deleting ${path}`);
+        await rm(path);
+      }
+    }
+
     core.info(`... Saving cache ...`);
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
     await cacheProvider.cache.saveCache(config.cachePaths.slice(), config.cacheKey);
 
-    if (config.incremental) {
-      core.info(`... Saving incremental cache ...`);
-      await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
-    }
   } catch (e) {
     reportError(e);
   }
