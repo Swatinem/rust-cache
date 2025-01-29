@@ -86691,7 +86691,61 @@ class Workspace {
     }
 }
 
+;// CONCATENATED MODULE: ./src/incremental.ts
+
+// import * as io from "@actions/io";
+
+
+// import { CARGO_HOME } from "./config";
+
+// import { Packages } from "./workspace";
+let incremental_missing = false;
+function isIncrementalMissing() {
+    return incremental_missing;
+}
+async function restoreIncremental(targetDir) {
+    lib_core.debug(`restoring incremental directory "${targetDir}"`);
+    let dir = await external_fs_default().promises.opendir(targetDir);
+    for await (const dirent of dir) {
+        if (dirent.isDirectory()) {
+            let dirName = external_path_default().join(dir.path, dirent.name);
+            // is it a profile dir, or a nested target dir?
+            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
+            try {
+                if (isNestedTarget) {
+                    await restoreIncremental(dirName);
+                }
+                else {
+                    await restoreIncrementalProfile(dirName);
+                }
+                restoreIncrementalProfile;
+            }
+            catch { }
+        }
+    }
+}
+async function restoreIncrementalProfile(dirName) {
+    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
+    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
+    if (await utils_exists(incrementalJson)) {
+        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
+        const { modifiedTimes } = JSON.parse(contents);
+        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
+        // Write the mtimes to all the files in the profile directory
+        for (const fileName of Object.keys(modifiedTimes)) {
+            const mtime = modifiedTimes[fileName];
+            const filePath = external_path_default().join(dirName, fileName);
+            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
+        }
+    }
+    else {
+        lib_core.debug(`incremental-restore.json not found for ${dirName}`);
+        incremental_missing = true;
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/config.ts
+
 
 
 
@@ -86911,6 +86965,13 @@ class CacheConfig {
         for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
             self.cachePaths.push(dir);
         }
+        if (self.incremental) {
+            if (cacheTargets === "true") {
+                for (const target of self.workspaces.map((ws) => ws.target)) {
+                    self.cachePaths.push(external_path_default().join(target, "incremental"));
+                }
+            }
+        }
         const bins = await getCargoBins();
         self.cargoBins = Array.from(bins.values());
         return self;
@@ -86972,6 +87033,12 @@ class CacheConfig {
      */
     saveState() {
         lib_core.saveState(STATE_CONFIG, this);
+    }
+    isIncrementalMissing() {
+        if (this.incremental) {
+            return isIncrementalMissing();
+        }
+        return false;
     }
 }
 /**
@@ -87340,51 +87407,6 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
-;// CONCATENATED MODULE: ./src/incremental.ts
-
-// import * as io from "@actions/io";
-
-
-// import { CARGO_HOME } from "./config";
-
-// import { Packages } from "./workspace";
-async function restoreIncremental(targetDir) {
-    lib_core.debug(`restoring incremental directory "${targetDir}"`);
-    let dir = await external_fs_default().promises.opendir(targetDir);
-    for await (const dirent of dir) {
-        if (dirent.isDirectory()) {
-            let dirName = external_path_default().join(dir.path, dirent.name);
-            // is it a profile dir, or a nested target dir?
-            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
-            try {
-                if (isNestedTarget) {
-                    await restoreIncremental(dirName);
-                }
-                else {
-                    await restoreIncrementalProfile(dirName);
-                }
-                restoreIncrementalProfile;
-            }
-            catch { }
-        }
-    }
-}
-async function restoreIncrementalProfile(dirName) {
-    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
-    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
-    if (await utils_exists(incrementalJson)) {
-        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
-        const { modifiedTimes } = JSON.parse(contents);
-        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
-        // Write the mtimes to all the files in the profile directory
-        for (const fileName of Object.keys(modifiedTimes)) {
-            const mtime = modifiedTimes[fileName];
-            const filePath = external_path_default().join(dirName, fileName);
-            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
-        }
-    }
-}
-
 ;// CONCATENATED MODULE: ./src/restore.ts
 
 
@@ -87433,7 +87455,7 @@ async function run() {
                     await restoreIncremental(workspace.target);
                 }
             }
-            if (!match) {
+            if (!match || config.isIncrementalMissing()) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
                     try {

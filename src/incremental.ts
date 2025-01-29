@@ -7,10 +7,14 @@ import path from "path";
 import { exists } from "./utils";
 // import { Packages } from "./workspace";
 
+let incremental_missing = false;
+
+export function isIncrementalMissing(): boolean {
+  return incremental_missing;
+}
 
 export async function restoreIncremental(targetDir: string) {
   core.debug(`restoring incremental directory "${targetDir}"`);
-
 
   let dir = await fs.promises.opendir(targetDir);
   for await (const dirent of dir) {
@@ -46,5 +50,8 @@ async function restoreIncrementalProfile(dirName: string) {
       const filePath = path.join(dirName, fileName);
       await fs.promises.utimes(filePath, new Date(mtime), new Date(mtime));
     }
+  } else {
+    core.debug(`incremental-restore.json not found for ${dirName}`);
+    incremental_missing = true;
   }
 }

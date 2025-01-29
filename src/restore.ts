@@ -56,7 +56,7 @@ async function run() {
         }
       }
 
-      if (!match) {
+      if (!match || config.isIncrementalMissing()) {
         // pre-clean the target directory on cache mismatch
         for (const workspace of config.workspaces) {
           try {

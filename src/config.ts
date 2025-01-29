@@ -10,6 +10,7 @@ import * as toml from "smol-toml";
 import { getCargoBins } from "./cleanup";
 import { CacheProvider, exists, getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
+import { isIncrementalMissing } from "./incremental";
 
 const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
@@ -61,8 +62,6 @@ export class CacheConfig {
     // or the `key` input combined with the `job` key.
 
     let key = core.getInput("prefix-key") || "v0-rust";
-
-
 
     const sharedKey = core.getInput("shared-key");
     if (sharedKey) {
@@ -119,7 +118,6 @@ export class CacheConfig {
     }
 
     self.keyEnvs = keyEnvs;
-
 
     // Make sure we consider incremental builds
     self.incremental = core.getInput("incremental").toLowerCase() == "true";
@@ -275,6 +273,14 @@ export class CacheConfig {
       self.cachePaths.push(dir);
     }
 
+    if (self.incremental) {
+      if (cacheTargets === "true") {
+        for (const target of self.workspaces.map((ws) => ws.target)) {
+          self.cachePaths.push(path.join(target, "incremental"));
+        }
+      }
+    }
+
     const bins = await getCargoBins();
     self.cargoBins = Array.from(bins.values());
 
@@ -342,6 +348,14 @@ export class CacheConfig {
    */
   saveState() {
     core.saveState(STATE_CONFIG, this);
+  }
+
+  isIncrementalMissing(): boolean {
+    if (this.incremental) {
+      return isIncrementalMissing();
+    }
+
+    return false;
   }
 }
 
