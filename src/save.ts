@@ -42,14 +42,19 @@ async function run() {
     // Save the incremental cache before we delete it
     if (config.incremental) {
       core.info(`... Saving incremental cache ...`);
-      core.debug(`paths include ${config.incrementalPaths} with key ${config.incrementalKey}`);
-      for (const paths of config.incrementalPaths) {
-        await saveIncrementalDirs(paths);
-      }
-      await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
-      for (const path of config.incrementalPaths) {
-        core.debug(`  deleting ${path}`);
-        await rm(path);
+      try {
+        core.debug(`paths include ${config.incrementalPaths} with key ${config.incrementalKey}`);
+        for (const paths of config.incrementalPaths) {
+          await saveIncrementalDirs(paths);
+        }
+        await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
+        for (const path of config.incrementalPaths) {
+          core.debug(`  deleting ${path}`);
+          await rm(path);
+        }
+      } catch (e) {
+        core.debug(`Failed to save incremental cache`);
+        core.debug(`${(e as any).stack}`);
       }
     }
 
@@ -112,9 +117,8 @@ async function macOsWorkaround() {
 }
 
 
-async function saveIncrementalDirs(profileDir: string) {
+async function saveIncrementalDirs(incrementalDir: string) {
   // Traverse the incremental folder recursively and collect the modified times in a map
-  const incrementalDir = path.join(profileDir, "incremental");
   const modifiedTimes = new Map<string, number>();
   const fillModifiedTimes = async (dir: string) => {
     const dirEntries = await fs.promises.opendir(dir);
