@@ -23,7 +23,11 @@ export class CacheConfig {
   public cachePaths: Array<string> = [];
   /** The primary cache key */
   public cacheKey = "";
-  /** The secondary (restore) key that only contains the prefix and environment */
+  /**
+   *  The secondary (restore) key that only contains the prefix and environment
+   *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
+   *  instead of the branch itself
+   * */
   public restoreKey = "";
 
   /** Whether to cache CARGO_HOME/.bin */
@@ -251,6 +255,8 @@ export class CacheConfig {
     keyFiles.push(...parsedKeyFiles);
     self.keyFiles = sort_and_uniq(keyFiles);
 
+    // todo(jon): make sure we differentiate incrementals on different branches
+    // we can use just a single cache per incremental branch
     if (self.incremental) {
       key += `-incremental`;
     }

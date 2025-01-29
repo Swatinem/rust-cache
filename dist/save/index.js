@@ -86767,7 +86767,11 @@ class CacheConfig {
         this.cachePaths = [];
         /** The primary cache key */
         this.cacheKey = "";
-        /** The secondary (restore) key that only contains the prefix and environment */
+        /**
+         *  The secondary (restore) key that only contains the prefix and environment
+         *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
+         *  instead of the branch itself
+         * */
         this.restoreKey = "";
         /** Whether to cache CARGO_HOME/.bin */
         this.cacheBin = true;
@@ -86946,6 +86950,11 @@ class CacheConfig {
         let lockHash = digest(hasher);
         keyFiles.push(...parsedKeyFiles);
         self.keyFiles = sort_and_uniq(keyFiles);
+        // todo(jon): make sure we differentiate incrementals on different branches
+        // we can use just a single cache per incremental branch
+        if (self.incremental) {
+            key += `-incremental`;
+        }
         key += `-${lockHash}`;
         self.cacheKey = key;
         self.cachePaths = [external_path_default().join(CARGO_HOME, "registry"), external_path_default().join(CARGO_HOME, "git")];
