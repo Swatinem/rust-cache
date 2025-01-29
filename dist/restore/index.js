@@ -86691,61 +86691,7 @@ class Workspace {
     }
 }
 
-;// CONCATENATED MODULE: ./src/incremental.ts
-
-// import * as io from "@actions/io";
-
-
-// import { CARGO_HOME } from "./config";
-
-// import { Packages } from "./workspace";
-let incremental_missing = false;
-function isIncrementalMissing() {
-    return incremental_missing;
-}
-async function restoreIncremental(targetDir) {
-    lib_core.debug(`restoring incremental directory "${targetDir}"`);
-    let dir = await external_fs_default().promises.opendir(targetDir);
-    for await (const dirent of dir) {
-        if (dirent.isDirectory()) {
-            let dirName = external_path_default().join(dir.path, dirent.name);
-            // is it a profile dir, or a nested target dir?
-            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
-            try {
-                if (isNestedTarget) {
-                    await restoreIncremental(dirName);
-                }
-                else {
-                    await restoreIncrementalProfile(dirName);
-                }
-                restoreIncrementalProfile;
-            }
-            catch { }
-        }
-    }
-}
-async function restoreIncrementalProfile(dirName) {
-    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
-    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
-    if (await utils_exists(incrementalJson)) {
-        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
-        const { modifiedTimes } = JSON.parse(contents);
-        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
-        // Write the mtimes to all the files in the profile directory
-        for (const fileName of Object.keys(modifiedTimes)) {
-            const mtime = modifiedTimes[fileName];
-            const filePath = external_path_default().join(dirName, fileName);
-            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
-        }
-    }
-    else {
-        lib_core.debug(`incremental-restore.json not found for ${dirName}`);
-        incremental_missing = true;
-    }
-}
-
 ;// CONCATENATED MODULE: ./src/config.ts
-
 
 
 
@@ -87046,12 +86992,6 @@ class CacheConfig {
     saveState() {
         lib_core.saveState(STATE_CONFIG, this);
     }
-    isIncrementalMissing() {
-        if (this.incremental) {
-            return isIncrementalMissing();
-        }
-        return false;
-    }
 }
 /**
  * Checks if the cache is up to date.
@@ -87112,7 +87052,7 @@ function sort_and_uniq(a) {
 
 
 
-async function cleanTargetDir(targetDir, packages, checkTimestamp) {
+async function cleanTargetDir(targetDir, packages, checkTimestamp = false) {
     lib_core.debug(`cleaning target directory "${targetDir}"`);
     // remove all *files* from the profile directory
     let dir = await external_fs_default().promises.opendir(targetDir);
@@ -87136,7 +87076,7 @@ async function cleanTargetDir(targetDir, packages, checkTimestamp) {
         }
     }
 }
-async function cleanProfileTarget(profileDir, packages, checkTimestamp) {
+async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) {
     lib_core.debug(`cleaning profile directory "${profileDir}"`);
     // Quite a few testing utility crates store compilation artifacts as nested
     // workspaces under `target/tests`. Notably, `target/tests/target` and
@@ -87394,6 +87334,54 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
+;// CONCATENATED MODULE: ./src/incremental.ts
+
+// import * as io from "@actions/io";
+
+
+// import { CARGO_HOME } from "./config";
+
+// import { Packages } from "./workspace";
+async function restoreIncremental(targetDir) {
+    lib_core.debug(`restoring incremental directory "${targetDir}"`);
+    let dir = await external_fs_default().promises.opendir(targetDir);
+    for await (const dirent of dir) {
+        if (dirent.isDirectory()) {
+            let dirName = external_path_default().join(dir.path, dirent.name);
+            // is it a profile dir, or a nested target dir?
+            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
+            try {
+                if (isNestedTarget) {
+                    await restoreIncremental(dirName);
+                }
+                else {
+                    await restoreIncrementalProfile(dirName);
+                }
+                restoreIncrementalProfile;
+            }
+            catch { }
+        }
+    }
+}
+async function restoreIncrementalProfile(dirName) {
+    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
+    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
+    if (await utils_exists(incrementalJson)) {
+        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
+        const { modifiedTimes } = JSON.parse(contents);
+        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
+        // Write the mtimes to all the files in the profile directory
+        for (const fileName of Object.keys(modifiedTimes)) {
+            const mtime = modifiedTimes[fileName];
+            const filePath = external_path_default().join(dirName, fileName);
+            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
+        }
+    }
+    else {
+        lib_core.debug(`incremental-restore.json not found for ${dirName}`);
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/restore.ts
 
 
@@ -87430,7 +87418,9 @@ async function run() {
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
         // https://github.com/actions/toolkit/pull/1378
         // TODO: remove this once the underlying bug is fixed.
-        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], { lookupOnly });
+        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], {
+            lookupOnly,
+        });
         if (restoreKey) {
             const match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);

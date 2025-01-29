@@ -7,12 +7,6 @@ import path from "path";
 import { exists } from "./utils";
 // import { Packages } from "./workspace";
 
-let incremental_missing = false;
-
-export function isIncrementalMissing(): boolean {
-  return incremental_missing;
-}
-
 export async function restoreIncremental(targetDir: string) {
   core.debug(`restoring incremental directory "${targetDir}"`);
 
@@ -52,6 +46,5 @@ async function restoreIncrementalProfile(dirName: string) {
     }
   } else {
     core.debug(`incremental-restore.json not found for ${dirName}`);
-    incremental_missing = true;
   }
 }

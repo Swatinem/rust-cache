@@ -7,7 +7,7 @@ import { CARGO_HOME } from "./config";
 import { exists } from "./utils";
 import { Packages } from "./workspace";
 
-export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp: boolean) {
+export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
   core.debug(`cleaning target directory "${targetDir}"`);
 
   // remove all *files* from the profile directory
@@ -32,7 +32,7 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
   }
 }
 
-async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp: boolean) {
+async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp = false) {
   core.debug(`cleaning profile directory "${profileDir}"`);
 
   // Quite a few testing utility crates store compilation artifacts as nested
@@ -51,12 +51,11 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
 
     // Delete everything else.
     await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+
     return;
   }
 
   let keepProfile = new Set(["build", ".fingerprint", "deps"]);
-
-
   await rmExcept(profileDir, keepProfile);
 
   const keepPkg = new Set(packages.map((p) => p.name));

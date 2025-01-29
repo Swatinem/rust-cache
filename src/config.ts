@@ -10,7 +10,6 @@ import * as toml from "smol-toml";
 import { getCargoBins } from "./cleanup";
 import { CacheProvider, exists, getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
-import { isIncrementalMissing } from "./incremental";
 
 const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
@@ -364,14 +363,6 @@ export class CacheConfig {
    */
   saveState() {
     core.saveState(STATE_CONFIG, this);
-  }
-
-  isIncrementalMissing(): boolean {
-    if (this.incremental) {
-      return isIncrementalMissing();
-    }
-
-    return false;
   }
 }
 
