@@ -87075,35 +87075,35 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremen
         }
         catch { }
         // Delete everything else.
-        let except = new Set(["target", "trybuild"]);
-        // Keep the incremental folder if incremental builds are enabled
-        if (incremental) {
-            except.add("incremental");
-            // Traverse the incremental folder recursively and collect the modified times in a map
-            const incrementalDir = external_path_default().join(profileDir, "incremental");
-            const modifiedTimes = new Map();
-            const fillModifiedTimes = async (dir) => {
-                const dirEntries = await external_fs_default().promises.opendir(dir);
-                for await (const dirent of dirEntries) {
-                    if (dirent.isDirectory()) {
-                        await fillModifiedTimes(external_path_default().join(dir, dirent.name));
-                    }
-                    else {
-                        const fileName = external_path_default().join(dir, dirent.name);
-                        const { mtime } = await external_fs_default().promises.stat(fileName);
-                        modifiedTimes.set(fileName, mtime.getTime());
-                    }
-                }
-            };
-            await fillModifiedTimes(incrementalDir);
-            // Write the modified times to the incremental folder
-            const contents = JSON.stringify({ modifiedTimes });
-            await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
-        }
-        await rmExcept(profileDir, except, checkTimestamp);
+        await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
         return;
     }
     let keepProfile = new Set(["build", ".fingerprint", "deps"]);
+    // Keep the incremental folder if incremental builds are enabled
+    if (incremental) {
+        keepProfile.add("incremental");
+        // Traverse the incremental folder recursively and collect the modified times in a map
+        const incrementalDir = external_path_default().join(profileDir, "incremental");
+        const modifiedTimes = new Map();
+        const fillModifiedTimes = async (dir) => {
+            const dirEntries = await external_fs_default().promises.opendir(dir);
+            for await (const dirent of dirEntries) {
+                if (dirent.isDirectory()) {
+                    await fillModifiedTimes(external_path_default().join(dir, dirent.name));
+                }
+                else {
+                    const fileName = external_path_default().join(dir, dirent.name);
+                    const { mtime } = await external_fs_default().promises.stat(fileName);
+                    modifiedTimes.set(fileName, mtime.getTime());
+                }
+            }
+        };
+        await fillModifiedTimes(incrementalDir);
+        // Write the modified times to the incremental folder
+        core.debug(`writing incremental-restore.json for ${incrementalDir} with ${modifiedTimes} files`);
+        const contents = JSON.stringify({ modifiedTimes });
+        await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
+    }
     await rmExcept(profileDir, keepProfile);
     const keepPkg = new Set(packages.map((p) => p.name));
     await rmExcept(external_path_default().join(profileDir, "build"), keepPkg, checkTimestamp);
