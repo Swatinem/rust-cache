@@ -87407,6 +87407,7 @@ async function run() {
                     lib_core.debug(`${err.stack}`);
                     match = false;
                 }
+                config.saveState();
             }
             setCacheHitOutput(match);
         }

@@ -88,6 +88,7 @@ async function run() {
           core.debug(`${(err as any).stack}`);
           match = false;
         }
+        config.saveState();
       }
 
       setCacheHitOutput(match);
