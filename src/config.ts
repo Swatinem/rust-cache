@@ -251,6 +251,10 @@ export class CacheConfig {
     keyFiles.push(...parsedKeyFiles);
     self.keyFiles = sort_and_uniq(keyFiles);
 
+    if (self.incremental) {
+      key += `-incremental`;
+    }
+
     key += `-${lockHash}`;
     self.cacheKey = key;
 
