@@ -1,9 +1,11 @@
 import * as core from "@actions/core";
 
 import { cleanTargetDir } from "./cleanup";
-import { CacheConfig } from "./config";
+import { CacheConfig, CARGO_HOME } from "./config";
 import { getCacheProvider, reportError } from "./utils";
-import { restoreIncremental } from "./incremental";
+// import { saveMtimes } from "./incremental";
+import path from "path";
+import fs from "fs";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -49,14 +51,18 @@ async function run() {
       const match = restoreKey === key;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
 
+      // Restore the incremental-restore.json file and write the mtimes to all the files in the list
       if (config.incremental) {
-        const incrementalKey = await cacheProvider.cache.restoreCache(config.incrementalPaths.slice(), config.incrementalKey, [config.restoreKey], { lookupOnly });
-        core.debug(`restoring incremental builds from ${incrementalKey}`);
-
-        if (incrementalKey) {
-          for (const workspace of config.workspaces) {
-            await restoreIncremental(workspace.target);
+        try {
+          const restoreJson = path.join(CARGO_HOME, "incremental-restore.json")
+          const restoreString = await fs.promises.readFile(restoreJson, "utf8");
+          const restoreData: Map<String, number> = JSON.parse(restoreString);
+          for (const [file, mtime] of Object.entries(restoreData)) {
+            await fs.promises.utimes(file, new Date(mtime), new Date(mtime));
           }
+        } catch (err) {
+          core.debug(`Could not restore incremental cache - ${err}`);
+          core.debug(`${(err as any).stack}`);
         }
       }
 

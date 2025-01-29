@@ -86712,7 +86712,7 @@ class CacheConfig {
         /** All the paths we want to cache */
         this.cachePaths = [];
         /** All the paths we want to cache for incremental builds */
-        this.incrementalPaths = [];
+        // public incrementalPaths: Array<string> = [];
         /** The primary cache key */
         this.cacheKey = "";
         /** The primary cache key for incremental builds */
@@ -86926,11 +86926,8 @@ class CacheConfig {
             const branchName = lib_core.getInput("incremental-key") || "-shared";
             const incrementalKey = key + `-incremental--` + branchName;
             self.incrementalKey = incrementalKey;
-            if (cacheTargets === "true") {
-                for (const target of self.workspaces.map((ws) => ws.target)) {
-                    self.incrementalPaths.push(external_path_default().join(target, "incremental"));
-                }
-            }
+            // Add the incremental cache to the cachePaths so we can restore it
+            self.cachePaths.push(external_path_default().join(config_CARGO_HOME, "incremental-restore.json"));
         }
         return self;
     }
@@ -87334,58 +87331,12 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
-;// CONCATENATED MODULE: ./src/incremental.ts
-
-// import * as io from "@actions/io";
-
-
-// import { CARGO_HOME } from "./config";
-
-// import { Packages } from "./workspace";
-async function restoreIncremental(targetDir) {
-    lib_core.debug(`restoring incremental directory "${targetDir}"`);
-    let dir = await external_fs_default().promises.opendir(targetDir);
-    for await (const dirent of dir) {
-        if (dirent.isDirectory()) {
-            let dirName = external_path_default().join(dir.path, dirent.name);
-            // is it a profile dir, or a nested target dir?
-            let isNestedTarget = (await utils_exists(external_path_default().join(dirName, "CACHEDIR.TAG"))) || (await utils_exists(external_path_default().join(dirName, ".rustc_info.json")));
-            try {
-                if (isNestedTarget) {
-                    await restoreIncremental(dirName);
-                }
-                else {
-                    await restoreIncrementalProfile(dirName);
-                }
-                restoreIncrementalProfile;
-            }
-            catch { }
-        }
-    }
-}
-async function restoreIncrementalProfile(dirName) {
-    lib_core.debug(`restoring incremental profile directory "${dirName}"`);
-    const incrementalJson = external_path_default().join(dirName, "incremental-restore.json");
-    if (await utils_exists(incrementalJson)) {
-        const contents = await external_fs_default().promises.readFile(incrementalJson, "utf8");
-        const { modifiedTimes } = JSON.parse(contents);
-        lib_core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
-        // Write the mtimes to all the files in the profile directory
-        for (const fileName of Object.keys(modifiedTimes)) {
-            const mtime = modifiedTimes[fileName];
-            const filePath = external_path_default().join(dirName, fileName);
-            await external_fs_default().promises.utimes(filePath, new Date(mtime), new Date(mtime));
-        }
-    }
-    else {
-        lib_core.debug(`incremental-restore.json not found for ${dirName}`);
-    }
-}
-
 ;// CONCATENATED MODULE: ./src/restore.ts
 
 
 
+
+// import { saveMtimes } from "./incremental";
 
 
 process.on("uncaughtException", (e) => {
@@ -87424,13 +87375,19 @@ async function run() {
         if (restoreKey) {
             const match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
+            // Restore the incremental-restore.json file and write the mtimes to all the files in the list
             if (config.incremental) {
-                const incrementalKey = await cacheProvider.cache.restoreCache(config.incrementalPaths.slice(), config.incrementalKey, [config.restoreKey], { lookupOnly });
-                lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
-                if (incrementalKey) {
-                    for (const workspace of config.workspaces) {
-                        await restoreIncremental(workspace.target);
+                try {
+                    const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
+                    const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
+                    const restoreData = JSON.parse(restoreString);
+                    for (const [file, mtime] of Object.entries(restoreData)) {
+                        await external_fs_default().promises.utimes(file, new Date(mtime), new Date(mtime));
                     }
+                }
+                catch (err) {
+                    lib_core.debug(`Could not restore incremental cache - ${err}`);
+                    lib_core.debug(`${err.stack}`);
                 }
             }
             if (!match) {

@@ -2,11 +2,12 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
-import { CacheConfig, isCacheUpToDate } from "./config";
+import { CacheConfig, CARGO_HOME, isCacheUpToDate } from "./config";
 import { getCacheProvider, reportError } from "./utils";
 import { rm } from "fs/promises";
 import fs from "fs";
 import path from "path";
+import { saveMtimes } from "./incremental";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -43,12 +44,18 @@ async function run() {
     if (config.incremental) {
       core.info(`... Saving incremental cache ...`);
       try {
-        core.debug(`paths include ${config.incrementalPaths} with key ${config.incrementalKey}`);
-        for (const paths of config.incrementalPaths) {
-          await saveIncrementalDirs(paths);
-        }
-        await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
-        for (const path of config.incrementalPaths) {
+        const targetDirs = config.workspaces.map((ws) => ws.target);
+        const cache = await saveMtimes(targetDirs);
+        const paths = Array.from(cache.keys());
+        const saved = await cacheProvider.cache.saveCache(paths, config.incrementalKey);
+        core.debug(`saved incremental cache with key ${saved} with contents ${paths}`);
+
+        // write the incremental-restore.json file
+        const serialized = JSON.stringify(cache);
+        await fs.promises.writeFile(path.join(CARGO_HOME, "incremental-restore.json"), serialized);
+
+        // Delete the incremental cache before proceeding
+        for (const [path, _mtime] of cache) {
           core.debug(`  deleting ${path}`);
           await rm(path);
         }
@@ -64,7 +71,7 @@ async function run() {
       allPackages.push(...packages);
       try {
         core.info(`... Cleaning ${workspace.target} ...`);
-        await cleanTargetDir(workspace.target, packages, false);
+        await cleanTargetDir(workspace.target, packages);
       } catch (e) {
         core.debug(`${(e as any).stack}`);
       }
@@ -99,7 +106,6 @@ async function run() {
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
     await cacheProvider.cache.saveCache(config.cachePaths.slice(), config.cacheKey);
-
   } catch (e) {
     reportError(e);
   }
@@ -117,29 +123,29 @@ async function macOsWorkaround() {
 }
 
 
-async function saveIncrementalDirs(incrementalDir: string) {
-  // Traverse the incremental folder recursively and collect the modified times in a map
-  const modifiedTimes = new Map<string, number>();
-  const fillModifiedTimes = async (dir: string) => {
-    const dirEntries = await fs.promises.opendir(dir);
-    for await (const dirent of dirEntries) {
-      if (dirent.isDirectory()) {
-        await fillModifiedTimes(path.join(dir, dirent.name));
-      } else {
-        const fileName = path.join(dir, dirent.name);
-        const { mtime } = await fs.promises.stat(fileName);
-        modifiedTimes.set(fileName, mtime.getTime());
-      }
-    }
-  };
-  await fillModifiedTimes(incrementalDir);
+// async function saveIncrementalDirs(incrementalDir: string) {
+//   // Traverse the incremental folder recursively and collect the modified times in a map
+//   const modifiedTimes = new Map<string, number>();
+//   const fillModifiedTimes = async (dir: string) => {
+//     const dirEntries = await fs.promises.opendir(dir);
+//     for await (const dirent of dirEntries) {
+//       if (dirent.isDirectory()) {
+//         await fillModifiedTimes(path.join(dir, dirent.name));
+//       } else {
+//         const fileName = path.join(dir, dirent.name);
+//         const { mtime } = await fs.promises.stat(fileName);
+//         modifiedTimes.set(fileName, mtime.getTime());
+//       }
+//     }
+//   };
+//   await fillModifiedTimes(incrementalDir);
 
-  // Write the modified times to the incremental folder
-  core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
-  for (const file of modifiedTimes.keys()) {
-    core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
-  }
-  const contents = JSON.stringify({ modifiedTimes });
-  await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
+//   // Write the modified times to the incremental folder
+//   core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
+//   for (const file of modifiedTimes.keys()) {
+//     core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
+//   }
+//   const contents = JSON.stringify({ modifiedTimes });
+//   await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
 
-}
+// }

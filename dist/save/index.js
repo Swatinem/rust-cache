@@ -86712,7 +86712,7 @@ class CacheConfig {
         /** All the paths we want to cache */
         this.cachePaths = [];
         /** All the paths we want to cache for incremental builds */
-        this.incrementalPaths = [];
+        // public incrementalPaths: Array<string> = [];
         /** The primary cache key */
         this.cacheKey = "";
         /** The primary cache key for incremental builds */
@@ -86926,11 +86926,8 @@ class CacheConfig {
             const branchName = core.getInput("incremental-key") || "-shared";
             const incrementalKey = key + `-incremental--` + branchName;
             self.incrementalKey = incrementalKey;
-            if (cacheTargets === "true") {
-                for (const target of self.workspaces.map((ws) => ws.target)) {
-                    self.incrementalPaths.push(external_path_default().join(target, "incremental"));
-                }
-            }
+            // Add the incremental cache to the cachePaths so we can restore it
+            self.cachePaths.push(external_path_default().join(CARGO_HOME, "incremental-restore.json"));
         }
         return self;
     }
@@ -87334,7 +87331,36 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
+;// CONCATENATED MODULE: ./src/incremental.ts
+// import * as core from "@actions/core";
+// import * as io from "@actions/io";
+
+
+// import { CARGO_HOME } from "./config";
+// import { exists } from "./utils";
+// import { Packages } from "./workspace";
+async function saveMtimes(targetDirs) {
+    let cache = new Map();
+    let stack = targetDirs.slice();
+    while (stack.length > 0) {
+        const dirName = stack.pop();
+        const dir = await external_fs_default().promises.opendir(dirName);
+        for await (const dirent of dir) {
+            if (dirent.isDirectory()) {
+                stack.push(external_path_default().join(dirName, dirent.name));
+            }
+            else {
+                const fileName = external_path_default().join(dirName, dirent.name);
+                const { mtime } = await external_fs_default().promises.stat(fileName);
+                cache.set(fileName, mtime.getTime());
+            }
+        }
+    }
+    return cache;
+}
+
 ;// CONCATENATED MODULE: ./src/save.ts
+
 
 
 
@@ -87371,12 +87397,16 @@ async function run() {
         if (config.incremental) {
             core.info(`... Saving incremental cache ...`);
             try {
-                core.debug(`paths include ${config.incrementalPaths} with key ${config.incrementalKey}`);
-                for (const paths of config.incrementalPaths) {
-                    await saveIncrementalDirs(paths);
-                }
-                await cacheProvider.cache.saveCache(config.incrementalPaths.slice(), config.incrementalKey);
-                for (const path of config.incrementalPaths) {
+                const targetDirs = config.workspaces.map((ws) => ws.target);
+                const cache = await saveMtimes(targetDirs);
+                const paths = Array.from(cache.keys());
+                const saved = await cacheProvider.cache.saveCache(paths, config.incrementalKey);
+                core.debug(`saved incremental cache with key ${saved} with contents ${paths}`);
+                // write the incremental-restore.json file
+                const serialized = JSON.stringify(cache);
+                await external_fs_default().promises.writeFile(external_path_default().join(CARGO_HOME, "incremental-restore.json"), serialized);
+                // Delete the incremental cache before proceeding
+                for (const [path, _mtime] of cache) {
                     core.debug(`  deleting ${path}`);
                     await (0,promises_.rm)(path);
                 }
@@ -87392,7 +87422,7 @@ async function run() {
             allPackages.push(...packages);
             try {
                 core.info(`... Cleaning ${workspace.target} ...`);
-                await cleanTargetDir(workspace.target, packages, false);
+                await cleanTargetDir(workspace.target, packages);
             }
             catch (e) {
                 core.debug(`${e.stack}`);
@@ -87442,31 +87472,30 @@ async function macOsWorkaround() {
     }
     catch { }
 }
-async function saveIncrementalDirs(incrementalDir) {
-    // Traverse the incremental folder recursively and collect the modified times in a map
-    const modifiedTimes = new Map();
-    const fillModifiedTimes = async (dir) => {
-        const dirEntries = await external_fs_default().promises.opendir(dir);
-        for await (const dirent of dirEntries) {
-            if (dirent.isDirectory()) {
-                await fillModifiedTimes(external_path_default().join(dir, dirent.name));
-            }
-            else {
-                const fileName = external_path_default().join(dir, dirent.name);
-                const { mtime } = await external_fs_default().promises.stat(fileName);
-                modifiedTimes.set(fileName, mtime.getTime());
-            }
-        }
-    };
-    await fillModifiedTimes(incrementalDir);
-    // Write the modified times to the incremental folder
-    core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
-    for (const file of modifiedTimes.keys()) {
-        core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
-    }
-    const contents = JSON.stringify({ modifiedTimes });
-    await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
-}
+// async function saveIncrementalDirs(incrementalDir: string) {
+//   // Traverse the incremental folder recursively and collect the modified times in a map
+//   const modifiedTimes = new Map<string, number>();
+//   const fillModifiedTimes = async (dir: string) => {
+//     const dirEntries = await fs.promises.opendir(dir);
+//     for await (const dirent of dirEntries) {
+//       if (dirent.isDirectory()) {
+//         await fillModifiedTimes(path.join(dir, dirent.name));
+//       } else {
+//         const fileName = path.join(dir, dirent.name);
+//         const { mtime } = await fs.promises.stat(fileName);
+//         modifiedTimes.set(fileName, mtime.getTime());
+//       }
+//     }
+//   };
+//   await fillModifiedTimes(incrementalDir);
+//   // Write the modified times to the incremental folder
+//   core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
+//   for (const file of modifiedTimes.keys()) {
+//     core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
+//   }
+//   const contents = JSON.stringify({ modifiedTimes });
+//   await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
+// }
 
 })();
 

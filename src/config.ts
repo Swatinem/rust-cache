@@ -22,7 +22,7 @@ export class CacheConfig {
   public cachePaths: Array<string> = [];
 
   /** All the paths we want to cache for incremental builds */
-  public incrementalPaths: Array<string> = [];
+  // public incrementalPaths: Array<string> = [];
 
   /** The primary cache key */
   public cacheKey = "";
@@ -292,11 +292,8 @@ export class CacheConfig {
       const incrementalKey = key + `-incremental--` + branchName;
       self.incrementalKey = incrementalKey;
 
-      if (cacheTargets === "true") {
-        for (const target of self.workspaces.map((ws) => ws.target)) {
-          self.incrementalPaths.push(path.join(target, "incremental"));
-        }
-      }
+      // Add the incremental cache to the cachePaths so we can restore it
+      self.cachePaths.push(path.join(CARGO_HOME, "incremental-restore.json"));
     }
 
     return self;
