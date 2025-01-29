@@ -87334,6 +87334,9 @@ async function rmRF(dirName) {
 ;// CONCATENATED MODULE: ./src/incremental.ts
 // import * as core from "@actions/core";
 // import * as io from "@actions/io";
+// import { CARGO_HOME } from "./config";
+// import { exists } from "./utils";
+// import { Packages } from "./workspace";
 
 
 async function saveMtimes(targetDirs) {
@@ -87480,30 +87483,6 @@ async function macOsWorkaround() {
     }
     catch { }
 }
-// async function saveIncrementalDirs(incrementalDir: string) {
-//   // Traverse the incremental folder recursively and collect the modified times in a map
-//   const modifiedTimes = new Map<string, number>();
-//   const fillModifiedTimes = async (dir: string) => {
-//     const dirEntries = await fs.promises.opendir(dir);
-//     for await (const dirent of dirEntries) {
-//       if (dirent.isDirectory()) {
-//         await fillModifiedTimes(path.join(dir, dirent.name));
-//       } else {
-//         const fileName = path.join(dir, dirent.name);
-//         const { mtime } = await fs.promises.stat(fileName);
-//         modifiedTimes.set(fileName, mtime.getTime());
-//       }
-//     }
-//   };
-//   await fillModifiedTimes(incrementalDir);
-//   // Write the modified times to the incremental folder
-//   core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
-//   for (const file of modifiedTimes.keys()) {
-//     core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
-//   }
-//   const contents = JSON.stringify({ modifiedTimes });
-//   await fs.promises.writeFile(path.join(incrementalDir, "incremental-restore.json"), contents);
-// }
 
 })();
 

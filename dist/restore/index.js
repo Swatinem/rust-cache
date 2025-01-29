@@ -87373,26 +87373,8 @@ async function run() {
             lookupOnly,
         });
         if (restoreKey) {
-            const match = restoreKey === key;
+            let match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
-            // Restore the incremental-restore.json file and write the mtimes to all the files in the list
-            if (config.incremental) {
-                try {
-                    const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
-                    const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
-                    const restoreData = JSON.parse(restoreString);
-                    const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
-                    lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
-                    for (const [file, mtime] of Object.entries(restoreData.times)) {
-                        lib_core.debug(`restoring ${file} with mtime ${mtime}`);
-                        await external_fs_default().promises.utimes(file, new Date(mtime), new Date(mtime));
-                    }
-                }
-                catch (err) {
-                    lib_core.debug(`Could not restore incremental cache - ${err}`);
-                    lib_core.debug(`${err.stack}`);
-                }
-            }
             if (!match) {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
@@ -87403,6 +87385,28 @@ async function run() {
                 }
                 // We restored the cache but it is not a full match.
                 config.saveState();
+            }
+            // Restore the incremental-restore.json file and write the mtimes to all the files in the list
+            if (config.incremental) {
+                try {
+                    const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
+                    const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
+                    const restoreData = JSON.parse(restoreString);
+                    if (restoreData.roots.length == 0) {
+                        throw new Error("No incremental roots found");
+                    }
+                    const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
+                    lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
+                    for (const [file, mtime] of Object.entries(restoreData.times)) {
+                        lib_core.debug(`restoring ${file} with mtime ${mtime}`);
+                        await external_fs_default().promises.utimes(file, new Date(mtime), new Date(mtime));
+                    }
+                }
+                catch (err) {
+                    lib_core.debug(`Could not restore incremental cache - ${err}`);
+                    lib_core.debug(`${err.stack}`);
+                    match = false;
+                }
             }
             setCacheHitOutput(match);
         }

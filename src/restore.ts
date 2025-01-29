@@ -49,8 +49,20 @@ async function run() {
       lookupOnly,
     });
     if (restoreKey) {
-      const match = restoreKey === key;
+      let match = restoreKey === key;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
+
+      if (!match) {
+        // pre-clean the target directory on cache mismatch
+        for (const workspace of config.workspaces) {
+          try {
+            await cleanTargetDir(workspace.target, [], true);
+          } catch { }
+        }
+
+        // We restored the cache but it is not a full match.
+        config.saveState();
+      }
 
       // Restore the incremental-restore.json file and write the mtimes to all the files in the list
       if (config.incremental) {
@@ -58,6 +70,10 @@ async function run() {
           const restoreJson = path.join(CARGO_HOME, "incremental-restore.json");
           const restoreString = await fs.promises.readFile(restoreJson, "utf8");
           const restoreData: MtimeData = JSON.parse(restoreString);
+
+          if (restoreData.roots.length == 0) {
+            throw new Error("No incremental roots found");
+          }
 
           const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
           core.debug(`restoring incremental builds from ${incrementalKey}`);
@@ -70,19 +86,8 @@ async function run() {
         } catch (err) {
           core.debug(`Could not restore incremental cache - ${err}`);
           core.debug(`${(err as any).stack}`);
+          match = false;
         }
-      }
-
-      if (!match) {
-        // pre-clean the target directory on cache mismatch
-        for (const workspace of config.workspaces) {
-          try {
-            await cleanTargetDir(workspace.target, [], true);
-          } catch { }
-        }
-
-        // We restored the cache but it is not a full match.
-        config.saveState();
       }
 
       setCacheHitOutput(match);
