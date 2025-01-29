@@ -86765,8 +86765,12 @@ class CacheConfig {
     constructor() {
         /** All the paths we want to cache */
         this.cachePaths = [];
+        /** All the paths we want to cache for incremental builds */
+        this.incrementalPaths = [];
         /** The primary cache key */
         this.cacheKey = "";
+        /** The primary cache key for incremental builds */
+        this.incrementalKey = "";
         /**
          *  The secondary (restore) key that only contains the prefix and environment
          *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
@@ -86950,13 +86954,14 @@ class CacheConfig {
         let lockHash = digest(hasher);
         keyFiles.push(...parsedKeyFiles);
         self.keyFiles = sort_and_uniq(keyFiles);
-        // todo(jon): make sure we differentiate incrementals on different branches
-        // we can use just a single cache per incremental branch
-        if (self.incremental) {
-            key += `-incremental`;
-        }
         key += `-${lockHash}`;
         self.cacheKey = key;
+        if (self.incremental) {
+            // wire the incremental key to be just for this branch
+            const branchName = lib_core.getInput("incremental-key") || "-shared";
+            const incrementalKey = key + `-incremental` + branchName;
+            self.incrementalKey = incrementalKey;
+        }
         self.cachePaths = [external_path_default().join(config_CARGO_HOME, "registry"), external_path_default().join(config_CARGO_HOME, "git")];
         if (self.cacheBin) {
             self.cachePaths = [
@@ -86977,7 +86982,7 @@ class CacheConfig {
         if (self.incremental) {
             if (cacheTargets === "true") {
                 for (const target of self.workspaces.map((ws) => ws.target)) {
-                    self.cachePaths.push(external_path_default().join(target, "incremental"));
+                    self.incrementalPaths.push(external_path_default().join(target, "incremental"));
                 }
             }
         }
@@ -87176,7 +87181,10 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp, incremen
         };
         await fillModifiedTimes(incrementalDir);
         // Write the modified times to the incremental folder
-        lib_core.debug(`writing incremental-restore.json for ${incrementalDir} with ${modifiedTimes} files`);
+        lib_core.debug(`writing incremental-restore.json for ${incrementalDir} files`);
+        for (const file of modifiedTimes.keys()) {
+            lib_core.debug(`  ${file} -> ${modifiedTimes.get(file)}`);
+        }
         const contents = JSON.stringify({ modifiedTimes });
         await external_fs_default().promises.writeFile(external_path_default().join(incrementalDir, "incremental-restore.json"), contents);
     }
@@ -87452,16 +87460,17 @@ async function run() {
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
         // https://github.com/actions/toolkit/pull/1378
         // TODO: remove this once the underlying bug is fixed.
-        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], {
-            lookupOnly,
-        });
+        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], { lookupOnly });
         if (restoreKey) {
             const match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
             if (config.incremental) {
-                lib_core.debug("restoring incremental builds");
-                for (const workspace of config.workspaces) {
-                    await restoreIncremental(workspace.target);
+                const incrementalKey = await cacheProvider.cache.restoreCache(config.incrementalPaths.slice(), config.incrementalKey, [config.restoreKey], { lookupOnly });
+                lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
+                if (incrementalKey) {
+                    for (const workspace of config.workspaces) {
+                        await restoreIncremental(workspace.target);
+                    }
                 }
             }
             if (!match || config.isIncrementalMissing()) {
