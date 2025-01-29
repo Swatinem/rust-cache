@@ -38,6 +38,8 @@ async function restoreIncrementalProfile(dirName: string) {
     const contents = await fs.promises.readFile(incrementalJson, "utf8");
     const { modifiedTimes } = JSON.parse(contents);
 
+    core.debug(`restoring incremental profile directory "${dirName}" with ${modifiedTimes} files`);
+
     // Write the mtimes to all the files in the profile directory
     for (const fileName of Object.keys(modifiedTimes)) {
       const mtime = modifiedTimes[fileName];

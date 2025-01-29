@@ -50,6 +50,7 @@ async function run() {
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
 
       if (config.incremental) {
+        core.debug("restoring incremental builds");
         for (const workspace of config.workspaces) {
           await restoreIncremental(workspace.target);
         }
