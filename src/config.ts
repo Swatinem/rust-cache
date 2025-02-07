@@ -74,9 +74,10 @@ export class CacheConfig {
       }
     }
 
-    // Add runner OS to the key to avoid cross-contamination of cache
+    // Add runner OS and CPU architecture to the key to avoid cross-contamination of cache
     const runnerOS = os.type();
-    key += `-${runnerOS}`;
+    const runnerArch = os.arch();
+    key += `-${runnerOS}-${runnerArch}`;
 
     self.keyPrefix = key;
 
