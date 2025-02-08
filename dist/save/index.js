@@ -86755,9 +86755,10 @@ class CacheConfig {
                 key += `-${job}`;
             }
         }
-        // Add runner OS to the key to avoid cross-contamination of cache
+        // Add runner OS and CPU architecture to the key to avoid cross-contamination of cache
         const runnerOS = external_os_default().type();
-        key += `-${runnerOS}`;
+        const runnerArch = external_os_default().arch();
+        key += `-${runnerOS}-${runnerArch}`;
         self.keyPrefix = key;
         // Construct environment portion of the key:
         // This consists of a hash that considers the rust version
