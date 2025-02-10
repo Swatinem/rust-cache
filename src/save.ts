@@ -2,8 +2,12 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
-import { CacheConfig, isCacheUpToDate } from "./config";
+import { CacheConfig, CARGO_HOME, isCacheUpToDate } from "./config";
 import { getCacheProvider, reportError } from "./utils";
+import { rm } from "fs/promises";
+import fs from "fs";
+import path from "path";
+import { saveMtimes } from "./incremental";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);
@@ -34,6 +38,30 @@ async function run() {
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     if (process.env["RUNNER_OS"] == "macOS") {
       await macOsWorkaround();
+    }
+
+    // Save the incremental cache before we delete it
+    if (config.incremental) {
+      core.info(`... Saving incremental cache ...`);
+      try {
+        const targetDirs = config.workspaces.map((ws) => ws.target);
+        const cache = await saveMtimes(targetDirs);
+        const saved = await cacheProvider.cache.saveCache(cache.roots, config.incrementalKey);
+        core.debug(`saved incremental cache with key ${saved} with contents ${cache.roots}, ${cache.times}`);
+
+        // write the incremental-restore.json file
+        const serialized = JSON.stringify(cache);
+        await fs.promises.writeFile(path.join(CARGO_HOME, "incremental-restore.json"), serialized);
+
+        // Delete the incremental cache before proceeding
+        for (const [path, _mtime] of cache.roots) {
+          core.debug(`  deleting ${path}`);
+          await rm(path);
+        }
+      } catch (e) {
+        core.debug(`Failed to save incremental cache`);
+        core.debug(`${(e as any).stack}`);
+      }
     }
 
     const allPackages = [];
@@ -72,7 +100,7 @@ async function run() {
       core.debug(`${(e as any).stack}`);
     }
 
-    core.info(`... Saving cache ...`);
+    core.info(`... Saving cache with key ${config.cacheKey}`);
     // Pass a copy of cachePaths to avoid mutating the original array as reported by:
     // https://github.com/actions/toolkit/pull/1378
     // TODO: remove this once the underlying bug is fixed.
@@ -90,5 +118,5 @@ async function macOsWorkaround() {
     // Workaround for https://github.com/actions/cache/issues/403
     // Also see https://github.com/rust-lang/cargo/issues/8603
     await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
-  } catch {}
+  } catch { }
 }

@@ -86711,9 +86711,17 @@ class CacheConfig {
     constructor() {
         /** All the paths we want to cache */
         this.cachePaths = [];
+        /** All the paths we want to cache for incremental builds */
+        // public incrementalPaths: Array<string> = [];
         /** The primary cache key */
         this.cacheKey = "";
-        /** The secondary (restore) key that only contains the prefix and environment */
+        /** The primary cache key for incremental builds */
+        this.incrementalKey = "";
+        /**
+         *  The secondary (restore) key that only contains the prefix and environment
+         *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
+         *  instead of the branch itself
+         * */
         this.restoreKey = "";
         /** Whether to cache CARGO_HOME/.bin */
         this.cacheBin = true;
@@ -86721,6 +86729,8 @@ class CacheConfig {
         this.workspaces = [];
         /** The cargo binaries present during main step */
         this.cargoBins = [];
+        /** Whether to cache incremental builds */
+        this.incremental = false;
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -86788,6 +86798,9 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
+        // Make sure we consider incremental builds
+        self.incremental = core.getInput("incremental").toLowerCase() == "true";
+        hasher.update(`incremental=${self.incremental}`);
         key += `-${digest(hasher)}`;
         self.restoreKey = key;
         // Construct the lockfiles portion of the key:
@@ -86909,6 +86922,14 @@ class CacheConfig {
         }
         const bins = await getCargoBins();
         self.cargoBins = Array.from(bins.values());
+        if (self.incremental) {
+            // wire the incremental key to be just for this branch
+            const branchName = core.getInput("incremental-key") || "-shared";
+            const incrementalKey = key + `-incremental--` + branchName;
+            self.incrementalKey = incrementalKey;
+            // Add the incremental cache to the cachePaths so we can restore it
+            self.cachePaths.push(external_path_default().join(CARGO_HOME, "incremental-restore.json"));
+        }
         return self;
     }
     /**
@@ -86959,6 +86980,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             core.info(`  - ${file}`);
         }
+        core.info(`.. Incremental: ${this.incremental}`);
         core.endGroup();
     }
     /**
@@ -87310,7 +87332,54 @@ async function rmRF(dirName) {
     await io.rmRF(dirName);
 }
 
+;// CONCATENATED MODULE: ./src/incremental.ts
+// import * as core from "@actions/core";
+// import * as io from "@actions/io";
+// import { CARGO_HOME } from "./config";
+// import { exists } from "./utils";
+// import { Packages } from "./workspace";
+
+
+async function saveMtimes(targetDirs) {
+    let data = {
+        roots: [],
+        times: {},
+    };
+    let stack = [];
+    // Collect all the incremental files
+    for (const dir of targetDirs) {
+        for (const maybeProfile of await external_fs_default().promises.readdir(dir)) {
+            const profileDir = external_path_default().join(dir, maybeProfile);
+            const incrementalDir = external_path_default().join(profileDir, "incremental");
+            if (external_fs_default().existsSync(incrementalDir)) {
+                stack.push(incrementalDir);
+            }
+        }
+    }
+    // Save the stack as the roots - we cache these directly
+    data.roots = stack.slice();
+    while (stack.length > 0) {
+        const dirName = stack.pop();
+        const dir = await external_fs_default().promises.opendir(dirName);
+        for await (const dirent of dir) {
+            if (dirent.isDirectory()) {
+                stack.push(external_path_default().join(dirName, dirent.name));
+            }
+            else {
+                const fileName = external_path_default().join(dirName, dirent.name);
+                const { mtime } = await external_fs_default().promises.stat(fileName);
+                data.times[fileName] = mtime.getTime();
+            }
+        }
+    }
+    return data;
+}
+
 ;// CONCATENATED MODULE: ./src/save.ts
+
+
+
+
 
 
 
@@ -87339,6 +87408,28 @@ async function run() {
         // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
         if (process.env["RUNNER_OS"] == "macOS") {
             await macOsWorkaround();
+        }
+        // Save the incremental cache before we delete it
+        if (config.incremental) {
+            core.info(`... Saving incremental cache ...`);
+            try {
+                const targetDirs = config.workspaces.map((ws) => ws.target);
+                const cache = await saveMtimes(targetDirs);
+                const saved = await cacheProvider.cache.saveCache(cache.roots, config.incrementalKey);
+                core.debug(`saved incremental cache with key ${saved} with contents ${cache.roots}, ${cache.times}`);
+                // write the incremental-restore.json file
+                const serialized = JSON.stringify(cache);
+                await external_fs_default().promises.writeFile(external_path_default().join(CARGO_HOME, "incremental-restore.json"), serialized);
+                // Delete the incremental cache before proceeding
+                for (const [path, _mtime] of cache.roots) {
+                    core.debug(`  deleting ${path}`);
+                    await (0,promises_.rm)(path);
+                }
+            }
+            catch (e) {
+                core.debug(`Failed to save incremental cache`);
+                core.debug(`${e.stack}`);
+            }
         }
         const allPackages = [];
         for (const workspace of config.workspaces) {
@@ -87376,7 +87467,7 @@ async function run() {
         catch (e) {
             core.debug(`${e.stack}`);
         }
-        core.info(`... Saving cache ...`);
+        core.info(`... Saving cache with key ${config.cacheKey}`);
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
         // https://github.com/actions/toolkit/pull/1378
         // TODO: remove this once the underlying bug is fixed.
