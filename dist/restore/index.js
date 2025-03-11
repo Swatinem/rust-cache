@@ -87258,7 +87258,7 @@ async function cleanGit(packages) {
     }
     catch { }
 }
-const ONE_WEEK = 7 * 24 * 3600 * 1000;
+const THREE_DAYS = 3 * 24 * 3600 * 1000;
 /**
  * Removes all files or directories in `dirName` matching some criteria.
  *
@@ -87275,7 +87275,7 @@ async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
         if (checkTimestamp) {
             const fileName = external_path_default().join(dir.path, dirent.name);
             const { mtime } = await external_fs_default().promises.stat(fileName);
-            const isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
+            const isOutdated = Date.now() - mtime.getTime() > THREE_DAYS;
             if (isOutdated) {
                 await rm(dir.path, dirent);
             }

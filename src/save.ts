@@ -47,7 +47,7 @@ async function run() {
       allPackages.push(...packages);
       try {
         core.info(`... Cleaning ${workspace.target} ...`);
-        await cleanTargetDir(workspace.target, packages);
+        await cleanTargetDir(workspace.target, packages, true);
       } catch (e) {
         core.debug(`${(e as any).stack}`);
       }
