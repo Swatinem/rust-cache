@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.7.8
+
+- Include CPU arch in the cache key
+
+## 2.7.7
+
+- Also cache `cargo install` metadata
+
+## 2.7.6
+
+- Allow opting out of caching $CARGO_HOME/bin
+- Add runner OS in cache key
+- Adds an option to do lookup-only of the cache
+
+## 2.7.5
+
+- Support Cargo.lock format cargo-lock v4
+- Only run macOsWorkaround() on macOS
+
 ## 2.7.3
 
 - Work around upstream problem that causes cache saving to hang for minutes.
