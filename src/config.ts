@@ -20,9 +20,21 @@ const HASH_LENGTH = 8;
 export class CacheConfig {
   /** All the paths we want to cache */
   public cachePaths: Array<string> = [];
+
+  /** All the paths we want to cache for incremental builds */
+  // public incrementalPaths: Array<string> = [];
+
   /** The primary cache key */
   public cacheKey = "";
-  /** The secondary (restore) key that only contains the prefix and environment */
+
+  /** The primary cache key for incremental builds */
+  public incrementalKey = "";
+
+  /**
+   *  The secondary (restore) key that only contains the prefix and environment
+   *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
+   *  instead of the branch itself
+   * */
   public restoreKey = "";
 
   /** Whether to cache CARGO_HOME/.bin */
@@ -34,6 +46,9 @@ export class CacheConfig {
   /** The cargo binaries present during main step */
   public cargoBins: Array<string> = [];
 
+  /** Whether to cache incremental builds */
+  public incremental: boolean = false;
+
   /** The prefix portion of the cache key */
   private keyPrefix = "";
   /** The rust version considered for the cache key */
@@ -43,7 +58,7 @@ export class CacheConfig {
   /** The files considered for the cache key */
   private keyFiles: Array<string> = [];
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Constructs a [`CacheConfig`] with all the paths and keys.
@@ -115,6 +130,10 @@ export class CacheConfig {
     }
 
     self.keyEnvs = keyEnvs;
+
+    // Make sure we consider incremental builds
+    self.incremental = core.getInput("incremental").toLowerCase() == "true";
+    hasher.update(`incremental=${self.incremental}`);
 
     key += `-${digest(hasher)}`;
 
@@ -268,6 +287,16 @@ export class CacheConfig {
     const bins = await getCargoBins();
     self.cargoBins = Array.from(bins.values());
 
+    if (self.incremental) {
+      // wire the incremental key to be just for this branch
+      const branchName = core.getInput("incremental-key") || "-shared";
+      const incrementalKey = key + `-incremental--` + branchName;
+      self.incrementalKey = incrementalKey;
+
+      // Add the incremental cache to the cachePaths so we can restore it
+      self.cachePaths.push(path.join(CARGO_HOME, "incremental-restore.json"));
+    }
+
     return self;
   }
 
@@ -322,6 +351,7 @@ export class CacheConfig {
     for (const file of this.keyFiles) {
       core.info(`  - ${file}`);
     }
+    core.info(`.. Incremental: ${this.incremental}`);
     core.endGroup();
   }
 

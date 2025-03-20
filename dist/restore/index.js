@@ -86711,9 +86711,17 @@ class CacheConfig {
     constructor() {
         /** All the paths we want to cache */
         this.cachePaths = [];
+        /** All the paths we want to cache for incremental builds */
+        // public incrementalPaths: Array<string> = [];
         /** The primary cache key */
         this.cacheKey = "";
-        /** The secondary (restore) key that only contains the prefix and environment */
+        /** The primary cache key for incremental builds */
+        this.incrementalKey = "";
+        /**
+         *  The secondary (restore) key that only contains the prefix and environment
+         *  This should be used if the primary cacheKey is not available - IE pulling from main on a branch
+         *  instead of the branch itself
+         * */
         this.restoreKey = "";
         /** Whether to cache CARGO_HOME/.bin */
         this.cacheBin = true;
@@ -86721,6 +86729,8 @@ class CacheConfig {
         this.workspaces = [];
         /** The cargo binaries present during main step */
         this.cargoBins = [];
+        /** Whether to cache incremental builds */
+        this.incremental = false;
         /** The prefix portion of the cache key */
         this.keyPrefix = "";
         /** The rust version considered for the cache key */
@@ -86788,6 +86798,9 @@ class CacheConfig {
             }
         }
         self.keyEnvs = keyEnvs;
+        // Make sure we consider incremental builds
+        self.incremental = lib_core.getInput("incremental").toLowerCase() == "true";
+        hasher.update(`incremental=${self.incremental}`);
         key += `-${digest(hasher)}`;
         self.restoreKey = key;
         // Construct the lockfiles portion of the key:
@@ -86909,6 +86922,14 @@ class CacheConfig {
         }
         const bins = await getCargoBins();
         self.cargoBins = Array.from(bins.values());
+        if (self.incremental) {
+            // wire the incremental key to be just for this branch
+            const branchName = lib_core.getInput("incremental-key") || "-shared";
+            const incrementalKey = key + `-incremental--` + branchName;
+            self.incrementalKey = incrementalKey;
+            // Add the incremental cache to the cachePaths so we can restore it
+            self.cachePaths.push(external_path_default().join(config_CARGO_HOME, "incremental-restore.json"));
+        }
         return self;
     }
     /**
@@ -86959,6 +86980,7 @@ class CacheConfig {
         for (const file of this.keyFiles) {
             lib_core.info(`  - ${file}`);
         }
+        lib_core.info(`.. Incremental: ${this.incremental}`);
         lib_core.endGroup();
     }
     /**
@@ -87315,6 +87337,9 @@ async function rmRF(dirName) {
 
 
 
+// import { saveMtimes } from "./incremental";
+
+
 process.on("uncaughtException", (e) => {
     lib_core.error(e.message);
     if (e.stack) {
@@ -87334,10 +87359,12 @@ async function run() {
         }
         var lookupOnly = lib_core.getInput("lookup-only").toLowerCase() === "true";
         lib_core.exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
-        lib_core.exportVariable("CARGO_INCREMENTAL", 0);
         const config = await CacheConfig.new();
         config.printInfo(cacheProvider);
         lib_core.info("");
+        if (!config.incremental) {
+            lib_core.exportVariable("CARGO_INCREMENTAL", 0);
+        }
         lib_core.info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
         const key = config.cacheKey;
         // Pass a copy of cachePaths to avoid mutating the original array as reported by:
@@ -87347,7 +87374,7 @@ async function run() {
             lookupOnly,
         });
         if (restoreKey) {
-            const match = restoreKey === key;
+            let match = restoreKey === key;
             lib_core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
             if (!match) {
                 // pre-clean the target directory on cache mismatch
@@ -87360,10 +87387,34 @@ async function run() {
                 // We restored the cache but it is not a full match.
                 config.saveState();
             }
+            // Restore the incremental-restore.json file and write the mtimes to all the files in the list
+            if (config.incremental) {
+                try {
+                    const restoreJson = external_path_default().join(config_CARGO_HOME, "incremental-restore.json");
+                    const restoreString = await external_fs_default().promises.readFile(restoreJson, "utf8");
+                    const restoreData = JSON.parse(restoreString);
+                    lib_core.debug(`restoreData: ${JSON.stringify(restoreData)}`);
+                    if (restoreData.roots.length == 0) {
+                        throw new Error("No incremental roots found");
+                    }
+                    const incrementalKey = await cacheProvider.cache.restoreCache(restoreData.roots, config.incrementalKey, [config.restoreKey], { lookupOnly });
+                    lib_core.debug(`restoring incremental builds from ${incrementalKey}`);
+                    for (const [file, mtime] of Object.entries(restoreData.times)) {
+                        lib_core.debug(`restoring ${file} with mtime ${mtime}`);
+                        await external_fs_default().promises.utimes(file, new Date(mtime), new Date(mtime));
+                    }
+                }
+                catch (err) {
+                    lib_core.debug(`Could not restore incremental cache - ${err}`);
+                    lib_core.debug(`${err.stack}`);
+                    match = false;
+                }
+                config.saveState();
+            }
             setCacheHitOutput(match);
         }
         else {
-            lib_core.info("No cache found.");
+            lib_core.info(`No cache found for ${config.cacheKey} - this key was found ${restoreKey}`);
             config.saveState();
             setCacheHitOutput(false);
         }

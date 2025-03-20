@@ -25,7 +25,7 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
         } else {
           await cleanProfileTarget(dirName, packages, checkTimestamp);
         }
-      } catch {}
+      } catch { }
     } else if (dirent.name !== "CACHEDIR.TAG") {
       await rm(dir.path, dirent);
     }
@@ -43,11 +43,11 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
       // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
       // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
       cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp);
-    } catch {}
+    } catch { }
     try {
       // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
       cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp);
-    } catch {}
+    } catch { }
 
     // Delete everything else.
     await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
@@ -86,7 +86,7 @@ export async function getCargoBins(): Promise<Set<string>> {
         bins.add(bin);
       }
     }
-  } catch {}
+  } catch { }
   return bins;
 }
 
@@ -117,7 +117,7 @@ export async function cleanRegistry(packages: Packages, crates = true) {
     const credentials = path.join(CARGO_HOME, ".cargo", "credentials.toml");
     core.debug(`deleting "${credentials}"`);
     await fs.promises.unlink(credentials);
-  } catch {}
+  } catch { }
 
   // `.cargo/registry/index`
   let pkgSet = new Set(packages.map((p) => p.name));
@@ -229,7 +229,7 @@ export async function cleanGit(packages: Packages) {
         await rm(dir.path, dirent);
       }
     }
-  } catch {}
+  } catch { }
 
   // clean the checkouts
   try {
@@ -250,7 +250,7 @@ export async function cleanGit(packages: Packages) {
         }
       }
     }
-  } catch {}
+  } catch { }
 }
 
 const ONE_WEEK = 7 * 24 * 3600 * 1000;
@@ -302,7 +302,7 @@ async function rm(parent: string, dirent: fs.Dirent) {
     } else if (dirent.isDirectory()) {
       await io.rmRF(fileName);
     }
-  } catch {}
+  } catch { }
 }
 
 async function rmRF(dirName: string) {
