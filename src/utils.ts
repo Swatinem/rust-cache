@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import * as buildjetCache from "@actions/buildjet-cache";
+import * as warpbuildCache from "@actions/warpbuild-cache";
 import * as ghCache from "@actions/cache";
 import fs from "fs";
 
@@ -44,17 +45,32 @@ export async function getCmdOutput(
   return stdout;
 }
 
+export interface GhCache {
+  isFeatureAvailable: typeof ghCache.isFeatureAvailable;
+  restoreCache: typeof ghCache.restoreCache;
+  saveCache: (paths: string[], key: string) => Promise<string | number>;
+}
+
 export interface CacheProvider {
   name: string;
-  cache: typeof ghCache;
+  cache: GhCache;
 }
 
 export function getCacheProvider(): CacheProvider {
   const cacheProvider = core.getInput("cache-provider");
-  const cache = cacheProvider === "github" ? ghCache : cacheProvider === "buildjet" ? buildjetCache : undefined;
-
-  if (!cache) {
-    throw new Error(`The \`cache-provider\` \`{cacheProvider}\` is not valid.`);
+  let cache: GhCache;
+  switch (cacheProvider) {
+    case "github":
+      cache = ghCache;
+      break;
+    case "buildjet":
+      cache = buildjetCache;
+      break;
+    case "warpbuild":
+      cache = warpbuildCache;
+      break;
+    default:
+      throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
   }
 
   return {
