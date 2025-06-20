@@ -14,4 +14,4 @@ watto = { git = "https://github.com/getsentry/watto", rev = "d71c8218506bddba102
 trybuild = "1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = "0.5.4"
+tikv-jemallocator = "0.6.0"
