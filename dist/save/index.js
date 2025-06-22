@@ -87340,9 +87340,14 @@ async function run() {
         if (process.env["RUNNER_OS"] == "macOS") {
             await macOsWorkaround();
         }
+        const workspaceCrates = core.getInput("cache-workspace-crates").toLowerCase() || "false";
         const allPackages = [];
         for (const workspace of config.workspaces) {
             const packages = await workspace.getPackagesOutsideWorkspaceRoot();
+            if (workspaceCrates === "true") {
+                const wsMembers = await workspace.getWorkspaceMembers();
+                packages.push(...wsMembers);
+            }
             allPackages.push(...packages);
             try {
                 core.info(`... Cleaning ${workspace.target} ...`);
