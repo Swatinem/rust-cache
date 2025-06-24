@@ -41,7 +41,7 @@ inputs:
     required: false
     default: "true"
   cache-provider:
-    description: "Determines which provider to use for caching. Options are github or buildjet, defaults to github."
+    description: "Determines which provider to use for caching. Options are github, buildjet, or warpbuild. Defaults to github."
     required: false
     default: "github"
   cache-bin:

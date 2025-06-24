@@ -82,7 +82,7 @@ sensible defaults.
     lookup-only: ""
 
     # Specifies what to use as the backend providing cache
-    # Can be set to either "github" or "buildjet"
+    # Can be set to "github", "buildjet", or "warpbuild"
     # default: "github"
     cache-provider: ""
 
