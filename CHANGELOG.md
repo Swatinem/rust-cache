@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.8.0
+
+- Add support for `warpbuild` cache provider
+- Add new `cache-workspace-crates` feature
+
 ## 2.7.8
 
 - Include CPU arch in the cache key
