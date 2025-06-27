@@ -101,14 +101,14 @@ This is a boolean flag that will be set to `true` when there was an exact cache 
 
 ## Cache Effectiveness
 
-This action only caches the _dependencies_ of a crate, so is more effective if
+This action only caches the _dependencies_ of a crate, so it is more effective if
 the dependency / own code ratio is higher.
 
-It is also most effective for repositories with a `Cargo.lock` file. Library
+It is also more effective for repositories with a `Cargo.lock` file. Library
 repositories with only a `Cargo.toml` file have limited benefits, as cargo will
 _always_ use the most up-to-date dependency versions, which may not be cached.
 
-Usage with Stable Rust is most effective, as a cache is tied to the Rust version.
+Usage with Stable Rust is the most effective, as a cache is tied to the Rust version.
 Using it with Nightly Rust is less effective as it will throw away the cache every day,
 unless a specific nightly build is being pinned.
 
