@@ -15,6 +15,7 @@ export class Workspace {
       const meta: Meta = JSON.parse(
         await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1", ...extraArgs], {
           cwd: this.root,
+          env: { "CARGO_ENCODED_RUSTFLAGS": "" },
         }),
       );
       core.debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
