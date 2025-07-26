@@ -1,4 +1,4 @@
-# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#package-ecosystem-
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/optimizing-pr-creation-version-updates#setting-up-a-cooldown-period-for-dependency-updates
 
 version: 2
 updates:
@@ -8,11 +8,42 @@ updates:
       - tests/wasm-workspace
     schedule:
       interval: weekly
+    # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#groups--
+    # 1 PR per week and group
+    groups:
+      major:
+        update-types: ["major"]
+      minor:
+        update-types: ["minor"]
+      patch:
+        update-types: ["patch"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        # Combine all images of the last week
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+      prd-major:
+        dependency-type: "production"
+        update-types: ["major"]
+      prd-minor:
+        dependency-type: "production"
+        update-types: ["minor"]
+      prd-patch:
+        dependency-type: "production"
+        update-types: ["patch"]
+      dev-major:
+        dependency-type: "development"
+        update-types: ["major"]
+      dev-minor:
+        dependency-type: "development"
+        update-types: ["minor"]
+      dev-patch:
+        dependency-type: "development"
+        update-types: ["patch"]
