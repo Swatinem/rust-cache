@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   git-registry:
+    if: github.repository == 'Swatinem/rust-cache'
     strategy:
       fail-fast: false
       matrix:
@@ -17,7 +18,7 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - run: rustup toolchain install stable --profile minimal --no-self-update
 

@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   install:
+    if: github.repository == 'Swatinem/rust-cache'
     strategy:
       fail-fast: false
       matrix:
@@ -16,7 +17,7 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - run: rustup toolchain install stable --profile minimal --no-self-update
 

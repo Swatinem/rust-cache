@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   workspaces:
+    if: github.repository == 'Swatinem/rust-cache'
     strategy:
       fail-fast: false
       matrix:
@@ -16,7 +17,7 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - run: rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown --no-self-update
 
@@ -26,8 +27,10 @@ jobs:
             tests
             tests/wasm-workspace
 
-      - run: cargo check
+      - name: cargo check (tests)
         working-directory: tests
+        run: cargo check
 
-      - run: cargo check
+      - name: cargo check (tests/wasm-workspace)
         working-directory: tests/wasm-workspace
+        run: cargo check
