@@ -11,11 +11,11 @@ updates:
     # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#groups--
     # 1 PR per week and group
     groups:
-      major:
+      cargo-major:
         update-types: ["major"]
-      minor:
+      cargo-minor:
         update-types: ["minor"]
-      patch:
+      cargo-patch:
         update-types: ["patch"]
   - package-ecosystem: github-actions
     directory: /
@@ -29,6 +29,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
       prd-major:
         dependency-type: "production"
         update-types: ["major"]
