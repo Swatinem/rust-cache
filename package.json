@@ -35,7 +35,7 @@
     "@types/node": "^24.2.1",
     "@vercel/ncc": "^0.38.3",
     "linefix": "^0.1.1",
-    "typescript": "5.8.3"
+    "typescript": "5.9.2"
   },
   "scripts": {
     "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && linefix dist"
