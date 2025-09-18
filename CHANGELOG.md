@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.8.1
+
+- Set empty `CARGO_ENCODED_RUSTFLAGS` when retrieving metadata
+- Various dependency updates
+
 ## 2.8.0
 
 - Add support for `warpbuild` cache provider
