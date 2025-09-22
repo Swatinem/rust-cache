@@ -2,6 +2,8 @@ name: git-registry
 
 on: [push, pull_request]
 
+permissions: {}
+
 jobs:
   git-registry:
     if: github.repository == 'Swatinem/rust-cache'
@@ -18,7 +20,9 @@ jobs:
       CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - run: rustup toolchain install stable --profile minimal --no-self-update
 
