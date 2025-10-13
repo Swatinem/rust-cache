@@ -25,7 +25,7 @@ jobs:
 
       - run: rustup toolchain install stable --profile minimal --component llvm-tools-preview --no-self-update
 
-      - uses: taiki-e/install-action@522492a8c115f1b6d4d318581f09638e9442547b # v2.62.21
+      - uses: taiki-e/install-action@e7ef886cf8f69c25ecef6bbc2858a42e273496ec # v2.62.28
         with:
           tool: cargo-llvm-cov
 
