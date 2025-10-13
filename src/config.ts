@@ -24,8 +24,6 @@ export class CacheConfig {
   public cacheKey = "";
   /** The secondary (restore) key that only contains the prefix and environment */
   public restoreKey = "";
-  /** If the 'GITHIB_JOB' environemnt variable should be added to the cache name */
-  public useJobKey = true;
 
   /** Whether to cache CARGO_HOME/.bin */
   public cacheBin: boolean = true;
@@ -71,7 +69,7 @@ export class CacheConfig {
       }
 
       const job = process.env.GITHUB_JOB;
-      if ((job) && core.useJobKey == true) {
+      if ((job) && core.getInput("use-job-key").toLowerCase() == "true") {
         key += `-${job}`;
       }
     }
