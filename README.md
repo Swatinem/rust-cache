@@ -28,6 +28,10 @@ sensible defaults.
     # default: empty
     key: ""
 
+    # If the automatic `job`-based cache key should be used for the cache name.
+    # default: "true"
+    use-job-key: ""
+
     # A whitespace separated list of env-var *prefixes* who's value contributes
     # to the environment cache key.
     # The env-vars are matched by *prefix*, so the default `RUST` var will
