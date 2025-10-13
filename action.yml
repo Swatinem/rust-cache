@@ -12,6 +12,10 @@ inputs:
   key:
     description: "An additional cache key that is added alongside the automatic `job`-based cache key and can be used to further differentiate jobs."
     required: false
+  use-job-key:
+    description: "If the 'GITHIB_JOB' environemnt variable should be added to the cache name"
+    required: alse
+    default: "true"
   env-vars:
     description: "Additional environment variables to include in the cache key, separated by spaces."
     required: false
