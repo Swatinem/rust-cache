@@ -16,6 +16,10 @@ inputs:
     description: "If the automatic `job`-based cache key should be used for the cache name. Defaults to true."
     required: false
     default: "true"
+  add-job-hash:
+    description: "If the automatic `job`-based cache key should include a hash of the job's contents. Defaults to false."
+    required: false
+    default: "true"
   env-vars:
     description: "Additional environment variables to include in the cache key, separated by spaces."
     required: false

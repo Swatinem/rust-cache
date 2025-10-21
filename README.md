@@ -32,6 +32,10 @@ sensible defaults.
     # default: "true"
     use-job-key: ""
 
+    # If the automatic `job`-based cache key should include a hash of the job's contents.
+    # default: "true"
+    add-job-hash: ""
+
     # A whitespace separated list of env-var *prefixes* who's value contributes
     # to the environment cache key.
     # The env-vars are matched by *prefix*, so the default `RUST` var will

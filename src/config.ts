@@ -116,7 +116,10 @@ export class CacheConfig {
 
     self.keyEnvs = keyEnvs;
 
-    key += `-${digest(hasher)}`;
+    // Add job hash suffix if 'add-job-hash' is true
+    if (core.getInput("add-job-hash").toLowerCase() == "true") {
+      key += `-${digest(hasher)}`;
+    }
 
     self.restoreKey = key;
 
