@@ -31,6 +31,19 @@ async function run() {
     config.printInfo(cacheProvider);
     core.info("");
 
+    try {
+      core.info(`... Checking cache for key "${config.cacheKey}" ...`);
+      const cacheKey= await cacheProvider.cache.restoreCache(config.cachePaths.slice(), config.cacheKey, [], {
+        lookupOnly: true,
+      });
+      if (cacheKey) {
+        core.info(`... Skipping since cache found for key "${cacheKey}".`);
+        return;
+      }
+    } catch (e) {
+      // ignore if something went wrong
+    }
+
     // TODO: remove this once https://github.com/actions/toolkit/pull/553 lands
     if (process.env["RUNNER_OS"] == "macOS") {
       await macOsWorkaround();
