@@ -241,12 +241,15 @@ export class CacheConfig {
       }
     }
 
-    let lockHash = digest(hasher);
-
     keyFiles.push(...parsedKeyFiles);
     self.keyFiles = sort_and_uniq(keyFiles);
 
-    key += `-${lockHash}`;
+    // Add lock hash suffix if 'add-job-hash' is true
+    if (core.getInput("add-job-hash").toLowerCase() == "true") {
+      let lockHash = digest(hasher);
+      key += `-${lockHash}`;
+    }
+
     self.cacheKey = key;
 
     self.cachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
