@@ -69,7 +69,7 @@ export class CacheConfig {
       }
 
       const job = process.env.GITHUB_JOB;
-      if ((job) && core.getInput("use-job-key").toLowerCase() == "true") {
+      if ((job) && core.getInput("add-job-id-key").toLowerCase() == "true") {
         key += `-${job}`;
       }
     }
@@ -116,8 +116,8 @@ export class CacheConfig {
 
     self.keyEnvs = keyEnvs;
 
-    // Add job hash suffix if 'add-job-hash' is true
-    if (core.getInput("add-job-hash").toLowerCase() == "true") {
+    // Add job hash suffix if 'add-rust-environment-hash-key' is true
+    if (core.getInput("add-rust-environment-hash-key").toLowerCase() == "true") {
       key += `-${digest(hasher)}`;
     }
 
@@ -244,8 +244,8 @@ export class CacheConfig {
     keyFiles.push(...parsedKeyFiles);
     self.keyFiles = sort_and_uniq(keyFiles);
 
-    // Add lock hash suffix if 'add-job-hash' is true
-    if (core.getInput("add-job-hash").toLowerCase() == "true") {
+    // Add lock hash suffix if 'add-rust-environment-hash-key' is true
+    if (core.getInput("add-rust-environment-hash-key").toLowerCase() == "true") {
       let lockHash = digest(hasher);
       key += `-${lockHash}`;
     }

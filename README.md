@@ -28,13 +28,15 @@ sensible defaults.
     # default: empty
     key: ""
 
-    # If the automatic `job`-based cache key should be used for the cache name.
+    # If the automatic `job`-based cache key should include the job id.
     # default: "true"
-    use-job-key: ""
+    add-job-id-key: ""
 
-    # If the automatic `job`-based cache key should include a hash of the job's contents.
+    # Weather the a hash of the rust environment should be included in the cache key.
+    # This includes a hash of all Cargo.toml/Cargo.lock files, rust-toolchain files,
+    # and .cargo/config.toml files (if present), as well as the specified 'env-vars'.
     # default: "true"
-    add-job-hash: ""
+    add-rust-environment-hash-key: ""
 
     # A whitespace separated list of env-var *prefixes* who's value contributes
     # to the environment cache key.
