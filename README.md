@@ -131,12 +131,13 @@ This action currently caches the following files/directories:
 
 This cache is automatically keyed by:
 
-- the github [`job_id`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_id),
+- the github [`job_id`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_id) (if `add-job-id-key` is `"true"`),
 - the rustc release / host / hash,
-- the value of some compiler-specific environment variables (eg. RUSTFLAGS, etc), and
-- a hash of all `Cargo.lock` / `Cargo.toml` files found anywhere in the repository (if present).
-- a hash of all `rust-toolchain` / `rust-toolchain.toml` files in the root of the repository (if present).
-- a hash of all `.cargo/config.toml` files in the root of the repository (if present).
+- the following values, if `add-rust-environment-hash-key` is `"true"`:
+  - the value of some compiler-specific environment variables (eg. RUSTFLAGS, etc), and
+  - a hash of all `Cargo.lock` / `Cargo.toml` files found anywhere in the repository (if present).
+  - a hash of all `rust-toolchain` / `rust-toolchain.toml` files in the root of the repository (if present).
+  - a hash of all `.cargo/config.toml` files in the root of the repository (if present).
 
 An additional input `key` can be provided if the builtin keys are not sufficient.
 
