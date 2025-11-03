@@ -12,6 +12,14 @@ inputs:
   key:
     description: "An additional cache key that is added alongside the automatic `job`-based cache key and can be used to further differentiate jobs."
     required: false
+  add-job-id-key:
+    description: "If the automatic `job`-based cache key should include the job id. Defaults to true."
+    required: false
+    default: "true"
+  add-rust-environment-hash-key:
+    description: "Weather the a hash of the rust environment should be included in the cache key. This includes a hash of all Cargo.toml/Cargo.lock files, rust-toolchain files, and .cargo/config.toml files (if present), as well as the specified 'env-vars'. Defaults to true."
+    required: false
+    default: "true"
   env-vars:
     description: "Additional environment variables to include in the cache key, separated by spaces."
     required: false
