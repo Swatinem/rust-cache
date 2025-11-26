@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.8.2
+
+- Don't overwrite env for cargo-metadata call
+
 ## 2.8.1
 
 - Set empty `CARGO_ENCODED_RUSTFLAGS` when retrieving metadata
