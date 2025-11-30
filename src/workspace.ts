@@ -8,12 +8,13 @@ const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
 export class Workspace {
   constructor(public root: string, public target: string) {}
 
-  async getPackages(filter: (p: Meta["packages"][0]) => boolean, ...extraArgs: string[]): Promise<Packages> {
+  async getPackages(cmdFormat: string, filter: (p: Meta["packages"][0]) => boolean, extraArgs?: string): Promise<Packages> {
+    const cmd = "cargo metadata --all-features --format-version 1" + (extraArgs ? ` ${extraArgs}` : "");
     let packages: Packages = [];
     try {
       core.debug(`collecting metadata for "${this.root}"`);
       const meta: Meta = JSON.parse(
-        await getCmdOutput("cargo", ["metadata", "--all-features", "--format-version", "1", ...extraArgs], {
+        await getCmdOutput(cmdFormat, cmd, {
           cwd: this.root,
           env: { ...process.env, "CARGO_ENCODED_RUSTFLAGS": "" },
         }),
@@ -29,12 +30,12 @@ export class Workspace {
     return packages;
   }
 
-  public async getPackagesOutsideWorkspaceRoot(): Promise<Packages> {
-    return await this.getPackages((pkg) => !pkg.manifest_path.startsWith(this.root));
+  public async getPackagesOutsideWorkspaceRoot(cmdFormat: string): Promise<Packages> {
+    return await this.getPackages(cmdFormat, (pkg) => !pkg.manifest_path.startsWith(this.root));
   }
 
-  public async getWorkspaceMembers(): Promise<Packages> {
-    return await this.getPackages((_) => true, "--no-deps");
+  public async getWorkspaceMembers(cmdFormat: string): Promise<Packages> {
+    return await this.getPackages(cmdFormat, (_) => true, "--no-deps");
   }
 }
 

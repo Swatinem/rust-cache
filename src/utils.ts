@@ -16,14 +16,15 @@ export function reportError(e: any) {
 }
 
 export async function getCmdOutput(
+  cmdFormat: string,
   cmd: string,
-  args: Array<string> = [],
   options: exec.ExecOptions = {},
 ): Promise<string> {
+  cmd = cmdFormat.replace("{0}", cmd);
   let stdout = "";
   let stderr = "";
   try {
-    await exec.exec(cmd, args, {
+    await exec.exec(cmd, [], {
       silent: true,
       listeners: {
         stdout(data) {
@@ -37,7 +38,7 @@ export async function getCmdOutput(
     });
   } catch (e) {
     (e as any).commandFailed = {
-      command: `${cmd} ${args.join(" ")}`,
+      command: cmd,
       stderr,
     };
     throw e;

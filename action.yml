@@ -60,6 +60,10 @@ inputs:
     description: "Check if a cache entry exists without downloading the cache"
     required: false
     default: "false"
+  cmd-format:
+    description: "A format string used to format commands to be run, i.e. `rustc` and `cargo`."
+    required: false
+    default: "{0}"
 outputs:
   cache-hit:
     description: "A boolean value that indicates an exact match was found."
