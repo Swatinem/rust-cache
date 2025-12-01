@@ -20,7 +20,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: cachix/install-nix-action@7e5978947b7efba56e96c43fd785691980aca924 # v31.8.4
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31.8.4
 
       - uses: ./
         with:
