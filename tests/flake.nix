@@ -23,6 +23,7 @@
             pkg-config
             rust-bin.stable.latest.minimal
           ];
+          CARGO_TERM_COLOR = "always";
         };
       }
     );

@@ -28,6 +28,6 @@ jobs:
           cmd-format: nix develop ./tests -c {0}
 
       - run: |
-          nix develop -c cargo check --color always
-          nix develop -c cargo test --color always
+          nix develop -c cargo check
+          nix develop -c cargo test
         working-directory: tests
