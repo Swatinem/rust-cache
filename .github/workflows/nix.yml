@@ -25,7 +25,7 @@ jobs:
       - uses: ./
         with:
           workspaces: tests
-          cmd-format: nix develop tests -c {0}
+          cmd-format: nix develop ./tests -c {0}
 
       - run: |
           nix develop -c cargo check --color always
