@@ -99,6 +99,16 @@ sensible defaults.
     # Determines whether to cache the ~/.cargo/bin directory.
     # default: "true"
     cache-bin: ""
+
+    # A format string used to format commands to be run, i.e. `rustc` and `cargo`.
+    # Must contain exactly one occurance of `{0}`, which is the formatting fragment
+    # that will be replaced with the `rustc` or `cargo` command. This is necessary
+    # when using Nix or other setup that requires running these commands within a
+    # specific shell, otherwise the system `rustc` and `cargo` will be run.
+    # default: "{0}"
+    cmd-format: ""
+    # To run within a Nix shell (using the default dev shell of a flake in the repo root):
+    cmd-format: nix develop -c {0}
 ```
 
 Further examples are available in the [.github/workflows](./.github/workflows/) directory.

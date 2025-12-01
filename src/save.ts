@@ -39,9 +39,9 @@ async function run() {
     const workspaceCrates = core.getInput("cache-workspace-crates").toLowerCase() || "false";
     const allPackages = [];
     for (const workspace of config.workspaces) {
-      const packages = await workspace.getPackagesOutsideWorkspaceRoot();
+      const packages = await workspace.getPackagesOutsideWorkspaceRoot(config.cmdFormat);
       if (workspaceCrates === "true") {
-        const wsMembers = await workspace.getWorkspaceMembers();
+        const wsMembers = await workspace.getWorkspaceMembers(config.cmdFormat);
         packages.push(...wsMembers);
       }
       allPackages.push(...packages);

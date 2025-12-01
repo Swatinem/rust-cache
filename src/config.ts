@@ -18,6 +18,9 @@ const STATE_CONFIG = "RUST_CACHE_CONFIG";
 const HASH_LENGTH = 8;
 
 export class CacheConfig {
+  /** A format string for running commands */
+  public cmdFormat: string = "";
+
   /** All the paths we want to cache */
   public cachePaths: Array<string> = [];
   /** The primary cache key */
@@ -52,6 +55,17 @@ export class CacheConfig {
    */
   static async new(): Promise<CacheConfig> {
     const self = new CacheConfig();
+
+    let cmdFormat = core.getInput("cmd-format");
+    if (cmdFormat) {
+      const placeholderMatches = cmdFormat.match(/\{0\}/g);
+      if (!placeholderMatches || placeholderMatches.length !== 1) {
+        cmdFormat = "{0}";
+      }
+    } else {
+      cmdFormat = "{0}";
+    }
+    self.cmdFormat = cmdFormat;
 
     // Construct key prefix:
     // This uses either the `shared-key` input,
@@ -89,7 +103,7 @@ export class CacheConfig {
     // resulting environment hash.
 
     let hasher = crypto.createHash("sha1");
-    const rustVersion = await getRustVersion();
+    const rustVersion = await getRustVersion(cmdFormat);
 
     let keyRust = `${rustVersion.release} ${rustVersion.host}`;
     hasher.update(keyRust);
@@ -158,7 +172,7 @@ export class CacheConfig {
           )),
         );
 
-        const workspaceMembers = await workspace.getWorkspaceMembers();
+        const workspaceMembers = await workspace.getWorkspaceMembers(cmdFormat);
 
         const cargo_manifests = sort_and_uniq(workspaceMembers.map((member) => path.join(member.path, "Cargo.toml")));
 
@@ -366,8 +380,8 @@ interface RustVersion {
   "commit-hash": string;
 }
 
-async function getRustVersion(): Promise<RustVersion> {
-  const stdout = await getCmdOutput("rustc", ["-vV"]);
+async function getRustVersion(cmdFormat: string): Promise<RustVersion> {
+  const stdout = await getCmdOutput(cmdFormat, "rustc -vV");
   let splits = stdout
     .split(/[\n\r]+/)
     .filter(Boolean)

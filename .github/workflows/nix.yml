@@ -1,0 +1,33 @@
+name: nix
+
+on: [push, pull_request]
+
+permissions: {}
+
+jobs:
+  nix:
+    if: github.repository == 'Swatinem/rust-cache'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    name: Test Nix on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31.8.4
+
+      - uses: ./
+        with:
+          workspaces: tests
+          cmd-format: nix develop ./tests -c {0}
+
+      - run: |
+          nix develop -c cargo check
+          nix develop -c cargo test
+        working-directory: tests
