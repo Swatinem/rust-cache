@@ -1,8 +1,9 @@
 import * as core from "@actions/core";
 import * as glob from "@actions/glob";
 import crypto from "crypto";
-import fs from "fs";
-import fs_promises from "fs/promises";
+import fs from "fs/promises";
+import { createReadStream } from "fs";
+import { pipeline } from "stream/promises";
 import os from "os";
 import path from "path";
 import * as toml from "smol-toml";
@@ -40,7 +41,7 @@ export class CacheConfig {
   /** The prefix portion of the cache key */
   private keyPrefix = "";
   /** The rust version considered for the cache key */
-  private keyRust = "";
+  private keyRust: Array<string> = [];
   /** The environment variables considered for the cache key */
   private keyEnvs: Array<string> = [];
   /** The files considered for the cache key */
@@ -103,14 +104,16 @@ export class CacheConfig {
     // resulting environment hash.
 
     let hasher = crypto.createHash("sha1");
-    const rustVersion = await getRustVersion(cmdFormat);
+    const rustVersions = Array.from(await getRustVersions(cmdFormat));
+    // Doesn't matter how they're sorted, just as long as it's deterministic.
+    rustVersions.sort();
 
-    let keyRust = `${rustVersion.release} ${rustVersion.host}`;
-    hasher.update(keyRust);
-    hasher.update(rustVersion["commit-hash"]);
-
-    keyRust += ` (${rustVersion["commit-hash"]})`;
-    self.keyRust = keyRust;
+    for (const rustVersion of rustVersions) {
+      const { release, host, "commit-hash": commitHash } = rustVersion;
+      const keyRust = `${release} ${host} ${commitHash}`;
+      hasher.update(keyRust);
+      self.keyRust.push(keyRust);
+    }
 
     // these prefixes should cover most of the compiler / rust / cargo keys
     const envPrefixes = ["CARGO", "CC", "CFLAGS", "CXX", "CMAKE", "RUST"];
@@ -178,7 +181,7 @@ export class CacheConfig {
 
         for (const cargo_manifest of cargo_manifests) {
           try {
-            const content = await fs_promises.readFile(cargo_manifest, { encoding: "utf8" });
+            const content = await fs.readFile(cargo_manifest, { encoding: "utf8" });
             // Use any since TomlPrimitive is not exposed
             const parsed = toml.parse(content) as { [key: string]: any };
 
@@ -225,7 +228,7 @@ export class CacheConfig {
         const cargo_lock = path.join(workspace.root, "Cargo.lock");
         if (await exists(cargo_lock)) {
           try {
-            const content = await fs_promises.readFile(cargo_lock, { encoding: "utf8" });
+            const content = await fs.readFile(cargo_lock, { encoding: "utf8" });
             const parsed = toml.parse(content);
 
             if ((parsed.version !== 3 && parsed.version !== 4) || !("package" in parsed)) {
@@ -253,9 +256,7 @@ export class CacheConfig {
       keyFiles = sort_and_uniq(keyFiles);
 
       for (const file of keyFiles) {
-        for await (const chunk of fs.createReadStream(file)) {
-          hasher.update(chunk);
-        }
+        await pipeline(createReadStream(file), hasher);
       }
 
       keyFiles.push(...parsedKeyFiles);
@@ -335,7 +336,10 @@ export class CacheConfig {
     core.info(`.. Prefix:`);
     core.info(`  - ${this.keyPrefix}`);
     core.info(`.. Environment considered:`);
-    core.info(`  - Rust Version: ${this.keyRust}`);
+    core.info(`  - Rust Versions:`);
+    for (const rust of this.keyRust) {
+      core.info(`    - ${rust}`);
+    }
     for (const env of this.keyEnvs) {
       core.info(`  - ${env}`);
     }
@@ -380,9 +384,33 @@ interface RustVersion {
   "commit-hash": string;
 }
 
-async function getRustVersion(cmdFormat: string): Promise<RustVersion> {
-  const stdout = await getCmdOutput(cmdFormat, "rustc -vV");
-  let splits = stdout
+async function getRustVersions(cmdFormat: string): Promise<Set<RustVersion>> {
+  const versions = new Set<RustVersion>();
+
+  versions.add(parseRustVersion(await getCmdOutput(cmdFormat, "rustc -vV")));
+
+  const stdout = await (async () => {
+    try {
+      return await getCmdOutput(cmdFormat, "rustup toolchain list --quiet");
+    } catch (e) {
+      core.warning(`Error running rustup toolchain list, falling back to default toolchain only: ${e}`);
+      return undefined;
+    }
+  })();
+  if (stdout !== undefined) {
+    for (const toolchain of stdout.split(/[\n\r]+/)) {
+      const trimmed = toolchain.trim();
+      if (!trimmed) {
+        continue;
+      }
+      versions.add(parseRustVersion(await getCmdOutput(cmdFormat, `rustup run ${toolchain} rustc -vV`)));
+    }
+  }
+  return versions;
+}
+
+function parseRustVersion(stdout: string): RustVersion {
+  const splits = stdout
     .split(/[\n\r]+/)
     .filter(Boolean)
     .map((s) => s.split(":").map((s) => s.trim()))
@@ -394,10 +422,17 @@ async function globFiles(pattern: string): Promise<string[]> {
   const globber = await glob.create(pattern, {
     followSymbolicLinks: false,
   });
-  // fs.statSync resolve the symbolic link and returns stat for the
+  // fs.stat resolve the symbolic link and returns stat for the
   // file it pointed to, so isFile would make sure the resolved
   // file is actually a regular file.
-  return (await globber.glob()).filter((file) => fs.statSync(file).isFile());
+  const files = [];
+  for (const file of await globber.glob()) {
+    const stats = await fs.stat(file);
+    if (stats.isFile()) {
+      files.push(file);
+    }
+  }
+  return files;
 }
 
 function sort_and_uniq(a: string[]) {
