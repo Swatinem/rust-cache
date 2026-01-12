@@ -42,7 +42,9 @@ async function run() {
       lookupOnly,
     });
     if (restoreKey) {
-      const match = restoreKey === key;
+      const match = restoreKey.localeCompare(key, undefined, {
+	sensitivity: "accent"
+      }) === 0;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
       if (!match) {
         // pre-clean the target directory on cache mismatch
