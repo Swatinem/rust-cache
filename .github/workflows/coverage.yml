@@ -19,13 +19,13 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - run: rustup toolchain install stable --profile minimal --component llvm-tools-preview --no-self-update
 
-      - uses: taiki-e/install-action@d850aa816998e5cf15f67a78c7b933f2a5033f8a # v2.63.3
+      - uses: taiki-e/install-action@f8d25fb8a2df08dcd3cead89780d572767b8655f # v2.68.0
         with:
           tool: cargo-llvm-cov
 
