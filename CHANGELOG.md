@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.0
+
+- Update to `node24`
+- Support running from within a `nix` shell
+- Consider all installed toolchains for cache key
+- Use case-insensitive comparison to determine exact cache hit
+
 ## 2.8.2
 
 - Don't overwrite env for cargo-metadata call
