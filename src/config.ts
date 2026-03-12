@@ -3,7 +3,6 @@ import * as glob from "@actions/glob";
 import crypto from "crypto";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
-import { pipeline } from "stream/promises";
 import os from "os";
 import path from "path";
 import * as toml from "smol-toml";
@@ -84,7 +83,7 @@ export class CacheConfig {
       }
 
       const job = process.env.GITHUB_JOB;
-      if ((job) && core.getInput("add-job-id-key").toLowerCase() == "true") {
+      if (job && core.getInput("add-job-id-key").toLowerCase() == "true") {
         key += `-${job}`;
       }
     }
@@ -256,7 +255,9 @@ export class CacheConfig {
       keyFiles = sort_and_uniq(keyFiles);
 
       for (const file of keyFiles) {
-        await pipeline(createReadStream(file), hasher);
+        for await (const chunk of createReadStream(file)) {
+          hasher.update(chunk);
+        }
       }
 
       keyFiles.push(...parsedKeyFiles);
