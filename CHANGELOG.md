@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.9.1
+
+- Fix regression in hash calculation
+
 ## 2.9.0
 
 - Update to `node24`
