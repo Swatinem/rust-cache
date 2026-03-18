@@ -3,7 +3,7 @@ import path from "path";
 
 import { getCmdOutput } from "./utils";
 
-const SAVE_TARGETS = new Set(["lib", "proc-macro"]);
+const SAVE_TARGETS = new Set(["lib", "cdylib", "dylib", "rlib", "staticlib", "proc-macro"]);
 
 export class Workspace {
   constructor(public root: string, public target: string) {}
