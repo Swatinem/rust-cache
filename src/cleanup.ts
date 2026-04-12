@@ -77,16 +77,16 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
 
 export async function getCargoBins(): Promise<Set<string>> {
   const bins = new Set<string>();
+
   try {
-    const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
-      await fs.promises.readFile(path.join(CARGO_HOME, ".crates2.json"), "utf8"),
-    );
-    for (const pkg of Object.values(installs)) {
-      for (const bin of pkg.bins) {
-        bins.add(bin);
+    const dir = await fs.promises.opendir(path.join(CARGO_HOME, "bin"));
+    for await (const dirent of dir) {
+      if (dirent.isFile()) {
+        bins.add(dirent.name);
       }
     }
   } catch {}
+
   return bins;
 }
 
@@ -97,15 +97,11 @@ export async function getCargoBins(): Promise<Set<string>> {
  * @param oldBins The binaries that existed when the action started.
  */
 export async function cleanBin(oldBins: Array<string>) {
-  const bins = await getCargoBins();
-
-  for (const bin of oldBins) {
-    bins.delete(bin);
-  }
+  const binsToRemove = new Set<string>(oldBins);
 
   const dir = await fs.promises.opendir(path.join(CARGO_HOME, "bin"));
   for await (const dirent of dir) {
-    if (dirent.isFile() && !bins.has(dirent.name)) {
+    if (dirent.isFile() && binsToRemove.has(dirent.name)) {
       await rm(dir.path, dirent);
     }
   }
