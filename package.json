@@ -29,7 +29,7 @@
     "@actions/exec": "^3.0.0",
     "@actions/glob": "^0.6.1",
     "@actions/io": "^3.0.2",
-    "smol-toml": "^1.6.0"
+    "smol-toml": "^1.6.1"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",
