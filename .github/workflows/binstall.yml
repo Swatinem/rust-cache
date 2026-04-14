@@ -25,7 +25,7 @@ jobs:
 
       - run: rustup toolchain install stable --profile minimal --no-self-update
 
-      - uses: cargo-bins/cargo-binstall@v1.17.9
+      - uses: cargo-bins/cargo-binstall@v1.18.1
 
       - uses: ./
 
