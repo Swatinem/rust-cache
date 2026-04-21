@@ -32,7 +32,7 @@
     "smol-toml": "^1.6.1"
   },
   "devDependencies": {
-    "@types/node": "^25.4.0",
+    "@types/node": "^25.6.0",
     "@vercel/ncc": "^0.38.4",
     "linefix": "^0.1.1",
     "typescript": "6.0.2"
