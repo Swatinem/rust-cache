@@ -25,7 +25,7 @@
     "@actions/buildjet-cache": "npm:github-actions.cache-buildjet@0.2.0",
     "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
     "@actions/cache": "^6.0.0",
-    "@actions/core": "^3.0.0",
+    "@actions/core": "^3.0.1",
     "@actions/exec": "^3.0.0",
     "@actions/glob": "^0.6.1",
     "@actions/io": "^3.0.2",
