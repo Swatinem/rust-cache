@@ -5,7 +5,7 @@ import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
 import { CacheConfig, isCacheUpToDate } from "./config";
 import { getCacheProvider, reportError } from "./utils";
 
-process.on("uncaughtException", (e) => {
+process.on("uncaughtException", (e: any) => {
   core.error(e.message);
   if (e.stack) {
     core.error(e.stack);
