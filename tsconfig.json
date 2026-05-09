@@ -3,13 +3,14 @@
     "noEmitOnError": false,
     "diagnostics": true,
     "lib": ["esnext"],
-
     "target": "es2020",
-
+    "rootDir": "src",
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "module": "esnext",
     "esModuleInterop": true,
+    "types": ["node"],
+    "ignoreDeprecations": "6.0",
 
     "strict": true,
     "skipLibCheck": true,
@@ -17,5 +18,6 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true
   },
+  "include": ["src/**/*.ts"],
   "exclude": ["dist"]
 }
