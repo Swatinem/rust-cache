@@ -110,7 +110,7 @@ export async function cleanBin(oldBins: Array<string>) {
 export async function cleanRegistry(packages: Packages, crates = true) {
   // remove `.cargo/credentials.toml`
   try {
-    const credentials = path.join(CARGO_HOME, ".cargo", "credentials.toml");
+    const credentials = path.join(CARGO_HOME, "credentials.toml");
     core.debug(`deleting "${credentials}"`);
     await fs.promises.unlink(credentials);
   } catch {}
