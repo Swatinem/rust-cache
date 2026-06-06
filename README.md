@@ -6,7 +6,7 @@ sensible defaults.
 ## Example usage
 
 ```yaml
-- uses: actions/checkout@v5
+- uses: actions/checkout@v6
 
 # selecting a toolchain either by action or manual `rustup` calls should happen
 # before the plugin, as the cache uses the current rustc version as its cache key
@@ -32,7 +32,7 @@ sensible defaults.
     # default: "true"
     add-job-id-key: ""
 
-    # Weather the a hash of the rust environment should be included in the cache key.
+    # Whether the a hash of the rust environment should be included in the cache key.
     # This includes a hash of all Cargo.toml/Cargo.lock files, rust-toolchain files,
     # and .cargo/config.toml files (if present), as well as the specified 'env-vars'.
     # default: "true"

@@ -380,19 +380,18 @@ function digest(hasher: crypto.Hash): string {
 
 export async function getCargoBins(): Promise<Set<string>> {
   const bins = new Set<string>();
+
   try {
-    const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
-      await fs.readFile(path.join(CARGO_HOME, ".crates2.json"), "utf8"),
-    );
-    for (const pkg of Object.values(installs)) {
-      for (const bin of pkg.bins) {
-        bins.add(bin);
+    const dir = await fs.opendir(path.join(CARGO_HOME, "bin"));
+    for await (const dirent of dir) {
+      if (dirent.isFile()) {
+        bins.add(dirent.name);
       }
     }
   } catch {}
+
   return bins;
 }
-
 interface RustVersion {
   host: string;
   release: string;

@@ -3,7 +3,7 @@ import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
 
-import { CARGO_HOME, getCargoBins } from "./config";
+import { CARGO_HOME } from "./config";
 import { exists } from "./utils";
 import { Packages } from "./workspace";
 
@@ -58,7 +58,7 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
   let keepProfile = new Set(["build", ".fingerprint", "deps"]);
   await rmExcept(profileDir, keepProfile);
 
-  const keepPkg = new Set(packages.map((p) => p.name));
+  const keepPkg = new Set(packages.flatMap((p) => [p.name, ...p.targets.map((t) => t.replace(/-/g, "_"))]));
   await rmExcept(path.join(profileDir, "build"), keepPkg, checkTimestamp);
   await rmExcept(path.join(profileDir, ".fingerprint"), keepPkg, checkTimestamp);
 
@@ -82,15 +82,11 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
  * @param oldBins The binaries that existed when the action started.
  */
 export async function cleanBin(oldBins: Array<string>) {
-  const bins = await getCargoBins();
-
-  for (const bin of oldBins) {
-    bins.delete(bin);
-  }
+  const binsToRemove = new Set<string>(oldBins);
 
   const dir = await fs.promises.opendir(path.join(CARGO_HOME, "bin"));
   for await (const dirent of dir) {
-    if (dirent.isFile() && !bins.has(dirent.name)) {
+    if (dirent.isFile() && binsToRemove.has(dirent.name)) {
       await rm(dir.path, dirent);
     }
   }
