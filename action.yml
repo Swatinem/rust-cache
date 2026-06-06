@@ -49,7 +49,7 @@ inputs:
     required: false
     default: "true"
   cache-provider:
-    description: "Determines which provider to use for caching. Options are github, buildjet, or warpbuild. Defaults to github."
+    description: "Determines which provider to use for caching. Options are github, or warpbuild. Defaults to github."
     required: false
     default: "github"
   cache-bin:
@@ -69,8 +69,8 @@ outputs:
     description: "A boolean value that indicates an exact match was found."
 runs:
   using: "node24"
-  main: "dist/restore/index.js"
-  post: "dist/save/index.js"
+  main: "dist/restore.js"
+  post: "dist/save.js"
   post-if: "success() || env.CACHE_ON_FAILURE == 'true'"
 branding:
   icon: "archive"

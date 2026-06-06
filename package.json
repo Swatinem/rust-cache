@@ -21,23 +21,30 @@
     "url": "https://github.com/sponsors/Swatinem"
   },
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
+  "type": "module",
   "dependencies": {
-    "@actions/buildjet-cache": "npm:github-actions.cache-buildjet@0.2.0",
-    "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
-    "@actions/cache": "^6.0.0",
-    "@actions/core": "^3.0.0",
+    "@actions/cache": "^6.0.1",
+    "@actions/core": "^3.0.1",
     "@actions/exec": "^3.0.0",
-    "@actions/glob": "^0.6.1",
+    "@actions/glob": "^0.7.0",
     "@actions/io": "^3.0.2",
-    "smol-toml": "^1.6.0"
+    "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
+    "smol-toml": "^1.6.1"
   },
   "devDependencies": {
-    "@types/node": "^25.4.0",
-    "@vercel/ncc": "^0.38.4",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@types/node": "^25.9.2",
     "linefix": "^0.1.1",
-    "typescript": "5.9.3"
+    "rollup": "^4.61.1",
+    "typescript": "6.0.3"
   },
   "scripts": {
-    "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && linefix dist"
+    "clean": "node -e \"(async () => { try { await require('fs/promises').rm('dist', { recursive: true }); } catch {} })()\"",
+    "prebuild": "npm run clean",
+    "build": "tsc && rollup --config .build/rollup.config.js",
+    "prepublishOnly": "npm run test",
+    "prepare": "npm run build && linefix dist"
   }
 }

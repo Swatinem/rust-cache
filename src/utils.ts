@@ -1,6 +1,5 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
-import * as buildjetCache from "@actions/buildjet-cache";
 import * as warpbuildCache from "@actions/warpbuild-cache";
 import * as ghCache from "@actions/cache";
 import fs from "fs";
@@ -15,11 +14,7 @@ export function reportError(e: any) {
   }
 }
 
-export async function getCmdOutput(
-  cmdFormat: string,
-  cmd: string,
-  options: exec.ExecOptions = {},
-): Promise<string> {
+export async function getCmdOutput(cmdFormat: string, cmd: string, options: exec.ExecOptions = {}): Promise<string> {
   cmd = cmdFormat.replace("{0}", cmd);
   let stdout = "";
   let stderr = "";
@@ -63,9 +58,6 @@ export function getCacheProvider(): CacheProvider {
   switch (cacheProvider) {
     case "github":
       cache = ghCache;
-      break;
-    case "buildjet":
-      cache = buildjetCache;
       break;
     case "warpbuild":
       cache = warpbuildCache;

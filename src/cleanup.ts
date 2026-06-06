@@ -3,7 +3,7 @@ import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
 
-import { CARGO_HOME } from "./config";
+import { CARGO_HOME, getCargoBins } from "./config";
 import { exists } from "./utils";
 import { Packages } from "./workspace";
 
@@ -73,21 +73,6 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
     }),
   );
   await rmExcept(path.join(profileDir, "deps"), keepDeps, checkTimestamp);
-}
-
-export async function getCargoBins(): Promise<Set<string>> {
-  const bins = new Set<string>();
-  try {
-    const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
-      await fs.promises.readFile(path.join(CARGO_HOME, ".crates2.json"), "utf8"),
-    );
-    for (const pkg of Object.values(installs)) {
-      for (const bin of pkg.bins) {
-        bins.add(bin);
-      }
-    }
-  } catch {}
-  return bins;
 }
 
 /**

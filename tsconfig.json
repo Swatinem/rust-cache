@@ -2,20 +2,28 @@
   "compilerOptions": {
     "noEmitOnError": false,
     "diagnostics": true,
-    "lib": ["esnext"],
+    "lib": ["es2024"],
+    "types": ["node"],
 
-    "target": "es2020",
+    "target": "es2024",
 
     "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
     "moduleResolution": "node",
     "module": "esnext",
     "esModuleInterop": true,
+
+    "incremental": true,
+    "tsBuildInfoFile": ".build/tsconfig.build.tsbuildinfo",
 
     "strict": true,
     "skipLibCheck": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+
+    "outDir": ".build"
   },
+  "include": ["src", "rollup.config.ts"],
   "exclude": ["dist"]
 }

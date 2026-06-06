@@ -7,7 +7,6 @@ import os from "os";
 import path from "path";
 import * as toml from "smol-toml";
 
-import { getCargoBins } from "./cleanup";
 import { CacheProvider, exists, getCmdOutput } from "./utils";
 import { Workspace } from "./workspace";
 
@@ -377,6 +376,21 @@ export function isCacheUpToDate(): boolean {
  */
 function digest(hasher: crypto.Hash): string {
   return hasher.digest("hex").substring(0, HASH_LENGTH);
+}
+
+export async function getCargoBins(): Promise<Set<string>> {
+  const bins = new Set<string>();
+  try {
+    const { installs }: { installs: { [key: string]: { bins: Array<string> } } } = JSON.parse(
+      await fs.readFile(path.join(CARGO_HOME, ".crates2.json"), "utf8"),
+    );
+    for (const pkg of Object.values(installs)) {
+      for (const bin of pkg.bins) {
+        bins.add(bin);
+      }
+    }
+  } catch {}
+  return bins;
 }
 
 interface RustVersion {

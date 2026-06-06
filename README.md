@@ -92,7 +92,7 @@ sensible defaults.
     lookup-only: ""
 
     # Specifies what to use as the backend providing cache
-    # Can be set to "github", "buildjet", or "warpbuild"
+    # Can be set to "github", or "warpbuild"
     # default: "github"
     cache-provider: ""
 
@@ -142,7 +142,7 @@ This action currently caches the following files/directories:
 This cache is automatically keyed by:
 
 - the github [`job_id`](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_id)
-(if `add-job-id-key` is `"true"`),
+  (if `add-job-id-key` is `"true"`),
 - the rustc release / host / hash (for all installed toolchains when
   available),
 - the following values, if `add-rust-environment-hash-key` is `"true"`:
@@ -210,5 +210,5 @@ to see those details as well as further details related to caching operations.
 - The cache cleaning process currently removes all the files from `~/.cargo/bin`
   that were present before the action ran (for example `rustc`), by default.
   This can be an issue on long-running self-hosted runners, where such state
-  is expected to be preserved across runs.  You can work around this by setting
+  is expected to be preserved across runs. You can work around this by setting
   `cache-bin: "false"`.
