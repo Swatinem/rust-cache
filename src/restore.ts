@@ -12,7 +12,7 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
-  const cacheProvider = getCacheProvider();
+  const cacheProvider = await getCacheProvider();
 
   if (!cacheProvider.cache.isFeatureAvailable()) {
     setCacheHitOutput(false);
@@ -42,9 +42,10 @@ async function run() {
       lookupOnly,
     });
     if (restoreKey) {
-      const match = restoreKey.localeCompare(key, undefined, {
-	sensitivity: "accent"
-      }) === 0;
+      const match =
+        restoreKey.localeCompare(key, undefined, {
+          sensitivity: "accent",
+        }) === 0;
       core.info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
       if (!match) {
         // pre-clean the target directory on cache mismatch

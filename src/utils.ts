@@ -1,7 +1,5 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
-import * as warpbuildCache from "@actions/warpbuild-cache";
-import * as ghCache from "@actions/cache";
 import fs from "fs";
 
 export function reportError(e: any) {
@@ -42,8 +40,8 @@ export async function getCmdOutput(cmdFormat: string, cmd: string, options: exec
 }
 
 export interface GhCache {
-  isFeatureAvailable: typeof ghCache.isFeatureAvailable;
-  restoreCache: typeof ghCache.restoreCache;
+  isFeatureAvailable: typeof import("@actions/cache").isFeatureAvailable;
+  restoreCache: typeof import("@actions/cache").restoreCache;
   saveCache: (paths: string[], key: string) => Promise<string | number>;
 }
 
@@ -52,15 +50,15 @@ export interface CacheProvider {
   cache: GhCache;
 }
 
-export function getCacheProvider(): CacheProvider {
+export async function getCacheProvider(): Promise<CacheProvider> {
   const cacheProvider = core.getInput("cache-provider");
   let cache: GhCache;
   switch (cacheProvider) {
     case "github":
-      cache = ghCache;
+      cache = await import("@actions/cache");
       break;
     case "warpbuild":
-      cache = warpbuildCache;
+      cache = await import("@actions/warpbuild-cache");
       break;
     default:
       throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);

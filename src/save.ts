@@ -13,7 +13,7 @@ process.on("uncaughtException", (e) => {
 });
 
 async function run() {
-  const cacheProvider = getCacheProvider();
+  const cacheProvider = await getCacheProvider();
 
   const save = core.getInput("save-if").toLowerCase() || "true";
 
