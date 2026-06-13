@@ -27,6 +27,20 @@ export class CacheConfig {
   /** The secondary (restore) key that only contains the prefix and environment */
   public restoreKey = "";
 
+  /** Whether the primary cache needs saving in the post action */
+  public cacheNeedsSave = true;
+
+  /** Workspace target paths cached separately when `target-key` is used */
+  public targetCachePaths: Array<string> = [];
+  /** The source-keyed workspace target cache key */
+  public targetCacheKey = "";
+  /** The source-keyed workspace target restore keys */
+  public targetRestoreKeys: Array<string> = [];
+  /** Whether workspace targets are cached separately from CARGO_HOME */
+  public targetCacheEnabled = false;
+  /** Whether the workspace target cache needs saving in the post action */
+  public targetCacheNeedsSave = false;
+
   /** Whether to cache CARGO_HOME/.bin */
   public cacheBin: boolean = true;
 
@@ -266,24 +280,50 @@ export class CacheConfig {
       key += `-${lockHash}`;
     }
 
-    self.cacheKey = key;
+    const baseCacheKey = key;
+    const baseRestoreKey = self.restoreKey;
 
-    self.cachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
+    const cargoCachePaths = [path.join(CARGO_HOME, "registry"), path.join(CARGO_HOME, "git")];
     if (self.cacheBin) {
-      self.cachePaths = [
+      cargoCachePaths.unshift(
         path.join(CARGO_HOME, "bin"),
         path.join(CARGO_HOME, ".crates.toml"),
         path.join(CARGO_HOME, ".crates2.json"),
-        ...self.cachePaths,
-      ];
+      );
     }
     const cacheTargets = core.getInput("cache-targets").toLowerCase() || "true";
-    if (cacheTargets === "true") {
-      self.cachePaths.push(...workspaces.map((ws) => ws.target));
+    const targetCachePaths = cacheTargets === "true" ? workspaces.map((ws) => ws.target) : [];
+    const cacheDirectories = core.getInput("cache-directories").trim().split(/\s+/).filter(Boolean);
+
+    const targetKey = core.getInput("target-key");
+    const workspaceCrates = core.getInput("cache-workspace-crates").toLowerCase() || "false";
+    if (targetKey && cacheTargets !== "true") {
+      core.warning("`target-key` is ignored because `cache-targets` is not `true`.");
+    }
+    if (targetKey && workspaceCrates !== "true") {
+      core.warning("`target-key` is ignored because `cache-workspace-crates` is not `true`.");
     }
 
-    const cacheDirectories = core.getInput("cache-directories");
-    for (const dir of cacheDirectories.trim().split(/\s+/).filter(Boolean)) {
+    self.targetCacheEnabled = Boolean(targetKey) && cacheTargets === "true" && workspaceCrates === "true";
+    if (self.targetCacheEnabled) {
+      self.cacheKey = baseCacheKey;
+      self.cachePaths = [...cargoCachePaths, ...cacheDirectories];
+
+      const targetKeyPrefix = `${baseRestoreKey}-target`;
+      const targetKeyEnvironment = baseCacheKey.slice(baseRestoreKey.length);
+      self.targetCachePaths = targetCachePaths;
+      self.targetCacheKey = `${targetKeyPrefix}${targetKeyEnvironment}-${targetKey}`;
+      self.targetRestoreKeys = uniqInOrder([`${targetKeyPrefix}${targetKeyEnvironment}-`, `${targetKeyPrefix}-`]);
+    } else {
+      self.cacheKey = baseCacheKey;
+      self.cachePaths = [...cargoCachePaths];
+    }
+
+    if (!self.targetCacheEnabled && cacheTargets === "true") {
+      self.cachePaths.push(...targetCachePaths);
+    }
+
+    for (const dir of self.targetCacheEnabled ? [] : cacheDirectories) {
       self.cachePaths.push(dir);
     }
 
@@ -325,14 +365,26 @@ export class CacheConfig {
     for (const workspace of this.workspaces) {
       core.info(`    ${workspace.root}`);
     }
-    core.info(`Cache Paths:`);
+    core.info(`${this.targetCacheEnabled ? "Cargo Cache" : "Cache"} Paths:`);
     for (const path of this.cachePaths) {
       core.info(`    ${path}`);
     }
-    core.info(`Restore Key:`);
+    core.info(`${this.targetCacheEnabled ? "Cargo Restore" : "Restore"} Key:`);
     core.info(`    ${this.restoreKey}`);
-    core.info(`Cache Key:`);
+    core.info(`${this.targetCacheEnabled ? "Cargo Cache" : "Cache"} Key:`);
     core.info(`    ${this.cacheKey}`);
+    if (this.targetCacheEnabled) {
+      core.info(`Target Cache Paths:`);
+      for (const path of this.targetCachePaths) {
+        core.info(`    ${path}`);
+      }
+      core.info(`Target Restore Keys:`);
+      for (const key of this.targetRestoreKeys) {
+        core.info(`    ${key}`);
+      }
+      core.info(`Target Cache Key:`);
+      core.info(`    ${this.targetCacheKey}`);
+    }
     core.info(`.. Prefix:`);
     core.info(`  - ${this.keyPrefix}`);
     core.info(`.. Environment considered:`);
@@ -464,4 +516,8 @@ function sort_and_uniq(a: string[]) {
       }
       return accumulator;
     }, []);
+}
+
+function uniqInOrder(a: string[]) {
+  return a.filter((value, index) => a.indexOf(value) === index);
 }

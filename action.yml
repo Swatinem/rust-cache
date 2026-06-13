@@ -44,6 +44,9 @@ inputs:
     description: "Similar to cache-all-crates. If `true` the workspace crates will be cached."
     required: false
     default: "false"
+  target-key:
+    description: "An additional key for source-keyed target caching. When set together with cache-targets and cache-workspace-crates, workspace target directories are cached separately using this key."
+    required: false
   save-if:
     description: "Determiners whether the cache should be saved. If `false`, the cache is only restored."
     required: false

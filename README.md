@@ -76,6 +76,14 @@ sensible defaults.
     # default: "false"
     cache-workspace-crates: ""
 
+    # An additional key for source-keyed target caching.
+    # When set together with `cache-targets` and `cache-workspace-crates`,
+    # workspace target directories are cached separately from CARGO_HOME using
+    # this key. This allows rebuilt workspace artifacts to be saved under a new
+    # source key while preserving the normal dependency cache behavior.
+    # default: empty
+    target-key: ""
+
     # Determines whether the cache should be saved.
     # If `false`, the cache is only restored.
     # Useful for jobs where the matrix is additive e.g. additional Cargo features,
@@ -172,6 +180,14 @@ to recreate it from the compressed crate archives in `~/.cargo/registry/cache`.
 
 The action will try to restore from a previous `Cargo.lock` version as well, so
 lockfile updates should only re-build changed dependencies.
+
+When `target-key` is set together with `cache-targets` and
+`cache-workspace-crates`, workspace target directories are restored after the
+normal CARGO_HOME cache and saved as a separate source-keyed cache. This is useful
+for workflows that deliberately cache workspace crates and can provide a stable
+source fingerprint, for example `${{ hashFiles('src/**', 'Cargo.toml') }}`.
+The target cache still restores from older target caches via restore prefixes,
+but exact source matches can become Cargo no-ops across repeated runs.
 
 The action invokes `cargo metadata` to determine the current set of dependencies.
 
