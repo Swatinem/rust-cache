@@ -33,6 +33,7 @@ jobs:
           shared-key: target-triple-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           add-job-id-key: "false"
           add-rust-environment-hash-key: "false"
+          cache-workspace-crates: "true"
 
       - run: cargo check --target "$RUST_TARGET"
         working-directory: tests
@@ -68,6 +69,7 @@ jobs:
           shared-key: target-triple-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           add-job-id-key: "false"
           add-rust-environment-hash-key: "false"
+          cache-workspace-crates: "true"
           save-if: "false"
 
       - name: Verify target-triple artifacts
@@ -79,7 +81,7 @@ jobs:
             echo "The target-triple cache was not restored exactly." >&2
             exit 1
           fi
-          if ! compgen -G "tests/target/$RUST_TARGET/debug/deps/librust_cache-*" > /dev/null; then
+          if ! compgen -G "tests/target/$RUST_TARGET/debug/deps/rust_cache-*" > /dev/null; then
             echo "The target-triple artifacts were not restored." >&2
             exit 1
           fi
