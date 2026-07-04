@@ -23,13 +23,13 @@
   "homepage": "https://github.com/Swatinem/rust-cache#readme",
   "type": "module",
   "dependencies": {
-    "@actions/cache": "^6.0.1",
+    "@actions/cache": "^6.1.0",
     "@actions/core": "^3.0.1",
     "@actions/exec": "^3.0.0",
     "@actions/glob": "^0.7.0",
     "@actions/io": "^3.0.2",
     "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
-    "smol-toml": "^1.6.1"
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^29.0.3",
