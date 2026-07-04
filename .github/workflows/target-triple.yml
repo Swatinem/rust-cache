@@ -1,0 +1,85 @@
+name: target-triple
+
+on: [push, pull_request]
+
+permissions: {}
+
+jobs:
+  save:
+    if: github.repository == 'Swatinem/rust-cache'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Save target-triple cache on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Set host target
+        shell: bash
+        run: |
+          echo "RUST_TARGET=$(rustc -vV | sed -n 's/^host: //p')" >> "$GITHUB_ENV"
+
+      - uses: ./
+        with:
+          workspaces: tests
+          shared-key: target-triple-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          add-job-id-key: "false"
+          add-rust-environment-hash-key: "false"
+
+      - run: cargo check --target "$RUST_TARGET"
+        working-directory: tests
+        shell: bash
+
+  restore:
+    if: github.repository == 'Swatinem/rust-cache'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Restore target-triple cache on ${{ matrix.os }}
+    needs: save
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - name: Set host target
+        shell: bash
+        run: |
+          echo "RUST_TARGET=$(rustc -vV | sed -n 's/^host: //p')" >> "$GITHUB_ENV"
+
+      - id: cache
+        uses: ./
+        with:
+          workspaces: tests
+          shared-key: target-triple-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          add-job-id-key: "false"
+          add-rust-environment-hash-key: "false"
+          save-if: "false"
+
+      - name: Verify target-triple artifacts
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        shell: bash
+        run: |
+          if [[ "$CACHE_HIT" != "true" ]]; then
+            echo "The target-triple cache was not restored exactly." >&2
+            exit 1
+          fi
+          if ! compgen -G "tests/target/$RUST_TARGET/debug/deps/librust_cache-*" > /dev/null; then
+            echo "The target-triple artifacts were not restored." >&2
+            exit 1
+          fi
