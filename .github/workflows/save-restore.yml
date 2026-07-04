@@ -7,8 +7,13 @@ permissions: {}
 jobs:
   save:
     if: github.repository == 'Swatinem/rust-cache'
-    name: Save a new cache on windows-latest
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Save a new cache on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
     env:
       CARGO_TERM_COLOR: always
@@ -24,16 +29,21 @@ jobs:
       - uses: ./
         with:
           workspaces: tests
-          shared-key: save-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          shared-key: save-restore-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - run: cargo check
         working-directory: tests
 
   restore:
     if: github.repository == 'Swatinem/rust-cache'
-    name: Restore the newly saved cache on windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    name: Restore the newly saved cache on ${{ matrix.os }}
     needs: save
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
 
     env:
       CARGO_TERM_COLOR: always
@@ -49,7 +59,7 @@ jobs:
         uses: ./
         with:
           workspaces: tests
-          shared-key: save-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          shared-key: save-restore-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           save-if: "false"
 
       - name: Verify exact cache hit
