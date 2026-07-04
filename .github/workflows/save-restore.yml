@@ -1,0 +1,60 @@
+name: save-restore
+
+on: [push, pull_request]
+
+permissions: {}
+
+jobs:
+  save:
+    if: github.repository == 'Swatinem/rust-cache'
+    name: Save a new cache on windows-latest
+    runs-on: windows-latest
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - run: rustup toolchain install stable --profile minimal --no-self-update
+
+      # Use a per-run key so this job always exercises the post-step save path.
+      - uses: ./
+        with:
+          workspaces: tests
+          shared-key: save-restore-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - run: cargo check
+        working-directory: tests
+
+  restore:
+    if: github.repository == 'Swatinem/rust-cache'
+    name: Restore the newly saved cache on windows-latest
+    needs: save
+    runs-on: windows-latest
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - run: rustup toolchain install stable --profile minimal --no-self-update
+
+      - id: cache
+        uses: ./
+        with:
+          workspaces: tests
+          shared-key: save-restore-${{ github.run_id }}-${{ github.run_attempt }}
+          save-if: "false"
+
+      - name: Verify exact cache hit
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          echo "The cache created by the save job could not be restored." >&2
+          exit 1
