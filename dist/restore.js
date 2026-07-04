@@ -1,4 +1,4 @@
-import { e as error, g as getCacheProvider, a as getInput, b as exportVariable, C as CacheConfig, i as info, c as cleanTargetDir, r as reportError, s as setOutput } from './cleanup-ChNUL7jL.js';
+import { e as error, g as getCacheProvider, a as getInput, b as exportVariable, C as CacheConfig, i as info, r as reportError, s as setOutput, c as cleanTargetDir } from './cleanup-ctNqmXyy.js';
 import 'os';
 import 'crypto';
 import 'fs';
@@ -47,44 +47,43 @@ async function run() {
         return;
     }
     try {
-        var cacheOnFailure = getInput("cache-on-failure").toLowerCase();
+        let cacheOnFailure = getInput("cache-on-failure").toLowerCase();
         if (cacheOnFailure !== "true") {
             cacheOnFailure = "false";
         }
-        var lookupOnly = getInput("lookup-only").toLowerCase() === "true";
+        const lookupOnly = getInput("lookup-only").toLowerCase() === "true";
         exportVariable("CACHE_ON_FAILURE", cacheOnFailure);
         exportVariable("CARGO_INCREMENTAL", 0);
         const config = await CacheConfig.new();
         config.printInfo(cacheProvider);
         info("");
         info(`... ${lookupOnly ? "Checking" : "Restoring"} cache ...`);
-        const key = config.cacheKey;
-        // Pass a copy of cachePaths to avoid mutating the original array as reported by:
-        // https://github.com/actions/toolkit/pull/1378
-        // TODO: remove this once the underlying bug is fixed.
-        const restoreKey = await cacheProvider.cache.restoreCache(config.cachePaths.slice(), key, [config.restoreKey], {
-            lookupOnly,
-        });
-        if (restoreKey) {
-            const match = restoreKey.localeCompare(key, undefined, {
-                sensitivity: "accent",
-            }) === 0;
-            info(`${lookupOnly ? "Found" : "Restored from"} cache key "${restoreKey}" full match: ${match}.`);
-            if (!match) {
-                // pre-clean the target directory on cache mismatch
-                for (const workspace of config.workspaces) {
-                    try {
-                        await cleanTargetDir(workspace.target, [], true);
-                    }
-                    catch { }
-                }
-                // We restored the cache but it is not a full match.
+        const cacheResult = await restoreCache(cacheProvider, config.cachePaths, config.cacheKey, [config.restoreKey], lookupOnly);
+        config.cacheNeedsSave = !cacheResult.match;
+        if (config.targetCacheEnabled) {
+            if (cacheResult.found && !cacheResult.match) {
+                // pre-clean the target directory on cargo cache mismatch before restoring target cache
+                await cleanTargets(config);
+            }
+            const targetResult = await restoreCache(cacheProvider, config.targetCachePaths, config.targetCacheKey, config.targetRestoreKeys, lookupOnly, "target");
+            config.targetCacheNeedsSave = !targetResult.match;
+            if (targetResult.found && !targetResult.match) {
+                // pre-clean the target directory on target cache mismatch
+                await cleanTargets(config);
+            }
+            if (!cacheResult.match || !targetResult.match) {
                 config.saveState();
             }
-            setCacheHitOutput(match);
+            setCacheHitOutput(cacheResult.match && targetResult.match);
+        }
+        else if (cacheResult.match) {
+            setCacheHitOutput(true);
         }
         else {
-            info("No cache found.");
+            if (cacheResult.found) {
+                // pre-clean the target directory on cache mismatch
+                await cleanTargets(config);
+            }
             config.saveState();
             setCacheHitOutput(false);
         }
@@ -97,5 +96,31 @@ async function run() {
 }
 function setCacheHitOutput(cacheHit) {
     setOutput("cache-hit", cacheHit.toString());
+}
+async function restoreCache(cacheProvider, paths, key, restoreKeys, lookupOnly, name = "") {
+    const label = name ? `${name} cache` : "cache";
+    // Pass a copy of cachePaths to avoid mutating the original array as reported by:
+    // https://github.com/actions/toolkit/pull/1378
+    // TODO: remove this once the underlying bug is fixed.
+    const restoreKey = await cacheProvider.cache.restoreCache(paths.slice(), key, restoreKeys, {
+        lookupOnly,
+    });
+    if (!restoreKey) {
+        info(`No ${label} found.`);
+        return { found: false, match: false };
+    }
+    const match = restoreKey.localeCompare(key, undefined, {
+        sensitivity: "accent",
+    }) === 0;
+    info(`${lookupOnly ? "Found" : "Restored from"} ${label} key "${restoreKey}" full match: ${match}.`);
+    return { found: true, match };
+}
+async function cleanTargets(config) {
+    for (const workspace of config.workspaces) {
+        try {
+            await cleanTargetDir(workspace.target, [], true);
+        }
+        catch { }
+    }
 }
 run();

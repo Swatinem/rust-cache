@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `target-key` for opt-in source-keyed workspace target caching.
+
 ## 2.9.1
 
 - Fix regression in hash calculation

@@ -1,4 +1,4 @@
-import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError, l as exec } from './cleanup-ChNUL7jL.js';
+import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError, l as exec } from './cleanup-ctNqmXyy.js';
 import 'os';
 import 'crypto';
 import 'fs';
@@ -58,6 +58,8 @@ async function run() {
         if (process.env["RUNNER_OS"] == "macOS") {
             await macOsWorkaround();
         }
+        const cleanCargo = !config.targetCacheEnabled || config.cacheNeedsSave;
+        const cleanTargets = !config.targetCacheEnabled || config.targetCacheNeedsSave;
         const workspaceCrates = getInput("cache-workspace-crates").toLowerCase() || "false";
         const allPackages = [];
         for (const workspace of config.workspaces) {
@@ -67,43 +69,62 @@ async function run() {
                 packages.push(...wsMembers);
             }
             allPackages.push(...packages);
+            if (cleanTargets) {
+                try {
+                    info(`... Cleaning ${workspace.target} ...`);
+                    await cleanTargetDir(workspace.target, packages);
+                }
+                catch (e) {
+                    debug(`${e.stack}`);
+                }
+            }
+        }
+        if (cleanCargo) {
             try {
-                info(`... Cleaning ${workspace.target} ...`);
-                await cleanTargetDir(workspace.target, packages);
+                const crates = getInput("cache-all-crates").toLowerCase() || "false";
+                info(`... Cleaning cargo registry (cache-all-crates: ${crates}) ...`);
+                await cleanRegistry(allPackages, crates !== "true");
+            }
+            catch (e) {
+                debug(`${e.stack}`);
+            }
+            if (config.cacheBin) {
+                try {
+                    info(`... Cleaning cargo/bin ...`);
+                    await cleanBin(config.cargoBins);
+                }
+                catch (e) {
+                    debug(`${e.stack}`);
+                }
+            }
+            try {
+                info(`... Cleaning cargo git cache ...`);
+                await cleanGit(allPackages);
             }
             catch (e) {
                 debug(`${e.stack}`);
             }
         }
-        try {
-            const crates = getInput("cache-all-crates").toLowerCase() || "false";
-            info(`... Cleaning cargo registry (cache-all-crates: ${crates}) ...`);
-            await cleanRegistry(allPackages, crates !== "true");
-        }
-        catch (e) {
-            debug(`${e.stack}`);
-        }
-        if (config.cacheBin) {
-            try {
-                info(`... Cleaning cargo/bin ...`);
-                await cleanBin(config.cargoBins);
+        if (config.targetCacheEnabled) {
+            if (config.cacheNeedsSave) {
+                info(`... Saving cargo cache ...`);
+                await saveCache(cacheProvider, config.cachePaths, config.cacheKey);
             }
-            catch (e) {
-                debug(`${e.stack}`);
+            else {
+                info(`Cargo cache up-to-date.`);
+            }
+            if (config.targetCacheNeedsSave) {
+                info(`... Saving target cache ...`);
+                await saveCache(cacheProvider, config.targetCachePaths, config.targetCacheKey);
+            }
+            else {
+                info(`Target cache up-to-date.`);
             }
         }
-        try {
-            info(`... Cleaning cargo git cache ...`);
-            await cleanGit(allPackages);
+        else {
+            info(`... Saving cache ...`);
+            await saveCache(cacheProvider, config.cachePaths, config.cacheKey);
         }
-        catch (e) {
-            debug(`${e.stack}`);
-        }
-        info(`... Saving cache ...`);
-        // Pass a copy of cachePaths to avoid mutating the original array as reported by:
-        // https://github.com/actions/toolkit/pull/1378
-        // TODO: remove this once the underlying bug is fixed.
-        await cacheProvider.cache.saveCache(config.cachePaths.slice(), config.cacheKey);
     }
     catch (e) {
         reportError(e);
@@ -111,6 +132,12 @@ async function run() {
     process.exit();
 }
 run();
+async function saveCache(cacheProvider, paths, key) {
+    // Pass a copy of cachePaths to avoid mutating the original array as reported by:
+    // https://github.com/actions/toolkit/pull/1378
+    // TODO: remove this once the underlying bug is fixed.
+    await cacheProvider.cache.saveCache(paths.slice(), key);
+}
 async function macOsWorkaround() {
     try {
         // Workaround for https://github.com/actions/cache/issues/403
