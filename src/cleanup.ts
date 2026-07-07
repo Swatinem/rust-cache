@@ -15,15 +15,19 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
   for await (const dirent of dir) {
     if (dirent.isDirectory()) {
       let dirName = path.join(dir.path, dirent.name);
-      // is it a profile dir, or a nested target dir?
-      let isNestedTarget =
-        (await exists(path.join(dirName, "CACHEDIR.TAG"))) || (await exists(path.join(dirName, ".rustc_info.json")));
+      // Target-triple directories do not contain Cargo's target directory
+      // markers, so identify profiles by their artifact directories as well.
+      const isProfile =
+        dirent.name === "tests" ||
+        (await exists(path.join(dirName, "build"))) ||
+        (await exists(path.join(dirName, ".fingerprint"))) ||
+        (await exists(path.join(dirName, "deps")));
 
       try {
-        if (isNestedTarget) {
-          await cleanTargetDir(dirName, packages, checkTimestamp);
-        } else {
+        if (isProfile) {
           await cleanProfileTarget(dirName, packages, checkTimestamp);
+        } else {
+          await cleanTargetDir(dirName, packages, checkTimestamp);
         }
       } catch {}
     } else if (dirent.name !== "CACHEDIR.TAG") {
