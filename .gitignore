@@ -2,6 +2,8 @@ node_modules/
 target/
 src/*.js
 .build
+.test-build
+.s3-cache-data/
 
 # Editors
 .idea/

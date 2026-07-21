@@ -92,9 +92,17 @@ sensible defaults.
     lookup-only: ""
 
     # Specifies what to use as the backend providing cache
-    # Can be set to "github", or "warpbuild"
+    # Can be set to "github", "warpbuild", or "s3"
     # default: "github"
     cache-provider: ""
+
+    # Required when cache-provider is "s3". If this resolves to an empty
+    # string, the action warns and falls back to the GitHub cache provider.
+    s3-bucket: ""
+
+    # S3 key prefix used when cache-provider is "s3".
+    # default: "rust-cache/"
+    s3-prefix: ""
 
     # Determines whether to cache the ~/.cargo/bin directory.
     # default: "true"
@@ -112,6 +120,38 @@ sensible defaults.
 ```
 
 Further examples are available in the [.github/workflows](./.github/workflows/) directory.
+
+## S3 cache provider
+
+Set `cache-provider: s3` to store caches in an S3 bucket. The action uses the
+standard AWS SDK credential chain (environment variables, shared configuration,
+then instance/task profiles) and reads the region from `AWS_REGION` or
+`AWS_DEFAULT_REGION`. No access-key inputs are required. Cache objects are
+namespaced by the repository, cache version, and full cache key under
+`s3-prefix` (which defaults to `rust-cache/`).
+
+```yaml
+- uses: Swatinem/rust-cache@v2
+  with:
+    cache-provider: s3
+    s3-bucket: ${{ vars.CACHE_BUCKET }}
+    s3-prefix: rust-cache/
+    shared-key: cargo-registry
+    save-if: ${{ github.ref == 'refs/heads/main' }}
+```
+
+If `s3-bucket` is empty, including when an unset GitHub variable expands to
+`""`, the action emits a warning and uses the GitHub cache provider instead.
+This lets the same workflow safely run in public forks without S3 credentials.
+
+> **Security warning:** Unlike the GitHub cache, S3 has no branch isolation: any
+> credentials that can write to the bucket can overwrite any cache entry, and
+> cached Cargo contents execute through build scripts, proc-macros, and binaries.
+> When untrusted jobs (such as pull requests) share a bucket, they must not
+> receive write-capable credentials — scope access at the credential level, for
+> example with an OIDC role whose trust policy only matches trusted refs, or
+> read-only credentials for PR runs. `save-if: ${{ github.ref == 'refs/heads/main' }}`
+> avoids unnecessary writes but is not a security boundary on its own.
 
 ## Outputs
 
@@ -182,16 +222,18 @@ otherwise corrupt the cache on macOS builds.
 
 ## Cache Limits and Control
 
-This specialized cache action is built on top of the upstream cache action
-maintained by GitHub. The same restrictions and limits apply, which are
-documented here:
+When `cache-provider: github` is used, this specialized cache action is built
+on top of the upstream cache action maintained by GitHub. The same restrictions
+and limits apply, which are documented here:
 [Caching dependencies to speed up workflows](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows)
 
 In particular, caches are currently limited to 10 GB in total and exceeding that
 limit will cause eviction of older caches.
 
-Caches from base branches are available to PRs, but not across unrelated
-branches.
+GitHub caches from base branches are available to PRs, but not across unrelated
+branches. These GitHub-specific limits and branch rules do not apply to the S3
+provider; S3 retention, lifecycle rules, and access controls are configured on
+the bucket.
 
 The caches can be controlled using the [Cache API](https://docs.github.com/en/rest/actions/cache)
 which allows listing existing caches and manually removing entries.
