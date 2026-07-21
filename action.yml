@@ -49,9 +49,16 @@ inputs:
     required: false
     default: "true"
   cache-provider:
-    description: "Determines which provider to use for caching. Options are github, or warpbuild. Defaults to github."
+    description: "Determines which provider to use for caching. Options are github, warpbuild, or s3. Defaults to github."
     required: false
     default: "github"
+  s3-bucket:
+    description: "S3 bucket used when cache-provider is s3. An empty value falls back to github caching."
+    required: false
+  s3-prefix:
+    description: "S3 key prefix used when cache-provider is s3."
+    required: false
+    default: "rust-cache/"
   cache-bin:
     description: "Determines whether to cache ${CARGO_HOME}/bin."
     required: false
