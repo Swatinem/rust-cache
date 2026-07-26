@@ -1,8 +1,8 @@
 import * as core from "@actions/core";
 
-import { cleanTargetDir } from "./cleanup";
-import { CacheConfig } from "./config";
-import { getCacheProvider, reportError } from "./utils";
+import { cleanTargetDir } from "./cleanup.js";
+import { CacheConfig } from "./config.js";
+import { getCacheProvider, reportError } from "./utils.js";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);

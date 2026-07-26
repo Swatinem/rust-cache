@@ -3,9 +3,9 @@ import * as io from "@actions/io";
 import fs from "fs";
 import path from "path";
 
-import { CARGO_HOME } from "./config";
-import { exists } from "./utils";
-import { Packages } from "./workspace";
+import { CARGO_HOME } from "./config.js";
+import { exists } from "./utils.js";
+import { Packages } from "./workspace.js";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
   core.debug(`cleaning target directory "${targetDir}"`);

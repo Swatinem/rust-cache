@@ -1,9 +1,9 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 
-import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup";
-import { CacheConfig, isCacheUpToDate } from "./config";
-import { getCacheProvider, reportError } from "./utils";
+import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup.js";
+import { CacheConfig, isCacheUpToDate } from "./config.js";
+import { getCacheProvider, reportError } from "./utils.js";
 
 process.on("uncaughtException", (e) => {
   core.error(e.message);

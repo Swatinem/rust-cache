@@ -7,8 +7,8 @@ import os from "os";
 import path from "path";
 import * as toml from "smol-toml";
 
-import { CacheProvider, exists, getCmdOutput } from "./utils";
-import { Workspace } from "./workspace";
+import { CacheProvider, exists, getCmdOutput } from "./utils.js";
+import { Workspace } from "./workspace.js";
 
 const HOME = os.homedir();
 export const CARGO_HOME = process.env.CARGO_HOME || path.join(HOME, ".cargo");
