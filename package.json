@@ -29,6 +29,8 @@
     "@actions/glob": "^0.7.0",
     "@actions/io": "^3.0.2",
     "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
+    "@aws-sdk/client-s3": "^3.1087.0",
+    "@aws-sdk/lib-storage": "^3.1087.0",
     "smol-toml": "^1.7.0"
   },
   "overrides": {
@@ -40,6 +42,7 @@
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
+    "@testcontainers/minio": "^12.0.4",
     "@types/node": "^25.9.3",
     "linefix": "^0.1.1",
     "rollup": "^4.62.2",
@@ -49,6 +52,8 @@
     "clean": "node -e \"(async () => { try { await require('fs/promises').rm('dist', { recursive: true }); } catch {} })()\"",
     "prebuild": "npm run clean",
     "build": "tsc && rollup --config .build/rollup.config.js",
+    "test": "tsc --project tsconfig.test.json && node --test .test-build/test/*.test.js",
+    "test:s3-e2e": "node test/s3-e2e.mjs",
     "prepublishOnly": "npm run test",
     "prepare": "npm run build && linefix dist"
   }

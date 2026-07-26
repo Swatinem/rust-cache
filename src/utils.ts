@@ -50,8 +50,27 @@ export interface CacheProvider {
   cache: GhCache;
 }
 
+export type CacheProviderName = "github" | "warpbuild" | "s3";
+
+export function selectCacheProvider(cacheProvider: string, s3Bucket: string, warn: (message: string) => void): CacheProviderName {
+  switch (cacheProvider || "github") {
+    case "github":
+      return "github";
+    case "warpbuild":
+      return "warpbuild";
+    case "s3":
+      if (s3Bucket === "") {
+        warn("cache-provider: s3 was selected but s3-bucket is empty; falling back to the github cache provider.");
+        return "github";
+      }
+      return "s3";
+    default:
+      throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
+  }
+}
+
 export async function getCacheProvider(): Promise<CacheProvider> {
-  const cacheProvider = core.getInput("cache-provider");
+  const cacheProvider = selectCacheProvider(core.getInput("cache-provider"), core.getInput("s3-bucket"), core.warning);
   let cache: GhCache;
   switch (cacheProvider) {
     case "github":
@@ -60,8 +79,9 @@ export async function getCacheProvider(): Promise<CacheProvider> {
     case "warpbuild":
       cache = await import("@actions/warpbuild-cache");
       break;
-    default:
-      throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
+    case "s3":
+      cache = await import("./s3-cache");
+      break;
   }
 
   return {
