@@ -245,6 +245,12 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
  * Otherwise, it will remove everything that does not match any string in the
  * `keepPrefix` set.
  * The matching strips and trailing `-$hash` suffix.
+ *
+ * Cargo's newer `build-dir` layout (rust-lang/cargo#17258) nests the hash as
+ * a subdirectory instead of appending it, so entries there are bare package
+ * names with no suffix to strip. Check for an exact match first so those
+ * names (which may themselves contain hyphens) aren't mistaken for a
+ * `<name>-<hash>` entry from the old layout and truncated incorrectly.
  */
 async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp = false) {
   const dir = await fs.promises.opendir(dirName);
@@ -262,14 +268,21 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp
 
     let name = dirent.name;
 
-    // strip the trailing hash
-    const idx = name.lastIndexOf("-");
-    if (idx !== -1) {
-      name = name.slice(0, idx);
-    }
+    // in Cargo's V1 layout, all packages are suffixed by their hash.
+    // in V2, all package hashes are subdirectories instead.
+    // Check both possible naming standards for packages and accept either.
 
+    // v2 package format
     if (!keepPrefix.has(name)) {
-      await rm(dir.path, dirent);
+      // now check for v1 package format
+      // strip the trailing hash
+      const idx = name.lastIndexOf("-");
+      if (idx !== -1) {
+        name = name.slice(0, idx);
+      }
+      if (!keepPrefix.has(name)) {
+        await rm(dir.path, dirent);
+      }
     }
   }
 }
