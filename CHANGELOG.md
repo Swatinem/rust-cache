@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.2
+
+- Fix `credentials.toml` cleanup
+- Improvements to cleanup, preserving more valid targets
+- Improvements to `cargo install` handling
+- Correctly sort/dedupe Rust versions
+
 ## 2.9.1
 
 - Fix regression in hash calculation
