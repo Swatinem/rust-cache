@@ -102,15 +102,9 @@ export class CacheConfig {
     // resulting environment hash.
 
     let hasher = crypto.createHash("sha1");
-    const rustVersions = Array.from(await getRustVersions(cmdFormat));
-    // Doesn't matter how they're sorted, just as long as it's deterministic.
-    rustVersions.sort();
-
+    const rustVersions = (self.keyRust = await getRustVersions(cmdFormat));
     for (const rustVersion of rustVersions) {
-      const { release, host, "commit-hash": commitHash } = rustVersion;
-      const keyRust = `${release} ${host} ${commitHash}`;
-      hasher.update(keyRust);
-      self.keyRust.push(keyRust);
+      hasher.update(rustVersion);
     }
 
     // these prefixes should cover most of the compiler / rust / cargo keys
@@ -392,14 +386,9 @@ export async function getCargoBins(): Promise<Set<string>> {
 
   return bins;
 }
-interface RustVersion {
-  host: string;
-  release: string;
-  "commit-hash": string;
-}
 
-async function getRustVersions(cmdFormat: string): Promise<Set<RustVersion>> {
-  const versions = new Set<RustVersion>();
+async function getRustVersions(cmdFormat: string): Promise<Array<string>> {
+  const versions = new Set<string>();
 
   versions.add(parseRustVersion(await getCmdOutput(cmdFormat, "rustc -vV")));
 
@@ -420,16 +409,25 @@ async function getRustVersions(cmdFormat: string): Promise<Set<RustVersion>> {
       versions.add(parseRustVersion(await getCmdOutput(cmdFormat, `rustup run ${toolchain} rustc -vV`)));
     }
   }
-  return versions;
+  const rustVersions = Array.from(versions);
+  // Doesn't matter how they're sorted, just as long as it's deterministic.
+  rustVersions.sort();
+  return rustVersions;
 }
 
-function parseRustVersion(stdout: string): RustVersion {
+interface RustVersion {
+  host: string;
+  release: string;
+  "commit-hash": string;
+}
+function parseRustVersion(stdout: string): string {
   const splits = stdout
     .split(/[\n\r]+/)
     .filter(Boolean)
     .map((s) => s.split(":").map((s) => s.trim()))
     .filter((s) => s.length === 2);
-  return Object.fromEntries(splits);
+  const { release, host, "commit-hash": commitHash } = Object.fromEntries(splits) as RustVersion;
+  return `${release} ${host} ${commitHash}`;
 }
 
 async function globFiles(pattern: string): Promise<string[]> {
