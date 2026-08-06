@@ -42,7 +42,7 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@types/node": "^26.1.2",
     "linefix": "^0.1.1",
-    "rollup": "^4.62.3",
+    "rollup": "^4.62.4",
     "typescript": "7.0.2"
   },
   "scripts": {
