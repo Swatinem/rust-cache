@@ -7,7 +7,7 @@ import { CARGO_HOME } from "./config.js";
 import { exists } from "./utils.js";
 import { Packages } from "./workspace.js";
 
-export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
+export async function cleanTargetDir(targetDir: string, packages: Packages | null, checkTimestamp = false) {
   core.debug(`cleaning target directory "${targetDir}"`);
 
   // remove all *files* from the profile directory
@@ -36,7 +36,7 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
   }
 }
 
-async function cleanProfileTarget(profileDir: string, packages: Packages, checkTimestamp = false) {
+async function cleanProfileTarget(profileDir: string, packages: Packages | null, checkTimestamp = false) {
   core.debug(`cleaning profile directory "${profileDir}"`);
 
   // Quite a few testing utility crates store compilation artifacts as nested
@@ -54,28 +54,30 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
     } catch {}
 
     // Delete everything else.
-    await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+    await rmExcept(profileDir, packages && new Set(["target", "trybuild"]), checkTimestamp);
 
     return;
   }
 
-  let keepProfile = new Set(["build", ".fingerprint", "deps"]);
+  let keepProfile = packages && new Set(["build", ".fingerprint", "deps"]);
   await rmExcept(profileDir, keepProfile);
 
-  const keepPkg = new Set(packages.flatMap((p) => [p.name, ...p.targets.map((t) => t.replace(/-/g, "_"))]));
+  const keepPkg = packages && new Set(packages.flatMap((p) => [p.name, ...p.targets.map((t) => t.replace(/-/g, "_"))]));
   await rmExcept(path.join(profileDir, "build"), keepPkg, checkTimestamp);
   await rmExcept(path.join(profileDir, ".fingerprint"), keepPkg, checkTimestamp);
 
-  const keepDeps = new Set(
-    packages.flatMap((p) => {
-      const names = [];
-      for (const n of [p.name, ...p.targets]) {
-        const name = n.replace(/-/g, "_");
-        names.push(name, `lib${name}`);
-      }
-      return names;
-    }),
-  );
+  const keepDeps =
+    packages &&
+    new Set(
+      packages.flatMap((p) => {
+        const names = [];
+        for (const n of [p.name, ...p.targets]) {
+          const name = n.replace(/-/g, "_");
+          names.push(name, `lib${name}`);
+        }
+        return names;
+      }),
+    );
   await rmExcept(path.join(profileDir, "deps"), keepDeps, checkTimestamp);
 }
 
@@ -243,11 +245,11 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
 /**
  * Removes all files or directories in `dirName` matching some criteria.
  *
- * When the `checkTimestamp` flag is set, this will also remove anything older
+ * When the `checkTimestamp` flag is set, this will remove anything older
  * than one week.
  *
- * Otherwise, it will remove everything that does not match any string in the
- * `keepPrefix` set.
+ * When `keepPrefix` is non-null, it will remove everything that does not
+ * match any string in the `keepPrefix` set.
  * The matching strips and trailing `-$hash` suffix.
  *
  * Cargo's newer `build-dir` layout (rust-lang/cargo#17258) nests the hash as
@@ -256,7 +258,7 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
  * names (which may themselves contain hyphens) aren't mistaken for a
  * `<name>-<hash>` entry from the old layout and truncated incorrectly.
  */
-async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp = false) {
+async function rmExcept(dirName: string, keepPrefix: Set<string> | null, checkTimestamp = false) {
   const dir = await fs.promises.opendir(dirName);
   for await (const dirent of dir) {
     if (checkTimestamp) {
@@ -266,8 +268,12 @@ async function rmExcept(dirName: string, keepPrefix: Set<string>, checkTimestamp
 
       if (isOutdated) {
         await rm(dir.path, dirent);
+        continue;
       }
-      return;
+    }
+
+    if (keepPrefix === null) {
+      continue;
     }
 
     let name = dirent.name;

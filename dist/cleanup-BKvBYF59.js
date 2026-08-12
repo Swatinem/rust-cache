@@ -34434,10 +34434,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-CTfQoCTL.js');
+            cache = await import('./cache-xFGjQaVa.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-DC26rUaF.js').then(function (n) { return n.c; });
+            cache = await import('./cache-DUrdLTLa.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -34923,22 +34923,23 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) 
         }
         catch { }
         // Delete everything else.
-        await rmExcept(profileDir, new Set(["target", "trybuild"]), checkTimestamp);
+        await rmExcept(profileDir, packages && new Set(["target", "trybuild"]), checkTimestamp);
         return;
     }
-    let keepProfile = new Set(["build", ".fingerprint", "deps"]);
+    let keepProfile = packages && new Set(["build", ".fingerprint", "deps"]);
     await rmExcept(profileDir, keepProfile);
-    const keepPkg = new Set(packages.flatMap((p) => [p.name, ...p.targets.map((t) => t.replace(/-/g, "_"))]));
+    const keepPkg = packages && new Set(packages.flatMap((p) => [p.name, ...p.targets.map((t) => t.replace(/-/g, "_"))]));
     await rmExcept(path__default.join(profileDir, "build"), keepPkg, checkTimestamp);
     await rmExcept(path__default.join(profileDir, ".fingerprint"), keepPkg, checkTimestamp);
-    const keepDeps = new Set(packages.flatMap((p) => {
-        const names = [];
-        for (const n of [p.name, ...p.targets]) {
-            const name = n.replace(/-/g, "_");
-            names.push(name, `lib${name}`);
-        }
-        return names;
-    }));
+    const keepDeps = packages &&
+        new Set(packages.flatMap((p) => {
+            const names = [];
+            for (const n of [p.name, ...p.targets]) {
+                const name = n.replace(/-/g, "_");
+                names.push(name, `lib${name}`);
+            }
+            return names;
+        }));
     await rmExcept(path__default.join(profileDir, "deps"), keepDeps, checkTimestamp);
 }
 /**
@@ -35099,11 +35100,11 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
 /**
  * Removes all files or directories in `dirName` matching some criteria.
  *
- * When the `checkTimestamp` flag is set, this will also remove anything older
+ * When the `checkTimestamp` flag is set, this will remove anything older
  * than one week.
  *
- * Otherwise, it will remove everything that does not match any string in the
- * `keepPrefix` set.
+ * When `keepPrefix` is non-null, it will remove everything that does not
+ * match any string in the `keepPrefix` set.
  * The matching strips and trailing `-$hash` suffix.
  *
  * Cargo's newer `build-dir` layout (rust-lang/cargo#17258) nests the hash as
@@ -35121,8 +35122,11 @@ async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
             const isOutdated = Date.now() - mtime.getTime() > ONE_WEEK;
             if (isOutdated) {
                 await rm(dir.path, dirent);
+                continue;
             }
-            return;
+        }
+        if (keepPrefix === null) {
+            continue;
         }
         let name = dirent.name;
         // in Cargo's V1 layout, all packages are suffixed by their hash.

@@ -1,4 +1,4 @@
-import { e as error, g as getCacheProvider, a as getInput, b as exportVariable, C as CacheConfig, i as info, c as cleanTargetDir, r as reportError, s as setOutput } from './cleanup-BWEbZ6YT.js';
+import { e as error, g as getCacheProvider, a as getInput, b as exportVariable, C as CacheConfig, i as info, c as cleanTargetDir, r as reportError, s as setOutput } from './cleanup-BKvBYF59.js';
 import 'os';
 import 'crypto';
 import 'fs';
@@ -74,7 +74,7 @@ async function run() {
                 // pre-clean the target directory on cache mismatch
                 for (const workspace of config.workspaces) {
                     try {
-                        await cleanTargetDir(workspace.target, [], true);
+                        await cleanTargetDir(workspace.target, null, true);
                     }
                     catch { }
                 }
