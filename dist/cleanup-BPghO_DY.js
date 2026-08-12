@@ -34434,10 +34434,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-CTfQoCTL.js');
+            cache = await import('./cache-CtywT2QH.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-DC26rUaF.js').then(function (n) { return n.c; });
+            cache = await import('./cache-DZhpLd9j.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -35099,8 +35099,9 @@ const ONE_WEEK = 7 * 24 * 3600 * 1000;
 /**
  * Removes all files or directories in `dirName` matching some criteria.
  *
- * When the `checkTimestamp` flag is set, this will also remove anything older
- * than one week.
+ * These two modes are mutually exclusive. When the `checkTimestamp` flag is
+ * set, this will remove anything older than one week and `keepPrefix` is
+ * ignored.
  *
  * Otherwise, it will remove everything that does not match any string in the
  * `keepPrefix` set.
@@ -35122,7 +35123,7 @@ async function rmExcept(dirName, keepPrefix, checkTimestamp = false) {
             if (isOutdated) {
                 await rm(dir.path, dirent);
             }
-            return;
+            continue;
         }
         let name = dirent.name;
         // in Cargo's V1 layout, all packages are suffixed by their hash.
