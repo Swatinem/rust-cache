@@ -8,6 +8,13 @@ import { exists } from "./utils.js";
 import { Packages } from "./workspace.js";
 
 export async function cleanTargetDir(targetDir: string, packages: Packages, checkTimestamp = false) {
+  // Cargo package archives and unpacked verification sources are not reusable
+  // build artifacts. Remove them without interpreting their contents as targets.
+  await rmRF(path.join(targetDir, "package"));
+  await cleanTargetContents(targetDir, packages, checkTimestamp);
+}
+
+async function cleanTargetContents(targetDir: string, packages: Packages, checkTimestamp: boolean) {
   core.debug(`cleaning target directory "${targetDir}"`);
 
   // remove all *files* from the profile directory
@@ -27,7 +34,7 @@ export async function cleanTargetDir(targetDir: string, packages: Packages, chec
         if (isProfile) {
           await cleanProfileTarget(dirName, packages, checkTimestamp);
         } else {
-          await cleanTargetDir(dirName, packages, checkTimestamp);
+          await cleanTargetContents(dirName, packages, checkTimestamp);
         }
       } catch {}
     } else if (dirent.name !== "CACHEDIR.TAG") {
@@ -46,11 +53,11 @@ async function cleanProfileTarget(profileDir: string, packages: Packages, checkT
     try {
       // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
       // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-      cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp);
+      await cleanTargetDir(path.join(profileDir, "target"), packages, checkTimestamp);
     } catch {}
     try {
       // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-      cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp);
+      await cleanTargetDir(path.join(profileDir, "trybuild"), packages, checkTimestamp);
     } catch {}
 
     // Delete everything else.
