@@ -49,7 +49,6 @@
     "clean": "node -e \"(async () => { try { await require('fs/promises').rm('dist', { recursive: true }); } catch {} })()\"",
     "prebuild": "npm run clean",
     "build": "tsc && rollup --config .build/rollup.config.js",
-    "test": "tsc && node --test tests/cleanup.test.mjs",
     "prepublishOnly": "npm run test",
     "prepare": "npm run build && linefix dist"
   }

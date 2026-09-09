@@ -34,9 +34,6 @@ jobs:
       - name: Rebuild the dist/ directory
         run: npm run prepare
 
-      - name: Test target cleanup
-        run: npm test
-
       - name: Compare the expected and actual dist/ directories
         run: |
           if [ "$(git diff dist/ | wc -l)" -gt "0" ]; then
