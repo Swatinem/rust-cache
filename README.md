@@ -158,6 +158,7 @@ Before being persisted, the cache is cleaned of:
 - Any files in `~/.cargo/bin` that were present before the action ran (for example `rustc`).
 - Dependencies that are no longer used.
 - Anything that is not a dependency.
+- Cargo package archives and verification sources (`target/package`).
 - Incremental build artifacts.
 - Any build artifacts with an `mtime` older than one week.
 
