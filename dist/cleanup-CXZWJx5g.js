@@ -34434,10 +34434,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-CtywT2QH.js');
+            cache = await import('./cache-DrBcWZx-.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-DZhpLd9j.js').then(function (n) { return n.c; });
+            cache = await import('./cache-C3QW-iHv.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -34817,7 +34817,7 @@ async function getRustVersions(cmdFormat) {
             return await getCmdOutput(cmdFormat, "rustup toolchain list --quiet");
         }
         catch (e) {
-            warning(`Error running rustup toolchain list, falling back to default toolchain only: ${e}`);
+            info(`Error running rustup toolchain list, falling back to default toolchain only: ${e}`);
             return undefined;
         }
     })();
