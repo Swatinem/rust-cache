@@ -2605,11 +2605,77 @@ function requireRequest$1 () {
 	    }
 	  }
 
-	  onUpgrade (statusCode, headers, socket) {
+	  /**
+	   * @param {number|null} statusCode
+	   * @param {Buffer[]|null} headers
+	   * @param {import('node:stream').Duplex} socket
+	   * @param {string} [statusText]
+	   */
+	  onUpgrade (statusCode, headers, socket, statusText = '') {
+	    this.onFinally();
+
 	    assert(!this.aborted);
 	    assert(!this.completed);
 
-	    return this[kHandler].onUpgrade(statusCode, headers, socket)
+	    if (statusCode !== null) {
+	      this.#publishUpgradeHeaders(statusCode, headers, statusText);
+	    }
+
+	    const result = this[kHandler].onUpgrade(statusCode, headers, socket);
+
+	    if (!this.aborted) {
+	      this.completed = true;
+	      if (statusCode !== null) {
+	        this.#publishUpgradeTrailers();
+	      }
+	    }
+
+	    return result
+	  }
+
+	  /**
+	   * @param {number} statusCode
+	   * @param {import('node:http2').IncomingHttpHeaders} headers
+	   * @param {(headers: import('node:http2').IncomingHttpHeaders) => Buffer[]} parseHeaders
+	   * @param {string} [statusText]
+	   */
+	  onUpgradeResponse (statusCode, headers, parseHeaders, statusText = '') {
+	    assert(!this.aborted);
+	    assert(this.completed);
+
+	    if (channels.headers.hasSubscribers) {
+	      this.#publishUpgradeHeaders(statusCode, parseHeaders(headers), statusText);
+	    }
+	    this.#publishUpgradeTrailers();
+	  }
+
+	  /**
+	   * @param {Error} error
+	   */
+	  onUpgradeError (error) {
+	    assert(!this.aborted);
+	    assert(this.completed);
+
+	    if (channels.error.hasSubscribers) {
+	      channels.error.publish({ request: this, error });
+	    }
+	  }
+
+	  /**
+	   * @param {number} statusCode
+	   * @param {Buffer[]} headers
+	   * @param {string} statusText
+	   */
+	  #publishUpgradeHeaders (statusCode, headers, statusText) {
+	    if (channels.headers.hasSubscribers) {
+	      channels.headers.publish({ request: this, response: { statusCode, headers, statusText } });
+	    }
+	  }
+
+	  #publishUpgradeTrailers () {
+	    if (channels.trailers.hasSubscribers) {
+	      channels.trailers.publish({ request: this, trailers: [] });
+	    }
 	  }
 
 	  onComplete (trailers) {
@@ -2839,6 +2905,7 @@ function requireDispatcherBase () {
 	if (hasRequiredDispatcherBase) return dispatcherBase;
 	hasRequiredDispatcherBase = 1;
 
+	const buffer = require$$0$1;
 	const Dispatcher = requireDispatcher();
 	const {
 	  ClientDestroyedError,
@@ -2851,6 +2918,7 @@ function requireDispatcherBase () {
 	const kOnClosed = Symbol('onClosed');
 	const kInterceptedDispatch = Symbol('Intercepted Dispatch');
 	const kWebSocketOptions = Symbol('webSocketOptions');
+	const kEventSourceOptions = Symbol('eventSourceOptions');
 
 	class DispatcherBase extends Dispatcher {
 	  constructor (opts) {
@@ -2861,12 +2929,19 @@ function requireDispatcherBase () {
 	    this[kClosed] = false;
 	    this[kOnClosed] = [];
 	    this[kWebSocketOptions] = opts?.webSocket ?? {};
+	    this[kEventSourceOptions] = opts?.eventSource ?? {};
 	  }
 
 	  get webSocketOptions () {
 	    return {
 	      maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
 	      maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
+	    }
+	  }
+
+	  get eventSourceOptions () {
+	    return {
+	      maxEventSize: this[kEventSourceOptions].maxEventSize ?? buffer.kStringMaxLength
 	    }
 	  }
 
@@ -9192,7 +9267,7 @@ function requireClientH1 () {
 	  }
 
 	  onUpgrade (head) {
-	    const { upgrade, client, socket, headers, statusCode } = this;
+	    const { upgrade, client, socket, headers, statusCode, statusText } = this;
 
 	    assert(upgrade);
 	    assert(client[kSocket] === socket);
@@ -9227,9 +9302,10 @@ function requireClientH1 () {
 	    client.emit('disconnect', client[kUrl], [client], new InformationalError('upgrade'));
 
 	    try {
-	      request.onUpgrade(statusCode, headers, socket);
-	    } catch (err) {
-	      util.destroy(socket, err);
+	      request.onUpgrade(statusCode, headers, socket, statusText);
+	    } catch (error) {
+	      util.errorRequest(client, request, error);
+	      util.destroy(socket, error);
 	    }
 
 	    client[kResume]();
@@ -9486,8 +9562,6 @@ function requireClientH1 () {
 	  socket[kParser] = new Parser(client, socket, llhttpInstance);
 
 	  addListener(socket, 'error', function (err) {
-	    assert(err.code !== 'ERR_TLS_CERT_ALTNAME_INVALID');
-
 	    const parser = this[kParser];
 
 	    // On Mac OS, we get an ECONNRESET even if there is a full body to be forwarded
@@ -9636,7 +9710,7 @@ function requireClientH1 () {
 
 	function clearIdleSocketValidation (socket) {
 	  if (socket[kIdleSocketValidationTimeout]) {
-	    clearTimeout(socket[kIdleSocketValidationTimeout]);
+	    clearImmediate(socket[kIdleSocketValidationTimeout]);
 	    socket[kIdleSocketValidationTimeout] = null;
 	  }
 
@@ -9645,15 +9719,23 @@ function requireClientH1 () {
 
 	function scheduleIdleSocketValidation (client, socket) {
 	  socket[kIdleSocketValidation] = 1;
-	  socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+	  // Yield to the check phase (after poll) so unsolicited bytes / FIN / RST
+	  // already pending on this idle keep-alive socket are processed before the
+	  // next request is written (GHSA-35p6-xmwp-9g52).
+	  //
+	  // setTimeout(0) pays Node's ~1ms timer floor on every sequential reuse
+	  // (#5493). setImmediate avoids that, but an *unref'd* Immediate lets poll
+	  // block for ~500ms when the event loop is otherwise idle (#5600 / #5606).
+	  // A ref'd Immediate both keeps the pending request alive and makes poll
+	  // return immediately — the hybrid those issues asked for.
+	  socket[kIdleSocketValidationTimeout] = setImmediate(() => {
 	    socket[kIdleSocketValidationTimeout] = null;
 	    socket[kIdleSocketValidation] = 2;
 
 	    if (client[kSocket] === socket && !socket.destroyed) {
 	      client[kResume]();
 	    }
-	  }, 0);
-	  socket[kIdleSocketValidationTimeout].unref?.();
+	  });
 	}
 
 	/**
@@ -9802,12 +9884,22 @@ function requireClientH1 () {
 	  const socket = client[kSocket];
 	  clearIdleSocketValidation(socket);
 
-	  const abort = (err) => {
-	    if (request.aborted || request.completed) {
+	  /**
+	   * @param {Error} [error]
+	   */
+	  const abort = (error) => {
+	    if (request.aborted) {
 	      return
 	    }
 
-	    util.errorRequest(client, request, err || new RequestAbortedError());
+	    if (request.completed) {
+	      if (request.upgrade || request.method === 'CONNECT') {
+	        util.destroy(socket, new InformationalError('aborted'));
+	      }
+	      return
+	    }
+
+	    util.errorRequest(client, request, error || new RequestAbortedError());
 
 	    util.destroy(body);
 	    util.destroy(socket, new InformationalError('aborted'));
@@ -10265,6 +10357,7 @@ function requireClientH2 () {
 	hasRequiredClientH2 = 1;
 
 	const assert = require$$0$3;
+	const { errorMonitor } = require$$0$2;
 	const { pipeline } = require$$0$4;
 	const util = requireUtil$7();
 	const {
@@ -10341,6 +10434,15 @@ function requireClientH2 () {
 	  return result
 	}
 
+	/**
+	 * @param {import('node:http2').IncomingHttpHeaders} headers
+	 * @returns {Buffer[]}
+	 */
+	function parseH2ResponseHeaders (headers) {
+	  const { [HTTP2_HEADER_STATUS]: _statusCode, ...realHeaders } = headers;
+	  return parseH2Headers(realHeaders)
+	}
+
 	async function connectH2 (client, socket) {
 	  client[kSocket] = socket;
 
@@ -10390,8 +10492,6 @@ function requireClientH2 () {
 	  socket[kHTTP2Session] = session;
 
 	  util.addListener(socket, 'error', function (err) {
-	    assert(err.code !== 'ERR_TLS_CERT_ALTNAME_INVALID');
-
 	    this[kError] = err;
 
 	    this[kClient][kOnError](err);
@@ -10465,8 +10565,6 @@ function requireClientH2 () {
 	}
 
 	function onHttp2SessionError (err) {
-	  assert(err.code !== 'ERR_TLS_CERT_ALTNAME_INVALID');
-
 	  this[kSocket][kError] = err;
 	  this[kClient][kOnError](err);
 	}
@@ -10561,22 +10659,32 @@ function requireClientH2 () {
 	  headers[HTTP2_HEADER_AUTHORITY] = host || `${hostname}${port ? `:${port}` : ''}`;
 	  headers[HTTP2_HEADER_METHOD] = method;
 
-	  const abort = (err) => {
-	    if (request.aborted || request.completed) {
+	  /**
+	   * @param {Error} [error]
+	   */
+	  const abort = (error) => {
+	    if (request.aborted) {
 	      return
 	    }
 
-	    err = err || new RequestAbortedError();
+	    if (request.completed) {
+	      if (method === 'CONNECT' && stream != null) {
+	        util.destroy(stream, error || new RequestAbortedError());
+	      }
+	      return
+	    }
 
-	    util.errorRequest(client, request, err);
+	    error = error || new RequestAbortedError();
+
+	    util.errorRequest(client, request, error);
 
 	    if (stream != null) {
-	      util.destroy(stream, err);
+	      util.destroy(stream, error);
 	    }
 
 	    // We do not destroy the socket as we can continue using the session
 	    // the stream get's destroyed and the session remains to create new streams
-	    util.destroy(body, err);
+	    util.destroy(body, error);
 	    client[kQueue][client[kRunningIdx]++] = null;
 	    client[kResume]();
 	  };
@@ -10595,25 +10703,57 @@ function requireClientH2 () {
 
 	  if (method === 'CONNECT') {
 	    session.ref();
-	    // We are already connected, streams are pending, first request
-	    // will create a new stream. We trigger a request to create the stream and wait until
-	    // `ready` event is triggered
 	    // We disabled endStream to allow the user to write to the stream
 	    stream = session.request(headers, { endStream: false, signal });
+	    let upgradeResponseFinished = false;
 
-	    if (stream.id && !stream.pending) {
-	      request.onUpgrade(null, null, stream);
-	      ++session[kOpenStreams];
-	      client[kQueue][client[kRunningIdx]++] = null;
-	    } else {
-	      stream.once('ready', () => {
+	    /**
+	     * @param {import('node:http2').IncomingHttpHeaders} headers
+	     */
+	    const onResponse = (headers) => {
+	      upgradeResponseFinished = true;
+	      stream.off(errorMonitor, onUpgradeError);
+	      request.onUpgradeResponse(Number(headers[HTTP2_HEADER_STATUS]), headers, parseH2ResponseHeaders);
+	    };
+
+	    /**
+	     * @param {Error} error
+	     */
+	    const onUpgradeError = (error) => {
+	      upgradeResponseFinished = true;
+	      stream.off('response', onResponse);
+	      request.onUpgradeError(error);
+	    };
+
+	    const onReady = () => {
+	      try {
 	        request.onUpgrade(null, null, stream);
-	        ++session[kOpenStreams];
-	        client[kQueue][client[kRunningIdx]++] = null;
-	      });
-	    }
+	      } catch (error) {
+	        stream.off('response', onResponse);
+	        abort(error);
+	        return
+	      }
+
+	      if (request.aborted) {
+	        return
+	      }
+
+	      stream.off('error', abort);
+	      stream.once(errorMonitor, onUpgradeError);
+	      client[kQueue][client[kRunningIdx]++] = null;
+	    };
+
+	    stream.once('response', onResponse);
+	    stream.once('error', abort);
+	    ++session[kOpenStreams];
+	    onReady();
 
 	    stream.once('close', () => {
+	      if (!upgradeResponseFinished && request.completed) {
+	        stream.off('response', onResponse);
+	        stream.off(errorMonitor, onUpgradeError);
+	        request.onUpgradeError(new InformationalError(`HTTP/2: "stream error" received - code ${stream.rstCode}`));
+	      }
 	      session[kOpenStreams] -= 1;
 	      if (session[kOpenStreams] === 0) session.unref();
 	    });
@@ -11372,9 +11512,10 @@ function requireClient () {
 	    // h2
 	    maxConcurrentStreams,
 	    allowH2,
-	    webSocket
+	    webSocket,
+	    eventSource
 	  } = {}) {
-	    super({ webSocket });
+	    super({ webSocket, eventSource });
 
 	    if (keepAlive !== undefined) {
 	      throw new InvalidArgumentError('unsupported keepAlive, use pipelining=0 instead')
@@ -12619,7 +12760,7 @@ function requireAgent () {
 	}
 
 	class Agent extends DispatcherBase {
-	  constructor ({ factory = defaultFactory, maxRedirections = 0, connect, ...options } = {}) {
+	  constructor ({ factory = defaultFactory, maxRedirections = 0, connect, tls, ...options } = {}) {
 	    if (typeof factory !== 'function') {
 	      throw new InvalidArgumentError('factory must be a function.')
 	    }
@@ -12638,11 +12779,15 @@ function requireAgent () {
 	      connect = { ...connect };
 	    }
 
+	    if (tls && typeof tls !== 'function') {
+	      tls = { ...tls };
+	    }
+
 	    this[kInterceptors] = options.interceptors?.Agent && Array.isArray(options.interceptors.Agent)
 	      ? options.interceptors.Agent
 	      : [createRedirectInterceptor({ maxRedirections })];
 
-	    this[kOptions] = { ...util.deepClone(options), connect };
+	    this[kOptions] = { ...util.deepClone(options), connect, tls };
 	    this[kOptions].interceptors = options.interceptors
 	      ? { ...options.interceptors }
 	      : undefined;
@@ -13273,6 +13418,7 @@ function requireRetryHandler () {
 	    this.end = null;
 	    this.etag = null;
 	    this.resume = null;
+	    this.headersSent = false;
 
 	    // Handle possible onConnect duplication
 	    this.handler.onConnect(reason => {
@@ -13283,6 +13429,20 @@ function requireRetryHandler () {
 	        this.reason = reason;
 	      }
 	    });
+	  }
+
+	  checkpointResponseEnd (headers, resume) {
+	    if (this.end == null && this.opts.method !== 'HEAD') {
+	      const contentLength = headers['content-length'];
+	      this.end = contentLength != null ? Number(contentLength) - 1 : null;
+
+	      assert(
+	        this.end == null || Number.isFinite(this.end),
+	        'invalid content-length'
+	      );
+	    }
+
+	    this.resume = this.end != null ? resume : null;
 	  }
 
 	  onRequestSent () {
@@ -13373,7 +13533,12 @@ function requireRetryHandler () {
 	    this.retryCount += 1;
 
 	    if (statusCode >= 300) {
-	      if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+	      // Only expose a response if no earlier attempt has reached the caller.
+	      // Otherwise abort this attempt so the error settles the existing body
+	      // instead of replacing it with a new response.
+	      if (!this.headersSent && this.retryOpts.statusCodes.includes(statusCode) === false) {
+	        this.headersSent = true;
+	        this.checkpointResponseEnd(headers, resume);
 	        return this.handler.onHeaders(
 	          statusCode,
 	          rawHeaders,
@@ -13442,8 +13607,15 @@ function requireRetryHandler () {
 
 	      const { start, size, end = size - 1 } = contentRange;
 
-	      assert(this.start === start, 'content-range mismatch');
-	      assert(this.end == null || this.end === end, 'content-range mismatch');
+	      if (this.start !== start || (this.end != null && this.end !== end)) {
+	        this.abort(
+	          new RequestRetryError('Content-Range mismatch', statusCode, {
+	            headers,
+	            data: { count: this.retryCount }
+	          })
+	        );
+	        return false
+	      }
 
 	      this.resume = resume;
 	      return true
@@ -13455,6 +13627,7 @@ function requireRetryHandler () {
 	        const range = parseRangeHeader(headers['content-range']);
 
 	        if (range == null) {
+	          this.headersSent = true;
 	          return this.handler.onHeaders(
 	            statusCode,
 	            rawHeaders,
@@ -13493,6 +13666,7 @@ function requireRetryHandler () {
 	      );
 
 	      this.resume = resume;
+	      this.headersSent = true;
 	      this.etag = headers.etag != null ? headers.etag : null;
 
 	      // Weak etags are not useful for comparison nor cache
@@ -13532,7 +13706,7 @@ function requireRetryHandler () {
 	  }
 
 	  onError (err) {
-	    if (this.aborted || isDisturbed(this.opts.body)) {
+	    if (this.aborted || isDisturbed(this.opts.body) || (this.headersSent && this.resume == null)) {
 	      return this.handler.onError(err)
 	    }
 
@@ -21156,8 +21330,10 @@ function requireFetch () {
 	  // 19. Run these steps in parallel:
 
 	  //    1. Run these steps, but abort when fetchParams is canceled:
-	  fetchParams.controller.onAborted = onAborted;
-	  fetchParams.controller.on('terminated', onAborted);
+	  if (!fetchParams.controller.resume) {
+	    fetchParams.controller.on('terminated', onAborted);
+	  }
+
 	  fetchParams.controller.resume = async () => {
 	    // 1. While true
 	    while (true) {
@@ -21326,8 +21502,6 @@ function requireFetch () {
 	          }
 	          location = headersList.get('location', true);
 
-	          this.body = new Readable({ read: resume });
-
 	          const decoders = [];
 
 	          const willFollow = location && request.redirect === 'follow' &&
@@ -21345,7 +21519,7 @@ function requireFetch () {
 	            // CVE fix similar to urllib3 (GHSA-gm62-xv2j-4w53) and curl (CVE-2022-32206).
 	            const maxContentEncodings = 5;
 	            if (codings.length > maxContentEncodings) {
-	              reject(new Error(`too many content-encodings in response: ${codings.length}, maximum allowed is ${maxContentEncodings}`));
+	              this.abort(new Error(`too many content-encodings in response: ${codings.length}, maximum allowed is ${maxContentEncodings}`));
 	              return true
 	            }
 
@@ -21377,6 +21551,8 @@ function requireFetch () {
 	              }
 	            }
 	          }
+
+	          this.body = new Readable({ read: resume });
 
 	          const onError = this.onError.bind(this);
 
@@ -21422,10 +21598,6 @@ function requireFetch () {
 	        onComplete () {
 	          if (this.abort) {
 	            fetchParams.controller.off('terminated', this.abort);
-	          }
-
-	          if (fetchParams.controller.onAborted) {
-	            fetchParams.controller.off('terminated', fetchParams.controller.onAborted);
 	          }
 
 	          fetchParams.controller.ended = true;
@@ -25679,7 +25851,7 @@ function requireConnection () {
 	        // is specified, the server needs to include the same field and one of
 	        // the selected subprotocol values in its response for the connection to
 	        // be established.
-	        if (!requestProtocols.includes(secProtocol)) {
+	        if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
 	          failWebsocketConnection(ws, 'Protocol was not set in the opening handshake.');
 	          return
 	        }
@@ -25926,7 +26098,12 @@ function requirePermessageDeflate () {
 
 	        if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
 	          callback(new MessageSizeExceededError());
+	          // The inflater may still hold buffered input that can emit a late
+	          // zlib error. Remove the data listener, then deterministically stop
+	          // the stream so a subsequent 'error' cannot fire without a listener
+	          // (which would terminate the process as an unhandled error event).
 	          this.#inflate.removeAllListeners();
+	          this.#inflate.destroy();
 	          this.#inflate = null;
 	          return
 	        }
@@ -26220,6 +26397,20 @@ function requireReceiver () {
 	        if (isControlFrame(this.#info.opcode)) {
 	          this.#loop = this.parseControlFrame(body);
 	          this.#state = parserStates.INFO;
+
+	          // If the automatic PONG/CLOSE reply filled the socket's write buffer,
+	          // stop parsing and resume on drain so a PING flood cannot grow the
+	          // outbound queue without bound.
+	          const socket = this.ws[kResponse].socket;
+	          if (this.#loop && socket.writableNeedDrain) {
+	            this.#loop = false;
+	            socket.once('drain', () => {
+	              if (this.destroyed) return
+	              this.#loop = true;
+	              this.run(callback);
+	            });
+	            return
+	          }
 	        } else {
 	          if (!this.#info.compressed) {
 	            if (!this.writeFragments(body)) {
@@ -27251,6 +27442,7 @@ var hasRequiredEventsourceStream;
 function requireEventsourceStream () {
 	if (hasRequiredEventsourceStream) return eventsourceStream;
 	hasRequiredEventsourceStream = 1;
+	const buffer = require$$0$1;
 	const { Transform } = require$$0$4;
 	const { isASCIINumber, isValidLastEventId } = requireUtil();
 
@@ -27274,6 +27466,63 @@ function requireEventsourceStream () {
 	 * @type {32} SPACE
 	 */
 	const SPACE = 0x20;
+
+	const defaultMaxEventSize = buffer.kStringMaxLength;
+
+	const DATA = Buffer.from('data');
+	const EVENT = Buffer.from('event');
+	const ID = Buffer.from('id');
+	const RETRY = Buffer.from('retry');
+
+	// Each data field creates a string node, and each unconsumed input chunk keeps
+	// a Buffer wrapper. The absolute ceiling protects the large default byte limit.
+	const minParserItems = 1024;
+	const maxParserItems = 131072;
+	const bytesPerParserItem = 128;
+
+	function isASCIINumberBytes (buffer, start) {
+	  if (start >= buffer.length) {
+	    return false
+	  }
+
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] < 0x30 || buffer[i] > 0x39) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isValidLastEventIdBytes (buffer, start) {
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] === 0x00) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isFieldName (line, length, field) {
+	  if (length !== field.length) {
+	    return false
+	  }
+
+	  for (let i = 0; i < length; i++) {
+	    if (line[i] !== field[i]) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function createMaxEventSizeExceededError () {
+	  const error = new Error('EventSource message size exceeded');
+	  error.aborted = false;
+	  return error
+	}
 
 	/**
 	 * @typedef {object} EventSourceStreamEvent
@@ -27315,11 +27564,21 @@ function requireEventsourceStream () {
 	  eventEndCheck = false
 
 	  /**
-	   * @type {Buffer}
+	   * @type {Buffer[]}
 	   */
-	  buffer = null
+	  chunks = []
 
+	  chunkIndex = 0
 	  pos = 0
+	  lineChunkIndex = 0
+	  linePos = 0
+	  lineLength = 0
+	  eventSize = 0
+	  eventFieldSizes = { data: 0, event: 0, id: 0, retry: 0 }
+	  dataLineCount = 0
+	  maxEventSize
+	  maxDataLines
+	  maxBufferedChunks
 
 	  event = {
 	    data: undefined,
@@ -27330,6 +27589,7 @@ function requireEventsourceStream () {
 
 	  /**
 	   * @param {object} options
+	   * @param {number} [options.maxEventSize]
 	   * @param {eventSourceSettings} options.eventSourceSettings
 	   * @param {Function} [options.push]
 	   */
@@ -27341,6 +27601,12 @@ function requireEventsourceStream () {
 	    super(options);
 
 	    this.state = options.eventSourceSettings || {};
+	    this.maxEventSize = options.maxEventSize ?? defaultMaxEventSize;
+	    const parserItemLimit = this.maxEventSize > 0
+	      ? Math.min(maxParserItems, Math.max(minParserItems, Math.floor(this.maxEventSize / bytesPerParserItem)))
+	      : 0;
+	    this.maxDataLines = parserItemLimit;
+	    this.maxBufferedChunks = parserItemLimit;
 	    if (options.push) {
 	      this.push = options.push;
 	    }
@@ -27358,92 +27624,28 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    // Cache the chunk in the buffer, as the data might not be complete while
-	    // processing it
-	    // TODO: Investigate if there is a more performant way to handle
-	    // incoming chunks
-	    // see: https://github.com/nodejs/undici/issues/2630
-	    if (this.buffer) {
-	      this.buffer = Buffer.concat([this.buffer, chunk]);
-	    } else {
-	      this.buffer = chunk;
+	    // A leading line ending can immediately release the currently buffered
+	    // line, even when it uses the final allowed chunk slot.
+	    if (this.maxEventSize > 0 &&
+	        this.chunks.length >= this.maxBufferedChunks &&
+	        chunk[0] !== LF && chunk[0] !== CR) {
+	      callback(createMaxEventSizeExceededError());
+	      return
 	    }
+	    this.chunks.push(chunk);
 
 	    // Strip leading byte-order-mark if we opened the stream and started
 	    // the processing of the incoming data
 	    if (this.checkBOM) {
-	      switch (this.buffer.length) {
-	        case 1:
-	          // Check if the first byte is the same as the first byte of the BOM
-	          if (this.buffer[0] === BOM[0]) {
-	            // If it is, we need to wait for more data
-	            callback();
-	            return
-	          }
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-
-	          // The buffer only contains one byte so we need to wait for more data
-	          callback();
-	          return
-	        case 2:
-	          // Check if the first two bytes are the same as the first two bytes
-	          // of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1]
-	          ) {
-	            // If it is, we need to wait for more data, because the third byte
-	            // is needed to determine if it is the BOM or not
-	            callback();
-	            return
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-	          break
-	        case 3:
-	          // Check if the first three bytes are the same as the first three
-	          // bytes of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // If it is, we can drop the buffered data, as it is only the BOM
-	            this.buffer = Buffer.alloc(0);
-	            // Set the checkBOM flag to false as we don't need to check for the
-	            // BOM anymore
-	            this.checkBOM = false;
-
-	            // Await more data
-	            callback();
-	            return
-	          }
-	          // If it is not the BOM, we can start processing the data
-	          this.checkBOM = false;
-	          break
-	        default:
-	          // The buffer is longer than 3 bytes, so we can drop the BOM if it is
-	          // present
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // Remove the BOM from the buffer
-	            this.buffer = this.buffer.subarray(3);
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          this.checkBOM = false;
-	          break
+	      if (this.handleBOM()) {
+	        callback();
+	        return
 	      }
 	    }
 
-	    while (this.pos < this.buffer.length) {
+	    while (this.hasCurrentByte()) {
+	      const byte = this.currentByte();
+
 	      // If the previous line ended with an end-of-line, we need to check
 	      // if the next character is also an end-of-line.
 	      if (this.eventEndCheck) {
@@ -27456,10 +27658,9 @@ function requireEventsourceStream () {
 	        if (this.crlfCheck) {
 	          // If the current character is a line feed, we can remove it
 	          // from the buffer and reset the crlfCheck flag
-	          if (this.buffer[this.pos] === LF) {
-	            this.buffer = this.buffer.subarray(this.pos + 1);
-	            this.pos = 0;
+	          if (byte === LF) {
 	            this.crlfCheck = false;
+	            this.consumeCurrentByte();
 
 	            // It is possible that the line feed is not the end of the
 	            // event. We need to check if the next character is an
@@ -27475,19 +27676,17 @@ function requireEventsourceStream () {
 	          this.crlfCheck = false;
 	        }
 
-	        if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	        if (byte === LF || byte === CR) {
 	          // If the current character is a carriage return, we need to
 	          // set the crlfCheck flag to true, as we need to check if the
 	          // next character is a line feed so we can remove it from the
 	          // buffer
-	          if (this.buffer[this.pos] === CR) {
+	          if (byte === CR) {
 	            this.crlfCheck = true;
 	          }
 
-	          this.buffer = this.buffer.subarray(this.pos + 1);
-	          this.pos = 0;
-	          if (
-	            this.event.data !== undefined || this.event.event || this.event.id || this.event.retry) {
+	          this.consumeCurrentByte();
+	          if (this.hasPendingEvent()) {
 	            this.processEvent(this.event);
 	          }
 	          this.clearEvent();
@@ -27501,22 +27700,23 @@ function requireEventsourceStream () {
 
 	      // If the current character is an end-of-line, we can process the
 	      // line
-	      if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	      if (byte === LF || byte === CR) {
 	        // If the current character is a carriage return, we need to
 	        // set the crlfCheck flag to true, as we need to check if the
 	        // next character is a line feed
-	        if (this.buffer[this.pos] === CR) {
+	        if (byte === CR) {
 	          this.crlfCheck = true;
 	        }
 
 	        // In any case, we can process the line as we reached an
 	        // end-of-line character
-	        this.parseLine(this.buffer.subarray(0, this.pos), this.event);
-
-	        // Remove the processed line from the buffer
-	        this.buffer = this.buffer.subarray(this.pos + 1);
-	        // Reset the position as we removed the processed line from the buffer
-	        this.pos = 0;
+	        try {
+	          this.parseLine(this.readLine(), this.event);
+	        } catch (error) {
+	          callback(error);
+	          return
+	        }
+	        this.consumeCurrentByte();
 	        // A line was processed and this could be the end of the event. We need
 	        // to check if the next line is empty to determine if the event is
 	        // finished.
@@ -27524,15 +27724,28 @@ function requireEventsourceStream () {
 	        continue
 	      }
 
-	      this.pos++;
+	      // readLine() is only called after CR or LF. Reject an unfinished line
+	      // before it can retain an unbounded number of decoded chunks. The seven
+	      // extra bytes allow the longest field prefix ("event: " or "retry: ").
+	      if (this.maxEventSize > 0 && ++this.lineLength > this.maxEventSize + 7) {
+	        callback(createMaxEventSizeExceededError());
+	        return
+	      }
+	      this.advanceCursor();
 	    }
 
 	    callback();
 	  }
 
+	  _destroy (error, callback) {
+	    this.chunks.length = 0;
+	    this.clearEvent();
+	    super._destroy(error, callback);
+	  }
+
 	  /**
 	   * @param {Buffer} line
-	   * @param {EventStreamEvent} event
+	   * @param {EventSourceStreamEvent} event
 	   */
 	  parseLine (line, event) {
 	    // If the line is empty (a blank line)
@@ -27549,65 +27762,72 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    let field = '';
-	    let value = '';
+	    let fieldLength = line.length;
+	    let valueStart = line.length;
 
 	    // If the line contains a U+003A COLON character (:)
 	    if (colonPosition !== -1) {
-	      // Collect the characters on the line before the first U+003A COLON
-	      // character (:), and let field be that string.
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // field
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      field = line.subarray(0, colonPosition).toString('utf8');
+	      fieldLength = colonPosition;
 
 	      // Collect the characters on the line after the first U+003A COLON
 	      // character (:), and let value be that string.
 	      // If value starts with a U+0020 SPACE character, remove it from value.
-	      let valueStart = colonPosition + 1;
+	      valueStart = colonPosition + 1;
 	      if (line[valueStart] === SPACE) {
 	        ++valueStart;
 	      }
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // value
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      value = line.subarray(valueStart).toString('utf8');
-
-	      // Otherwise, the string is not empty but does not contain a U+003A COLON
-	      // character (:)
-	    } else {
-	      // Process the field using the steps described below, using the whole
-	      // line as the field name, and the empty string as the field value.
-	      field = line.toString('utf8');
-	      value = '';
 	    }
 
-	    // Modify the event with the field name and value. The value is also
-	    // decoded as UTF-8
-	    switch (field) {
-	      case 'data':
-	        if (event[field] === undefined) {
-	          event[field] = value;
-	        } else {
-	          event[field] += `\n${value}`;
-	        }
-	        break
-	      case 'retry':
-	        if (isASCIINumber(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'id':
-	        if (isValidLastEventId(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'event':
-	        if (value.length > 0) {
-	          event[field] = value;
-	        }
-	        break
+	    if (isFieldName(line, fieldLength, DATA)) {
+	      if (this.maxEventSize > 0 && this.dataLineCount >= this.maxDataLines) {
+	        throw createMaxEventSizeExceededError()
+	      }
+	      const valueBytes = line.length - valueStart;
+	      const dataSize = this.eventFieldSizes.data + (event.data === undefined ? 0 : 1) + valueBytes;
+	      this.setEventFieldSize('data', dataSize);
+
+	      const value = line.toString('utf8', valueStart);
+
+	      if (event.data === undefined) {
+	        event.data = value;
+	      } else {
+	        event.data += `\n${value}`;
+	      }
+	      this.dataLineCount++;
+	      return
 	    }
+
+	    if (isFieldName(line, fieldLength, RETRY)) {
+	      if (isASCIINumberBytes(line, valueStart)) {
+	        this.setEventFieldSize('retry', line.length - valueStart);
+	        event.retry = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, ID)) {
+	      if (isValidLastEventIdBytes(line, valueStart)) {
+	        this.setEventFieldSize('id', line.length - valueStart);
+	        event.id = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, EVENT)) {
+	      if (valueStart < line.length) {
+	        this.setEventFieldSize('event', line.length - valueStart);
+	        event.event = line.toString('utf8', valueStart);
+	      }
+	    }
+	  }
+
+	  setEventFieldSize (field, size) {
+	    const eventSize = this.eventSize - this.eventFieldSizes[field] + size;
+	    if (this.maxEventSize > 0 && eventSize > this.maxEventSize) {
+	      throw createMaxEventSizeExceededError()
+	    }
+	    this.eventSize = eventSize;
+	    this.eventFieldSizes[field] = size;
 	  }
 
 	  /**
@@ -27636,12 +27856,159 @@ function requireEventsourceStream () {
 	  }
 
 	  clearEvent () {
-	    this.event = {
-	      data: undefined,
-	      event: undefined,
-	      id: undefined,
-	      retry: undefined
-	    };
+	    this.event.data = undefined;
+	    this.event.event = undefined;
+	    this.event.id = undefined;
+	    this.event.retry = undefined;
+	    this.eventSize = 0;
+	    this.dataLineCount = 0;
+	    this.eventFieldSizes.data = 0;
+	    this.eventFieldSizes.event = 0;
+	    this.eventFieldSizes.id = 0;
+	    this.eventFieldSizes.retry = 0;
+	  }
+
+	  hasPendingEvent () {
+	    return this.event.data !== undefined ||
+	      this.event.event !== undefined ||
+	      this.event.id !== undefined ||
+	      this.event.retry !== undefined
+	  }
+
+	  hasCurrentByte () {
+	    return this.chunkIndex < this.chunks.length &&
+	      this.pos < this.chunks[this.chunkIndex].length
+	  }
+
+	  currentByte () {
+	    return this.chunks[this.chunkIndex][this.pos]
+	  }
+
+	  consumeCurrentByte () {
+	    this.advanceCursor();
+	    this.syncLineStartToCursor();
+	  }
+
+	  advanceCursor () {
+	    this.pos++;
+
+	    while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+	      this.chunkIndex++;
+	      this.pos = 0;
+	    }
+	  }
+
+	  syncLineStartToCursor () {
+	    this.lineChunkIndex = this.chunkIndex;
+	    this.linePos = this.pos;
+	    this.lineLength = 0;
+	    this.dropConsumedChunks();
+	  }
+
+	  dropConsumedChunks () {
+	    if (this.lineChunkIndex > 0) {
+	      const consumed = this.lineChunkIndex;
+	      this.chunks.splice(0, consumed);
+	      this.lineChunkIndex = 0;
+	      this.chunkIndex -= consumed;
+	    }
+
+	    if (this.chunkIndex === this.chunks.length) {
+	      this.chunks.length = 0;
+	      this.chunkIndex = 0;
+	      this.pos = 0;
+	      this.lineChunkIndex = 0;
+	      this.linePos = 0;
+	    }
+	  }
+
+	  readLine () {
+	    if (this.lineChunkIndex === this.chunkIndex) {
+	      return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos)
+	    }
+
+	    const chunks = [];
+	    let length = 0;
+
+	    for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+	      const chunk = this.chunks[i];
+	      const start = i === this.lineChunkIndex ? this.linePos : 0;
+	      const end = i === this.chunkIndex ? this.pos : chunk.length;
+	      const slice = chunk.subarray(start, end);
+	      length += slice.length;
+	      chunks.push(slice);
+	    }
+
+	    return Buffer.concat(chunks, length)
+	  }
+
+	  peekBufferedByte (offset) {
+	    let chunkIndex = this.lineChunkIndex;
+	    let pos = this.linePos;
+
+	    while (chunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[chunkIndex];
+	      const remaining = chunk.length - pos;
+
+	      if (offset < remaining) {
+	        return chunk[pos + offset]
+	      }
+
+	      offset -= remaining;
+	      chunkIndex++;
+	      pos = 0;
+	    }
+	  }
+
+	  discardLeadingBytes (count) {
+	    while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[this.lineChunkIndex];
+	      const remaining = chunk.length - this.linePos;
+
+	      if (count < remaining) {
+	        this.linePos += count;
+	        count = 0;
+	      } else {
+	        count -= remaining;
+	        this.lineChunkIndex++;
+	        this.linePos = 0;
+	      }
+	    }
+
+	    this.chunkIndex = this.lineChunkIndex;
+	    this.pos = this.linePos;
+	    this.dropConsumedChunks();
+	  }
+
+	  handleBOM () {
+	    const first = this.peekBufferedByte(0);
+	    const second = this.peekBufferedByte(1);
+	    const third = this.peekBufferedByte(2);
+
+	    if (second === undefined) {
+	      if (first === BOM[0]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return true
+	    }
+
+	    if (third === undefined) {
+	      if (first === BOM[0] && second === BOM[1]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return false
+	    }
+
+	    if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+	      this.discardLeadingBytes(3);
+	    }
+
+	    this.checkBOM = false;
+	    return !this.hasCurrentByte()
 	  }
 	}
 
@@ -27669,6 +28036,7 @@ function requireEventsource () {
 	const { delay } = requireUtil();
 	const { kEnumerableProperty } = requireUtil$7();
 	const { environmentSettingsObject } = requireUtil$6();
+	const { getGlobalDispatcher } = requireGlobal();
 
 	let experimentalWarned = false;
 
@@ -27950,6 +28318,7 @@ function requireEventsource () {
 
 	      const eventSourceStream = new EventSourceStream({
 	        eventSourceSettings: this.#state,
+	        maxEventSize: this.#dispatcher.eventSourceOptions?.maxEventSize,
 	        push: (event) => {
 	          this.dispatchEvent(createFastMessageEvent(
 	            event.type,
@@ -28128,7 +28497,8 @@ function requireEventsource () {
 	  },
 	  {
 	    key: 'dispatcher', // undici only
-	    converter: webidl.converters.any
+	    converter: webidl.converters.any,
+	    defaultValue: () => getGlobalDispatcher()
 	  }
 	]);
 
@@ -30501,6 +30871,24 @@ const EXPANSION_MAX = 100_000;
 // realistic expansion (100k results hitting `EXPANSION_MAX` measure ~1M
 // characters) so legitimate input is unaffected.
 const EXPANSION_MAX_LENGTH = 4_000_000;
+// `expand_` recurses once per level of brace *nesting* - both when expanding a
+// set's comma members and when re-wrapping a set whose body is a single part.
+// The CVE-2026-14257 fix made the *tail* iterative (recursion on `m.post`, one
+// level per chained group), which left nesting depth unbounded: about 3,100
+// levels of `{{{...a,b...}}}` - only ~6KB of input - exhausted the native stack
+// and crashed the process. `EXPANSION_MAX_DEPTH` bounds how deep the parser
+// will follow nesting. It sits far above any realistic pattern and well below
+// the depth at which the stack runs out.
+const EXPANSION_MAX_DEPTH = 1_000;
+// Bash keeps a quirk where a brace group followed by a comma set still expands
+// (`{a},b}`). The parser implements it by rewriting the string and restarting
+// the scan, absorbing one `}` per pass. `n` trailing braces therefore cost `n`
+// full passes over a string that itself grows by one `escClose` sentinel each
+// time - quadratic in `n`, with a ~26x constant from the sentinel's length.
+// 128KB of `'{a}' + '}'.repeat(n) + ',z}'` blocked the event loop for 27
+// seconds to produce two results. `EXPANSION_MAX_REWRITES` bounds how many
+// times the scan may restart. Real `{a},b}` input needs a handful.
+const EXPANSION_MAX_REWRITES = 1_000;
 function numeric(str) {
     return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
 }
@@ -30520,36 +30908,52 @@ function unescapeBraces(str) {
         .replace(escCommaPattern, ',')
         .replace(escPeriodPattern, '.');
 }
+// Like `target.push(...items)` but doesn't overflow the stack
+function pushAll(target, items) {
+    for (let i = 0; i < items.length; i++) {
+        target.push(items[i]);
+    }
+}
 /**
  * Basically just str.split(","), but handling cases
  * where we have nested braced sections, which should be
  * treated as individual members, like {a,{b,c},d}
  */
 function parseCommaParts(str) {
-    if (!str) {
-        return [''];
-    }
     const parts = [];
-    const m = balanced('{', '}', str);
-    if (!m) {
-        return str.split(',');
+    // Walk the brace groups iteratively. Recursing on `post` once per group let a
+    // chain of them exhaust the stack - the parsing-side counterpart to
+    // the `expand_` overflow fixed for CVE-2026-14257, and not something `max` or
+    // `maxLength` can bound, since it happens before expansion.
+    //
+    // The part the next chunk continues
+    let carry = '';
+    for (;;) {
+        const m = balanced('{', '}', str);
+        if (!m) {
+            const tail = str.split(',');
+            tail[0] = carry + tail[0];
+            pushAll(parts, tail);
+            return parts;
+        }
+        const { pre, body, post } = m;
+        const p = pre.split(',');
+        p[0] = carry + p[0];
+        p[p.length - 1] += '{' + body + '}';
+        if (!post.length) {
+            pushAll(parts, p);
+            return parts;
+        }
+        carry = p.pop();
+        pushAll(parts, p);
+        str = post;
     }
-    const { pre, body, post } = m;
-    const p = pre.split(',');
-    p[p.length - 1] += '{' + body + '}';
-    const postParts = parseCommaParts(post);
-    if (post.length) {
-        p[p.length - 1] += postParts.shift();
-        p.push.apply(p, postParts);
-    }
-    parts.push.apply(parts, p);
-    return parts;
 }
 function expand(str, options = {}) {
     if (!str) {
         return [];
     }
-    const { max = EXPANSION_MAX, maxLength = EXPANSION_MAX_LENGTH } = options;
+    const { max = EXPANSION_MAX, maxLength = EXPANSION_MAX_LENGTH, maxDepth = EXPANSION_MAX_DEPTH, maxRewrites = EXPANSION_MAX_REWRITES, } = options;
     // I don't know why Bash 4.3 does this, but it does.
     // Anything starting with {} will have the first two bytes preserved
     // but *only* at the top level, so {},a}b will not expand to anything,
@@ -30559,7 +30963,7 @@ function expand(str, options = {}) {
     if (str.slice(0, 2) === '{}') {
         str = '\\{\\}' + str.slice(2);
     }
-    return expand_(escapeBraces(str), max, maxLength, true).map(unescapeBraces);
+    return expand_(escapeBraces(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces);
 }
 function embrace(str) {
     return '{' + str + '}';
@@ -30600,7 +31004,7 @@ function combine(acc, pre, values, max, maxLength, dropEmpties) {
 }
 // The expansion values of a single numeric (`1..5`) or alphabetic (`a..e..2`)
 // sequence body.
-function expandSequence(body, isAlphaSequence, max) {
+function expandSequence(body, isAlphaSequence, max, maxLength) {
     const n = body.split(/\.\./);
     const N = [];
     // A sequence body always splits into two or three parts, but the compiler
@@ -30623,6 +31027,7 @@ function expandSequence(body, isAlphaSequence, max) {
         test = gte;
     }
     const pad = n.some(isPadded);
+    let length = 0;
     for (let i = x; test(i, y) && N.length < max; i += incr) {
         let c;
         if (isAlphaSequence) {
@@ -30646,11 +31051,20 @@ function expandSequence(body, isAlphaSequence, max) {
                 }
             }
         }
+        if (length + c.length > maxLength)
+            break;
         N.push(c);
+        length += c.length;
     }
     return N;
 }
-function expand_(str, max, maxLength, isTop) {
+function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
+    // Too deeply nested to keep following: treat the rest as literal, the same
+    // way a group that cannot expand is already handled. Truncating rather than
+    // throwing keeps `expand` total, matching `max` and `maxLength`.
+    if (depth > maxDepth) {
+        return [str];
+    }
     // Consume the string's top-level brace groups left to right, threading a
     // running set of combined prefixes (`acc`). Expanding the tail iteratively -
     // rather than recursing on `m.post` once per group - keeps the native stack
@@ -30662,6 +31076,9 @@ function expand_(str, max, maxLength, isTop) {
     // comma set - a sequence like `{a..\}` may legitimately yield ''. The drop
     // is on the final strings, so it is applied to whichever `combine` produces
     // them (the one with no brace set left in the tail).
+    // How many times the `{a},b}` rewrite below has restarted the scan. Each pass
+    // re-reads the whole string, so leaving this unbounded is quadratic.
+    let rewrites = 0;
     let dropEmpties = false;
     let firstGroup = true;
     for (;;) {
@@ -30686,7 +31103,8 @@ function expand_(str, max, maxLength, isTop) {
         const isOptions = m.body.indexOf(',') >= 0;
         if (!isSequence && !isOptions) {
             // {a},b}
-            if (m.post.match(/,(?!,).*\}/)) {
+            if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
+                rewrites++;
                 str = m.pre + '{' + m.body + escClose + m.post;
                 isTop = true;
                 continue;
@@ -30700,13 +31118,13 @@ function expand_(str, max, maxLength, isTop) {
         }
         let values;
         if (isSequence) {
-            values = expandSequence(m.body, isAlphaSequence, max);
+            values = expandSequence(m.body, isAlphaSequence, max, maxLength);
         }
         else {
             let n = parseCommaParts(m.body);
             if (n.length === 1 && n[0] !== undefined) {
                 // x{{a,b}}y ==> x{a}y x{b}y
-                n = expand_(n[0], max, maxLength, false).map(embrace);
+                n = expand_(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
                 //XXX is this necessary? Can't seem to hit it in tests.
                 /* c8 ignore start */
                 if (n.length === 1) {
@@ -30718,9 +31136,32 @@ function expand_(str, max, maxLength, isTop) {
                 }
                 /* c8 ignore stop */
             }
+            // Values that `combine` is going to drop as empty produce no result, so
+            // they must not count against `max` - otherwise `{a,,b}` with `max: 2`
+            // would stop at `['a', '']` and yield one result instead of two. Skipping
+            // them outright keeps `values` bounded while leaving `max` a bound on
+            // *kept* results.
+            let dropsEmpties = dropEmpties && !m.post.length && !pre;
+            for (let d = 0; dropsEmpties && d < acc.length; d++) {
+                if (acc[d]) {
+                    dropsEmpties = false;
+                }
+            }
             values = [];
-            for (let j = 0; j < n.length; j++) {
-                values.push.apply(values, expand_(n[j], max, maxLength, false));
+            let valuesLength = 0;
+            outer: for (let j = 0; j < n.length; j++) {
+                const expanded = expand_(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false);
+                for (let k = 0; k < expanded.length; k++) {
+                    const v = expanded[k];
+                    if (dropsEmpties && !v)
+                        continue;
+                    if (values.length >= max ||
+                        valuesLength + v.length > maxLength) {
+                        break outer;
+                    }
+                    values.push(v);
+                    valuesLength += v.length;
+                }
             }
         }
         acc = combine(acc, pre, values, max, maxLength, dropEmpties && !m.post.length);
@@ -33479,38 +33920,286 @@ function create(patterns, options) {
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-let DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
+function getLineColFromPtr(string, ptr) {
+    let lines = string.slice(0, ptr).split(/\r?\n/);
+    return [lines.length, lines.pop().length + 1];
+}
+function makeCodeBlock(string, line, column) {
+    let lines = string.split(/\r?\n/);
+    let codeblock = '';
+    let numberLen = (Math.log10(line + 1) | 0) + 1;
+    for (let i = line - 1; i <= line + 1; i++) {
+        let l = lines[i - 1];
+        if (!l)
+            continue;
+        codeblock += i.toString().padEnd(numberLen, ' ');
+        codeblock += ':  ';
+        codeblock += l;
+        codeblock += '\n';
+        if (i === line) {
+            codeblock += ' '.repeat(numberLen + column + 2);
+            codeblock += '^\n';
+        }
+    }
+    return codeblock;
+}
+class TomlError extends Error {
+    line;
+    column;
+    codeblock;
+    constructor(message, options) {
+        const [line, column] = getLineColFromPtr(options.toml, options.ptr);
+        const codeblock = makeCodeBlock(options.toml, line, column);
+        super(`Invalid TOML document: ${message}\n\n${codeblock}`, options);
+        this.line = line;
+        this.column = column;
+        this.codeblock = codeblock;
+    }
+    /** @internal */
+    static x(message, ctx, ptr) {
+        throw new TomlError(message, { toml: ctx.s, ptr: ptr ?? ctx.p });
+    }
+}
+
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/** @internal */
+function parseString(ctx) {
+    let startPtr = ctx.p;
+    let c = ctx.s.charCodeAt(ctx.p++);
+    let first = c;
+    let isLiteral = c === 0x27; /* ' */
+    let isMultiline = c === ctx.s.charCodeAt(ctx.p) && c === ctx.s.charCodeAt(ctx.p + 1);
+    if (isMultiline) {
+        // Trim initial newline
+        if ((c = ctx.s.charCodeAt(ctx.p += 2)) === 0xa /* \n */)
+            ctx.p++;
+        else if (c === 0xd /* \r */ && ctx.s.charCodeAt(ctx.p + 1) === 0xa /* \n */)
+            ctx.p += 2;
+    }
+    // For the record: it is not worth it to use a fast-path for literal strings using `indexOf`.
+    // Doing a char-by-char iteration ends up dispatching less instructions, for the same wall-clock runtime.
+    let parsed = '';
+    let sliceStart = ctx.p;
+    // states:
+    //   0 - decoding
+    //   1 - decoding escape
+    //   2 - whitespace escape (no newline encountered yet, must fail on non-whitespace)
+    //   3 - whitespace escape (newline encountered, allowed to transition back to normal decode)
+    let state = 0;
+    for (; ctx.p < ctx.s.length; ctx.p++) {
+        c = ctx.s.charCodeAt(ctx.p);
+        // Deal with newlines first, since that simplifies control character checking and handling across all states
+        if (isMultiline && (c === 0xa /* \n */ || (c === 0xd /* \r */ && ctx.s.charCodeAt(ctx.p + 1) === 0xa /* \n */))) {
+            state = state && 3;
+        }
+        // Control characters are banned in TOML, so we throw an error if we encounter them
+        else if ((c < 0x20 && c !== 0x9 /* \t */) || c === 0x7f) {
+            TomlError.x('control characters are not allowed in strings', ctx);
+        }
+        // The string might terminate while we're parsing through a newline escape.
+        // It must have encountered a newline; otherwise, it'll simply fail in another branch.
+        else if ((!state || state === 3) && c === first && (!isMultiline || (ctx.s.charCodeAt(ctx.p + 1) === first && ctx.s.charCodeAt(ctx.p + 2) === first))) {
+            if (isMultiline) {
+                // If the string ends with 4-5 quotes, then the first 1-2 are part of the string
+                if (ctx.s.charCodeAt(ctx.p + 3) === first)
+                    ctx.p++;
+                if (ctx.s.charCodeAt(ctx.p + 3) === first)
+                    ctx.p++;
+            }
+            // If we're in a newline escape still, then there's nothing to add.
+            if (!state) {
+                // Avoid a useless concat operation if the string can be used as-is.
+                let s = ctx.s.slice(sliceStart, ctx.p);
+                parsed = parsed ? parsed + s : s;
+            }
+            ctx.p += isMultiline ? 3 : 1;
+            return parsed;
+        }
+        // Baseline state; keep moving forward unless an escape sequence starts
+        else if (!state) {
+            if (!isLiteral && c === 0x5c /* \ */) {
+                parsed += ctx.s.slice(sliceStart, (sliceStart = ctx.p));
+                state = 1;
+            }
+        }
+        else if (state === 1) {
+            if (c === 0x78 /* x */ || c === 0x75 /* u */ || c === 0x55 /* U */) { // Unicode escape
+                let errPtr = ctx.p++ - 1;
+                let value = 0;
+                let len = c === 0x78 /* x */ ? 2 : c === 0x75 /* u */ ? 4 : 8;
+                for (let j = 0; j < len; j++, ctx.p++) {
+                    let hex = ctx.s.charCodeAt(ctx.p);
+                    let digit = 
+                    /* 0-9 */ hex >= 0x30 && hex <= 0x39 ? hex - 0x30 :
+                        /* A-F */ hex >= 0x41 && hex <= 0x46 ? hex - 0x41 + 10 :
+                            /* a-f */ hex >= 0x61 && hex <= 0x66 ? hex - 0x61 + 10 : -1;
+                    if (digit < 0)
+                        TomlError.x('invalid non-hex character in unicode escape', ctx);
+                    value = (value << 4) | digit;
+                }
+                // Because JS does bitwise on signed 32bit integers, all 0xfzzzzzzz values are actually seen as negative
+                if (value < 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) {
+                    TomlError.x('invalid unicode escape', ctx, errPtr);
+                }
+                parsed += String.fromCodePoint(value);
+                sliceStart = ctx.p--;
+                state = 0;
+            }
+            // Newline escape sequence. We only need to care about spaces and tabs; newlines are dealt with earlier
+            else if (isMultiline && (c === 0x20 || c === 0x9 /* \t */)) {
+                state = 2;
+            }
+            // Basic escape sequence
+            else {
+                if (c === 0x62 /* b */)
+                    parsed += '\b';
+                else if (c === 0x74 /* t */)
+                    parsed += '\t';
+                else if (c === 0x6e /* n */)
+                    parsed += '\n';
+                else if (c === 0x66 /* f */)
+                    parsed += '\f';
+                else if (c === 0x72 /* r */)
+                    parsed += '\r';
+                else if (c === 0x65 /* e */)
+                    parsed += '\x1b';
+                else if (c === 0x22 /* " */)
+                    parsed += '"';
+                else if (c === 0x5c /* \ */)
+                    parsed += '\\';
+                else
+                    TomlError.x('unrecognised escape sequence', ctx);
+                sliceStart = ctx.p + 1;
+                state = 0;
+            }
+        }
+        // Newline escape continuation: keep moving forward until the first non-whitespace char
+        else if (c !== 0x20 && c !== 0x9 /* \t */) {
+            if (state === 2)
+                TomlError.x('invalid escape: only line-ending whitespace may be escaped', ctx, sliceStart);
+            // State cannot be zero, or we'd have branched earlier already.
+            // If it's a backslash, immediately transition to the escape state so it can be processed.
+            state = !isLiteral && c === 0x5c /* \ */ ? 1 : 0;
+            sliceStart = ctx.p;
+        }
+    }
+    TomlError.x('unfinished string', ctx, startPtr);
+}
+
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+let DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[Tt ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|z|[-+]\d{2}:\d{2})?$/i;
 class TomlDate extends Date {
     #hasDate = false;
     #hasTime = false;
     #offset = null;
-    constructor(date) {
+    constructor(date, fasttype, unsafeDelim) {
         let hasDate = true;
         let hasTime = true;
         let offset = 'Z';
+        let c;
         if (typeof date === 'string') {
-            let match = date.match(DATE_TIME_RE);
-            if (match) {
-                if (!match[1]) {
-                    hasDate = false;
-                    date = `0000-01-01T${date}`;
+            if (fasttype)
+                prep: {
+                    // Date-time
+                    if (fasttype < 3) {
+                        if (+date.slice(11, 13) > 23) {
+                            date = '';
+                            break prep;
+                        }
+                        // Local
+                        if (fasttype === 2) {
+                            offset = null;
+                            date += 'Z';
+                        }
+                        // Offset; keep track of offset if not Z
+                        else if ((c = date.charCodeAt(date.length - 1)) !== 0x5a /* Z */ && c !== 0x7a /* z */) {
+                            offset = date.slice(date.length - 6);
+                        }
+                        if (unsafeDelim)
+                            date = date.slice(0, 10) + 'T' + date.slice(11);
+                    }
+                    // Time
+                    else if (fasttype === 4) {
+                        date = +date.slice(0, 2) > 23 ? '' : `0000-01-01T${date}Z`;
+                    }
+                    hasDate = fasttype !== 4;
+                    hasTime = fasttype !== 3;
                 }
-                hasTime = !!match[2];
-                // Make sure to use T instead of a space. Breaks in case of extreme values otherwise.
-                hasTime && date[10] === ' ' && (date = date.replace(' ', 'T'));
-                // Do not allow rollover hours.
-                if (match[2] && +match[2] > 23) {
-                    date = '';
+            else {
+                let match = date.match(DATE_TIME_RE);
+                if (match) {
+                    if (!match[1]) {
+                        hasDate = false;
+                        date = `0000-01-01T${date}`;
+                    }
+                    hasTime = !!match[2];
+                    // Make sure to use T instead of a space. Breaks in case of extreme values otherwise.
+                    hasTime && date[10] === ' ' && (date = date.replace(' ', 'T'));
+                    // Do not allow rollover hours.
+                    if (match[2] && +match[2] > 23) {
+                        date = '';
+                    }
+                    else {
+                        offset = match[3] || null;
+                        if (!offset && hasTime)
+                            date += 'Z';
+                    }
                 }
                 else {
-                    offset = match[3] || null;
-                    date = date.toUpperCase();
-                    if (!offset && hasTime)
-                        date += 'Z';
+                    date = '';
                 }
-            }
-            else {
-                date = '';
             }
         }
         super(date);
@@ -33547,7 +34236,7 @@ class TomlDate extends Date {
         if (this.#offset === null)
             return iso.slice(0, -1);
         // Offset DateTime
-        if (this.#offset === 'Z')
+        if (this.#offset === 'Z' || this.#offset === 'z')
             return iso;
         // This part is quite annoying: JS strips the original timezone from the ISO string representation
         // Instead of using a "modified" date and "Z", we restore the representation "as authored"
@@ -33607,40 +34296,266 @@ class TomlDate extends Date {
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-function getLineColFromPtr(string, ptr) {
-    let lines = string.slice(0, ptr).split(/\r\n|\n|\r/g);
-    return [lines.length, lines.pop().length + 1];
+function isDigit(char, base = 10) {
+    return base === 16
+        ? (char > 0x2f && char < 0x3a) || (char > 0x40 && char < 0x47) || (char > 0x60 && char < 0x67)
+        : (char > 0x2f && char < 0x30 + base);
 }
-function makeCodeBlock(string, line, column) {
-    let lines = string.split(/\r\n|\n|\r/g);
-    let codeblock = '';
-    let numberLen = (Math.log10(line + 1) | 0) + 1;
-    for (let i = line - 1; i <= line + 1; i++) {
-        let l = lines[i - 1];
-        if (!l)
-            continue;
-        codeblock += i.toString().padEnd(numberLen, ' ');
-        codeblock += ':  ';
-        codeblock += l;
-        codeblock += '\n';
-        if (i === line) {
-            codeblock += ' '.repeat(numberLen + column + 2);
-            codeblock += '^\n';
+function isEndOfValue(char, delim) {
+    // Whitespace -- we're permissive on `\r` for performance; it'll be dealt with later anyway
+    return char === 0x20 || char === 0x9 /* \t */ || char === 0xa /* \n */ || char === 0xd /* \r */ ||
+        // Structure end or next value delimiter
+        (delim && (char === delim || char === 0x2c /* , */)) ||
+        // Comment
+        char === 0x23; /* # */
+}
+/** @internal */
+function extractValue(ctx, end) {
+    let errPtr = ctx.p;
+    let c = ctx.s.charCodeAt(ctx.p);
+    // Structs
+    if (c === 0x5b /* [ */ || c === 0x7b /* { */) {
+        ctx.d-- || TomlError.x('document contains excessively nested structures. aborting.', ctx);
+        let value = c === 0x5b /* [ */
+            ? parseArray(ctx)
+            : parseInlineTable(ctx);
+        ctx.d++;
+        return value;
+    }
+    // Strings
+    if (c === 0x22 /* " */ || c === 0x27 /* ' */) {
+        return parseString(ctx);
+    }
+    // Booleans
+    // We can fast-path because the first character is enough to know the only possible value
+    if (c === 0x74 /* t */) { // Only possible valid value is `true`
+        if (ctx.s.charCodeAt(++ctx.p) !== 0x72 || ctx.s.charCodeAt(++ctx.p) !== 0x75 || ctx.s.charCodeAt(++ctx.p) !== 0x65)
+            TomlError.x('invalid value', ctx, errPtr);
+        return ctx.p++, true;
+    }
+    if (c === 0x66 /* f */) { // Only possible valid value is `false`
+        if (ctx.s.charCodeAt(++ctx.p) !== 0x61 || ctx.s.charCodeAt(++ctx.p) !== 0x6c || ctx.s.charCodeAt(++ctx.p) !== 0x73 || ctx.s.charCodeAt(++ctx.p) !== 0x65)
+            TomlError.x('invalid value', ctx, errPtr);
+        return ctx.p++, false;
+    }
+    if (c === 0x2b /* + */ || c === 0x2d /* - */) {
+        return parseNumber(ctx, ctx.p, ctx.s.charCodeAt(++ctx.p), 0x2c - c, end);
+    }
+    // Rough heuristic, but `parseDate` falls back to number parsing if it's a false positive.
+    // e.g.: `a = 1\n-------------- = 1` would match this heuristic, but gracefully fallback to numbers.
+    if (ctx.s.charCodeAt(ctx.p + 4) === 0x2d /* - */ && ctx.s.charCodeAt(ctx.p + 7) === 0x2d /* - */) {
+        return parseDate(ctx, c, end);
+    }
+    // Same logic as above; `parseTime` falls back to number parsing if it's a false positive.
+    if (ctx.s.charCodeAt(ctx.p + 2) === 0x3a /* : */) {
+        return parseTime(ctx, c, end);
+    }
+    return parseNumber(ctx, ctx.p, c, 0, end);
+}
+// State:
+// 0: init
+// 1: integer
+// 2: fractional dot
+// 3: fractional
+// 4: exponent letter
+// 5: exponent
+// 6: exponent sign
+// 7: exponent with sign
+// >9: underscore; see below
+//     -> 12: was integer
+//     -> 14: was fractional
+//     -> 16: was exponent
+// states 2-5, 14, 16 are ONLY permitted iif base === 10
+function parseNumber(ctx, startPtr, startChr, sign, endChr) {
+    let c = startChr;
+    let state = 0;
+    let hasUnderscores = false;
+    // (+/-)inf
+    if (c === 0x69 /* i */) {
+        if (ctx.s.charCodeAt(++ctx.p) !== 0x6e || ctx.s.charCodeAt(++ctx.p) !== 0x66)
+            TomlError.x('invalid value', ctx, startPtr);
+        return ctx.p++, (sign || 1) / 0;
+    }
+    // (+/-)nan
+    if (c === 0x6e /* n */) {
+        if (ctx.s.charCodeAt(++ctx.p) !== 0x61 || ctx.s.charCodeAt(++ctx.p) !== 0x6e)
+            TomlError.x('invalid value', ctx, startPtr);
+        return ctx.p++, NaN;
+    }
+    // Leading zero
+    // Only allowed cases: `0<EOV>`, `0.(...)`, `0e(...)`, `0x(...)`, `0b(...)`, `0o(...)`
+    // FWIW, `0e(...)` is a stupid case, but it's not banned per-se so we have to parse it
+    if (c === 0x30 /* 0 */) {
+        if (++ctx.p >= ctx.s.length || isEndOfValue(c = ctx.s.charCodeAt(ctx.p), endChr))
+            return ctx.bi === true ? 0n : 0; // note: conveniently deals with `-0`
+        if (!sign) {
+            if (c === 0x78 /* x */)
+                return parseIntegerBaseN(ctx, startPtr, 16, endChr);
+            else if (c === 0x62 /* b */)
+                return parseIntegerBaseN(ctx, startPtr, 2, endChr);
+            else if (c === 0x6f /* o */)
+                return parseIntegerBaseN(ctx, startPtr, 8, endChr);
+        }
+        if (c === 0x2e /* . */)
+            state = 2;
+        else if (c === 0x65 /* e */ || c === 0x45 /* E */)
+            state = 4;
+        else
+            TomlError.x('illegal leading zero', ctx, startPtr);
+    }
+    // If the 1st char is not a digit by now, then it's not a valid TOML value at all
+    else if (!isDigit(c))
+        TomlError.x('invalid value', ctx, startPtr);
+    while (++ctx.p < ctx.s.length && (c = ctx.s.charCodeAt(ctx.p), !isEndOfValue(c, endChr))) {
+        if (!state)
+            state = 1; // Detects single-digit numbers we can use a fast parse path for
+        // The way the states are numbered is not random: underscores are always permitted in odd-numbered states and
+        // never permitted in even-numbered ones.
+        if (c === 0x5f /* _ */) {
+            if (!(state & 1))
+                TomlError.x('illegal underscore', ctx);
+            state += 11; // 11 is a marker that makes the state even and greater than 9; see the numbering + rationale above
+            hasUnderscores = true;
+        }
+        // Transition to fractional part.
+        else if (state === 1 && c === 0x2e /* . */)
+            state = 2;
+        // Transition to exponent part.
+        else if ((state === 1 || state === 3) && (c === 0x65 /* e */ || c === 0x45 /* E */))
+            state = 4;
+        // + and - are permitted in state 4 only (handled before entering the function for state 0)
+        else if (state === 4 && (c === 0x2b /* + */ || c === 0x2d /* - */)) {
+            state = 6;
+        }
+        // All special cases have been handled; only digits are allowed here
+        else if (!isDigit(c))
+            TomlError.x(`illegal character in numeric literal`, ctx);
+        // Clear state flags
+        else if (state > 9)
+            state -= 11;
+        else if (!(state & 1))
+            state++;
+    }
+    // Single-char number; we can fast-path these very easily.
+    if (!state) {
+        let val = (startChr - 0x30 /* 0 */) * (sign || 1);
+        return ctx.bi === true ? BigInt(val) : val;
+    }
+    // Even-numbered states absolutely require a digit next; not even end of value is permitted
+    if (!(state & 1))
+        TomlError.x('unfinished numeric value', ctx, startPtr);
+    let str = ctx.s.slice(startPtr, ctx.p);
+    if (hasUnderscores)
+        str = str.replaceAll('_', ''); // perf: replaceAll 1.25x faster than replace with a regex
+    return state > 1
+        ? parseFloat(str)
+        : parseInteger(ctx, str, 10, startPtr);
+}
+function parseIntegerBaseN(ctx, startPtr, base, endChr) {
+    let c, underscore = 1;
+    while (++ctx.p < ctx.s.length && (c = ctx.s.charCodeAt(ctx.p), !isEndOfValue(c, endChr))) {
+        if (c === 0x5f /* _ */) {
+            if (underscore & 1)
+                TomlError.x('illegal underscore', ctx);
+            underscore = 3;
+        }
+        // We only need to check if the number is a valid digit, nothing else is permitted
+        else if (!isDigit(c, base))
+            TomlError.x(`illegal character in numeric literal`, ctx);
+        // Clear underscore flag
+        else if (underscore & 1)
+            underscore--;
+    }
+    // Trailing underscore is not allowed
+    if (underscore & 1)
+        TomlError.x('unfinished numeric value', ctx);
+    let str = ctx.s.slice(startPtr + 2, ctx.p);
+    if (underscore)
+        str = str.replaceAll('_', ''); // perf: replaceAll 1.25x faster than replace with a regex
+    return parseInteger(ctx, str, base, startPtr);
+}
+function parseInteger(ctx, str, base, startPtr) {
+    if (ctx.bi !== true)
+        int: {
+            let val = parseInt(str, base);
+            if (!Number.isSafeInteger(val)) {
+                if (ctx.bi)
+                    break int;
+                TomlError.x('integer value cannot be represented losslessly', ctx, startPtr);
+            }
+            return val;
+        }
+    return base === 10 ? BigInt(str) : BigInt((base === 2 ? '0b' : base === 8 ? '0o' : '0x') + str);
+}
+function parseDate(ctx, c, endChr) {
+    let startPtr = ctx.p++, unsafeSeparator;
+    if (!isDigit(c) ||
+        !isDigit(ctx.s.charCodeAt(ctx.p++)) ||
+        !isDigit(ctx.s.charCodeAt(ctx.p++)) ||
+        !isDigit(ctx.s.charCodeAt(ctx.p++))) {
+        return parseNumber(ctx, ctx.p = startPtr, c, 0, endChr);
+    }
+    ctx.p += 5;
+    if (!isDigit(ctx.s.charCodeAt(ctx.p++)))
+        TomlError.x('invalid date-time: date part is malformed', ctx, startPtr);
+    if (ctx.p >= ctx.s.length || (((c = ctx.s.charCodeAt(ctx.p)) !== 0x20 || (unsafeSeparator = true, !isDigit(ctx.s.charCodeAt(ctx.p + 1)))) && c !== 0x54 /* T */ && c !== 0x74 /* t */)) {
+        let t = ctx.s.slice(startPtr, ctx.p);
+        return readDate(ctx, t, 3, false, startPtr);
+    }
+    if (ctx.s.charCodeAt(ctx.p += 3) !== 0x3a /* : */)
+        TomlError.x('invalid date-time: time part is malformed', ctx, startPtr);
+    if (ctx.s.charCodeAt(ctx.p += 3) === 0x3a /* : */)
+        ctx.p += 3;
+    if (ctx.s.charCodeAt(ctx.p) === 0x2e /* . */)
+        while (isDigit(ctx.s.charCodeAt(++ctx.p)))
+            ;
+    if (c = ctx.s.charCodeAt(ctx.p)) {
+        if (c === 0x5a /* Z */ || c === 0x7a /* z */) {
+            let t = ctx.s.slice(startPtr, ++ctx.p);
+            return readDate(ctx, t, 1, unsafeSeparator, startPtr, '[+00:00]');
+        }
+        if (c === 0x2b /* + */ || c === 0x2d /* - */) {
+            // Temporal's ZonedDateTime is weird asf when it comes to dealing with traditional offsets...
+            // It's 1.2x faster to allocate a new string to pass to ZDT than use Instant.toZonedDateTimeISO
+            let t = ctx.s.slice(startPtr, ctx.p += 6);
+            return readDate(ctx, t, 1, unsafeSeparator, startPtr, !ctx.ld && ('[' + ctx.s.slice(ctx.p - 6, ctx.p) + ']'));
         }
     }
-    return codeblock;
+    let t = ctx.s.slice(startPtr, ctx.p);
+    return readDate(ctx, t, 2, unsafeSeparator, startPtr);
 }
-class TomlError extends Error {
-    line;
-    column;
-    codeblock;
-    constructor(message, options) {
-        const [line, column] = getLineColFromPtr(options.toml, options.ptr);
-        const codeblock = makeCodeBlock(options.toml, line, column);
-        super(`Invalid TOML document: ${message}\n\n${codeblock}`, options);
-        this.line = line;
-        this.column = column;
-        this.codeblock = codeblock;
+function parseTime(ctx, c, endChr) {
+    let start = ctx.p;
+    if (!isDigit(c) || !isDigit(ctx.s.charCodeAt(++ctx.p))) {
+        return parseNumber(ctx, --ctx.p, c, 0, endChr);
+    }
+    if (ctx.s.charCodeAt(ctx.p += 4) === 0x3a /* : */)
+        ctx.p += 3;
+    if (ctx.s.charCodeAt(ctx.p) === 0x2e /* . */)
+        while (isDigit(ctx.s.charCodeAt(++ctx.p)))
+            ;
+    let t = ctx.s.slice(start, ctx.p);
+    return readDate(ctx, t, 4, false, start);
+}
+function readDate(ctx, str, type, unsafeDelim, errPtr, temporalSuffix) {
+    if (ctx.ld) {
+        let date = new TomlDate(str, type, unsafeDelim);
+        if (!date.isValid())
+            TomlError.x('invalid date', ctx, errPtr);
+        return date;
+    }
+    try {
+        if (temporalSuffix)
+            str += temporalSuffix;
+        switch (type) {
+            case 1: return Temporal.ZonedDateTime.from(str);
+            case 2: return Temporal.PlainDateTime.from(str);
+            case 3: return Temporal.PlainDate.from(str);
+            case 4: return Temporal.PlainTime.from(str);
+        }
+    }
+    catch (e) {
+        TomlError.x(e instanceof Error ? e.message : '' + e, ctx, errPtr);
     }
 }
 
@@ -33671,581 +34586,187 @@ class TomlError extends Error {
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-// let CTRL_REGEX = /[\x00-\x08\x0f-\x1f\x7f]/
-let INT_REGEX = /^((0x[0-9a-fA-F](_?[0-9a-fA-F])*)|(([+-]|0[ob])?\d(_?\d)*))$/;
-let FLOAT_REGEX = /^[+-]?\d(_?\d)*(\.\d(_?\d)*)?([eE][+-]?\d(_?\d)*)?$/;
-let LEADING_ZERO = /^[+-]?0[0-9_]/;
 /** @internal */
-function parseString(str, ptr) {
-    let c = str[ptr++];
-    let first = c;
-    let isLiteral = c === "'";
-    let isMultiline = c === str[ptr] && c === str[ptr + 1];
-    if (isMultiline) {
-        // Trim initial newline
-        if (str[ptr += 2] === '\n')
-            ptr++;
-        else if (str[ptr] === '\r' && str[ptr + 1] === '\n')
-            ptr += 2;
+function skipComment(ctx) {
+    for (; ctx.p < ctx.s.length; ctx.p++) {
+        let c = ctx.s.charCodeAt(ctx.p);
+        if (c === 0xa /* \n */)
+            break;
+        if (c === 0xd /* \r */ && ctx.s.charCodeAt(ctx.p + 1) === 0xa /* \n */) {
+            ctx.p++;
+            break;
+        }
+        if ((c < 0x20 && c !== 0x9 /* \t */) || c === 0x7f) {
+            TomlError.x('control characters are not allowed in comments', ctx);
+        }
     }
-    /*
-    The fast path does not seem to bring significant performance gains, so it's commented out.
-    Kept for reference and/or future fafoing.
-
-    Without: spec  5.08 µs/iter    3.88 ipc (99.44% cache)   23.90 branch misses   28.61k cycles    111.01k instructions
-             5MB   115.73 ms/iter  2.51 ipc (98.36% cache)   3.12M branch misses   619.30M cycles   1.56G instructions
-
-    With:    spec  5.09 µs/iter    3.90 ipc (99.46% cache)   24.42 branch misses   28.57k cycles    111.49k instructions
-             5MB   113.89 ms/iter  2.47 ipc (98.38% cache)   3.12M branch misses   611.94M cycles   1.51G instructions
-
-    if (c === "'") {
-        // Literal strings fast path - no transform needs to occur; just grab the str and that's it
-        let endPtr = str.indexOf(isMultiline ? "'''" : "'", ptr)
-        if (endPtr < 0) {
-            throw new TomlError("unfinished string literal", { toml: str, ptr })
-        }
-
-        if (isMultiline) {
-            // If the string ends with 4-5 quotes, then the first 1-2 are part of the string
-            if (str[endPtr + 3] === "'") endPtr++
-            if (str[endPtr + 3] === "'") endPtr++
-        }
-
-        let string = str.slice(ptr, endPtr)
-        if (CTRL_REGEX.test(string)) {
-            let match = string.match(CTRL_REGEX)!
-            throw new TomlError('control characters are not allowed in strings', { toml: str, ptr: ptr + (match.index ?? 0) })
-        }
-        return [string, endPtr + (isMultiline ? 3 : 1)]
+}
+/** @internal */
+function skipVoid(ctx, banNewLines, banComments) {
+    let c;
+    while (ctx.p < ctx.s.length) {
+        while (ctx.p < ctx.s.length && ((c = ctx.s.charCodeAt(ctx.p)) === 0x20 ||
+            c === 0x9 /* \t */ ||
+            (!banNewLines &&
+                (c === 0xa /* \n */ || (c === 0xd /* \r */ && ctx.s.charCodeAt(ctx.p + 1) === 0xa /* \n */)))))
+            ctx.p++;
+        if (banComments || c !== 0x23 /* # */)
+            break;
+        skipComment(ctx);
     }
-    */
-    let parsed = '';
-    let sliceStart = ptr;
-    // states:
-    //   0 - decoding
-    //   1 - decoding escape
-    //   2 - whitespace escape (no newline encountered yet, must fail on non-whitespace)
-    //   3 - whitespace escape (newline encountered, allowed to transition back to normal decode)
+}
+
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+/** @internal */
+function parseKey(ctx, end = 0x3d /* = */) {
+    // States:
+    // 0: before first char
+    // 1: parsing bare key
+    // 2: after key component
+    let startPtr;
     let state = 0;
-    for (let i = ptr; i < str.length; i++) {
-        c = str[i];
-        // Deal with newlines first, since that simplifies control character checking and handling across all states
-        if (isMultiline && (c === '\n' || (c === '\r' && str[i + 1] === '\n'))) {
-            state = state && 3;
+    let parsed = [];
+    let sliceStart;
+    let c = ctx.s.charCodeAt(startPtr = ctx.p);
+    do {
+        // End of key
+        if (c === end) {
+            if (!state)
+                TomlError.x('unexpected end of key', ctx);
+            if (state === 1)
+                parsed.push(ctx.s.slice(sliceStart, ctx.p));
+            return ctx.p++, parsed;
         }
-        // Control characters are banned in TOML, so we throw an error if we encounter them
-        else if ((c < '\x20' && c !== '\t') || c === '\x7f') {
-            throw new TomlError('control characters are not allowed in strings', {
-                toml: str,
-                ptr: i,
-            });
+        // Dotted key separator
+        else if (c === 0x2e /* . */) {
+            if (!state)
+                TomlError.x('illegal empty bare key', ctx);
+            if (state === 1)
+                parsed.push(ctx.s.slice(sliceStart, ctx.p));
+            state = 0;
         }
-        // The string might terminate while we're parsing through a newline escape.
-        // It must have encountered a newline; otherwise, it'll simply fail in another branch.
-        else if ((!state || state === 3) && c === first && (!isMultiline || (str[i + 1] === first && str[i + 2] === first))) {
-            if (isMultiline) {
-                // If the string ends with 4-5 quotes, then the first 1-2 are part of the string
-                if (str[i + 3] === first)
-                    i++;
-                if (str[i + 3] === first)
-                    i++;
-            }
-            return [
-                // If we're in a newline escape still, then there's nothing to add.
-                // Also try to avoid concat if there's nothing to add to parsed, or nothing has been added to parsed.
-                state ? parsed : parsed + str.slice(sliceStart, i),
-                i + (isMultiline ? 3 : 1),
-            ];
+        // Quoted key
+        else if (!state && (c === 0x22 /* " */ || c === 0x27 /* ' */)) {
+            if (c === ctx.s.charCodeAt(ctx.p + 1) && c === ctx.s.charCodeAt(ctx.p + 2))
+                TomlError.x('illegal quoted key: multiline strings are not allowed', ctx);
+            parsed.push(parseString(ctx));
+            state = 2;
+            ctx.p--;
         }
-        else if (!state) {
-            if (!isLiteral && c === '\\') {
-                parsed += str.slice(sliceStart, (sliceStart = i));
-                state = 1;
-            }
-        }
-        else if (state === 1) {
-            if (c === 'x' || c === 'u' || c === 'U') { // Unicode escape
-                let value = 0;
-                let len = c === 'x' ? 2 : c === 'u' ? 4 : 8;
-                for (let j = 0; j < len; j++, i++) {
-                    let hex = str.charCodeAt(i + 1);
-                    let digit = 
-                    /* 0-9 */ hex >= 0x30 && hex <= 0x39 ? hex - 0x30 :
-                        /* A-F */ hex >= 0x41 && hex <= 0x46 ? hex - 0x41 + 10 :
-                            /* a-f */ hex >= 0x61 && hex <= 0x66 ? hex - 0x61 + 10 : -1;
-                    if (digit < 0)
-                        throw new TomlError('invalid non-hex character in unicode escape', { toml: str, ptr: i + 1 });
-                    value = (value << 4) | digit;
-                }
-                // Because JS does bitwise on signed 32bit integers, all 0xfzzzzzzz values are actually seen as negative
-                if (value < 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) {
-                    throw new TomlError('invalid unicode escape', { toml: str, ptr: i });
-                }
-                parsed += String.fromCodePoint(value);
-                sliceStart = i + 1;
-                state = 0;
-            }
-            else if (c === ' ' || c === '\t') { // If it was a newline, it'd have been handled earlier
+        // Whitespace; no-op in state 0 and 2, end of bare key in state 1
+        else if (c === 0x20 || c === 0x9 /* \t */) {
+            if (state === 1) {
+                parsed.push(ctx.s.slice(sliceStart, ctx.p));
                 state = 2;
             }
-            else {
-                if (c === 'b')
-                    parsed += '\b';
-                else if (c === 't')
-                    parsed += '\t';
-                else if (c === 'n')
-                    parsed += '\n';
-                else if (c === 'f')
-                    parsed += '\f';
-                else if (c === 'r')
-                    parsed += '\r';
-                else if (c === 'e')
-                    parsed += '\x1b';
-                else if (c === '"')
-                    parsed += '"';
-                else if (c === '\\')
-                    parsed += '\\';
-                else
-                    throw new TomlError('unrecognized escape sequence', { toml: str, ptr: i });
-                sliceStart = i + 1;
-                state = 0;
-            }
         }
-        else if (c !== ' ' && c !== '\t') {
-            if (state === 2) {
-                throw new TomlError('invalid escape: only line-ending whitespace may be escaped', {
-                    toml: str,
-                    ptr: sliceStart,
-                });
-            }
-            // State cannot be zero, or we'd have branched earlier already.
-            // If it's a backslash, immediately transition to the escape state so it can be processed.
-            state = !isLiteral && c === '\\' ? 1 : 0;
-            sliceStart = i;
+        // If state is post-key, no character is allowed; otherwise ensure it's a bare-key component
+        else if (state === 2 || (c < 0x30 && c !== 0x2d /* - */) || (c > 0x39 && c < 0x41) || (c > 0x5a && c < 0x61 && c !== 0x5f /* _ */) || c > 0x7a) {
+            TomlError.x('illegal character in key', ctx);
         }
-    }
-    throw new TomlError('unfinished string', { toml: str, ptr });
+        // Illegal character
+        else if (!state) {
+            state = 1;
+            sliceStart = ctx.p;
+        }
+    } while (c = ctx.s.charCodeAt(++ctx.p));
+    TomlError.x('incomplete key-value: cannot find end of key', ctx, startPtr);
 }
 /** @internal */
-function parseValue(value, toml, ptr, integersAsBigInt) {
-    // Constant values
-    if (value === 'true')
-        return true;
-    if (value === 'false')
-        return false;
-    if (value === '-inf')
-        return -Infinity;
-    if (value === 'inf' || value === '+inf')
-        return Infinity;
-    if (value === 'nan' || value === '+nan' || value === '-nan')
-        return NaN;
-    // Avoid FP representation of -0
-    if (value === '-0')
-        return integersAsBigInt ? 0n : 0;
-    // Numbers
-    let isInt = INT_REGEX.test(value);
-    if (isInt || FLOAT_REGEX.test(value)) {
-        if (LEADING_ZERO.test(value)) {
-            throw new TomlError('leading zeroes are not allowed', {
-                toml: toml,
-                ptr: ptr,
-            });
-        }
-        value = value.replace(/_/g, '');
-        let numeric = +value;
-        if (isNaN(numeric)) {
-            throw new TomlError('invalid number', {
-                toml: toml,
-                ptr: ptr,
-            });
-        }
-        if (isInt) {
-            if ((isInt = !Number.isSafeInteger(numeric)) && !integersAsBigInt) {
-                throw new TomlError('integer value cannot be represented losslessly', {
-                    toml: toml,
-                    ptr: ptr,
-                });
-            }
-            if (isInt || integersAsBigInt === true)
-                numeric = BigInt(value);
-        }
-        return numeric;
-    }
-    const date = new TomlDate(value);
-    if (!date.isValid()) {
-        throw new TomlError('invalid value', {
-            toml: toml,
-            ptr: ptr,
-        });
-    }
-    return date;
-}
-
-/*!
- * Copyright (c) Squirrel Chat et al., All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-/** @internal */
-function indexOfNewline(str, start = 0, end = str.length) {
-    let idx = str.indexOf('\n', start);
-    if (str[idx - 1] === '\r')
-        idx--;
-    return idx <= end ? idx : -1;
-}
-/** @internal */
-function skipComment(str, ptr) {
-    for (let i = ptr; i < str.length; i++) {
-        let c = str[i];
-        if (c === '\n')
-            return i;
-        if (c === '\r' && str[i + 1] === '\n')
-            return i + 1;
-        if ((c < '\x20' && c !== '\t') || c === '\x7f') {
-            throw new TomlError('control characters are not allowed in comments', {
-                toml: str,
-                ptr: ptr,
-            });
-        }
-    }
-    return str.length;
-}
-/** @internal */
-function skipVoid(str, ptr, banNewLines, banComments) {
-    let c;
-    while (1) {
-        while ((c = str[ptr]) === ' ' || c === '\t' || (!banNewLines && (c === '\n' || (c === '\r' && str[ptr + 1] === '\n'))))
-            ptr++;
-        // Tucking the return statement here would save 5 characters >:)
-        // But TypeScript fails to detect there is no way to exit the loop so it complains about the lack of final return
-        if (banComments || c !== '#')
-            break;
-        ptr = skipComment(str, ptr);
-    }
-    return ptr;
-}
-/** @internal */
-function skipUntil(str, ptr, sep, end, banNewLines = false) {
-    if (!end) {
-        ptr = indexOfNewline(str, ptr);
-        return ptr < 0 ? str.length : ptr;
-    }
-    for (let i = ptr; i < str.length; i++) {
-        let c = str[i];
-        if (c === '#') {
-            i = indexOfNewline(str, i);
-            if (i < 0)
-                break;
-        }
-        else if (c === sep) {
-            return i + 1;
-        }
-        else if (c === end || (banNewLines && (c === '\n' || (c === '\r' && str[i + 1] === '\n')))) {
-            return i;
-        }
-    }
-    throw new TomlError('cannot find end of structure', {
-        toml: str,
-        ptr: ptr,
-    });
-}
-
-/*!
- * Copyright (c) Squirrel Chat et al., All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-function sliceAndTrimEndOf(str, startPtr, endPtr) {
-    let value = str.slice(startPtr, endPtr);
-    let commentIdx = value.indexOf('#');
-    if (commentIdx > -1) {
-        // The call to skipComment allows to "validate" the comment
-        // (absence of control characters)
-        skipComment(str, commentIdx);
-        value = value.slice(0, commentIdx);
-    }
-    return [value.trimEnd(), commentIdx];
-}
-/** @internal */
-function extractValue(str, ptr, end, depth, integersAsBigInt) {
-    if (depth === 0) {
-        throw new TomlError('document contains excessively nested structures. aborting.', {
-            toml: str,
-            ptr: ptr,
-        });
-    }
-    let c = str[ptr];
-    if (c === '[' || c === '{') {
-        let [value, endPtr] = c === '['
-            ? parseArray(str, ptr, depth, integersAsBigInt)
-            : parseInlineTable(str, ptr, depth, integersAsBigInt);
-        if (end) {
-            endPtr = skipVoid(str, endPtr);
-            if (str[endPtr] === ',')
-                endPtr++;
-            else if (str[endPtr] !== end) {
-                throw new TomlError('expected comma or end of structure', {
-                    toml: str,
-                    ptr: endPtr,
-                });
-            }
-        }
-        return [value, endPtr];
-    }
-    if (c === '"' || c === "'") {
-        let [parsed, endPtr] = parseString(str, ptr);
-        if (end) {
-            endPtr = skipVoid(str, endPtr);
-            if (str[endPtr] && str[endPtr] !== ',' && str[endPtr] !== end && str[endPtr] !== '\n' && str[endPtr] !== '\r') {
-                throw new TomlError('unexpected character encountered', {
-                    toml: str,
-                    ptr: endPtr,
-                });
-            }
-            if (str[endPtr] === ',')
-                endPtr++;
-        }
-        return [parsed, endPtr];
-    }
-    let endPtr = skipUntil(str, ptr, ',', end);
-    let slice = sliceAndTrimEndOf(str, ptr, endPtr - (str[endPtr - 1] === ',' ? 1 : 0));
-    if (!slice[0]) {
-        throw new TomlError('incomplete key-value declaration: no value specified', {
-            toml: str,
-            ptr: ptr,
-        });
-    }
-    if (end && slice[1] > -1) {
-        endPtr = skipVoid(str, ptr + slice[1]);
-        if (str[endPtr] === ',')
-            endPtr++;
-    }
-    return [
-        parseValue(slice[0], str, ptr, integersAsBigInt),
-        endPtr,
-    ];
-}
-
-/*!
- * Copyright (c) Squirrel Chat et al., All rights reserved.
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the copyright holder nor the names of its contributors
- *    may be used to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-let KEY_PART_RE = /^[a-zA-Z0-9-_]+[ \t]*$/;
-/** @internal */
-function parseKey(str, ptr, end = '=') {
-    let dot = ptr - 1;
-    let parsed = [];
-    let endPtr = str.indexOf(end, ptr);
-    if (endPtr < 0) {
-        throw new TomlError('incomplete key-value: cannot find end of key', {
-            toml: str,
-            ptr: ptr,
-        });
-    }
-    do {
-        let c = str[(ptr = ++dot)];
-        // If it's whitespace, ignore
-        if (c !== ' ' && c !== '\t') {
-            // If it's a string
-            if (c === '"' || c === "'") {
-                if (c === str[ptr + 1] && c === str[ptr + 2]) {
-                    throw new TomlError('multiline strings are not allowed in keys', {
-                        toml: str,
-                        ptr: ptr,
-                    });
-                }
-                let [part, eos] = parseString(str, ptr);
-                dot = str.indexOf('.', eos);
-                let strEnd = str.slice(eos, dot < 0 || dot > endPtr ? endPtr : dot);
-                let newLine = indexOfNewline(strEnd);
-                if (newLine > -1) {
-                    throw new TomlError('newlines are not allowed in keys', {
-                        toml: str,
-                        ptr: ptr + dot + newLine,
-                    });
-                }
-                if (strEnd.trimStart()) {
-                    throw new TomlError('found extra tokens after the string part', {
-                        toml: str,
-                        ptr: eos,
-                    });
-                }
-                if (endPtr < eos) {
-                    endPtr = str.indexOf(end, eos);
-                    if (endPtr < 0) {
-                        throw new TomlError('incomplete key-value: cannot find end of key', {
-                            toml: str,
-                            ptr: ptr,
-                        });
-                    }
-                }
-                parsed.push(part);
-            }
-            else {
-                // Normal raw key part consumption and validation
-                dot = str.indexOf('.', ptr);
-                let part = str.slice(ptr, dot < 0 || dot > endPtr ? endPtr : dot);
-                if (!KEY_PART_RE.test(part)) {
-                    throw new TomlError('only letter, numbers, dashes and underscores are allowed in keys', {
-                        toml: str,
-                        ptr: ptr,
-                    });
-                }
-                parsed.push(part.trimEnd());
-            }
-        }
-        // Until there's no more dot
-    } while (dot + 1 && dot < endPtr);
-    return [parsed, skipVoid(str, endPtr + 1, true, true)];
-}
-/** @internal */
-function parseInlineTable(str, ptr, depth, integersAsBigInt) {
-    let res = {};
+function parseInlineTable(ctx) {
+    let startPtr = ctx.p++;
+    let res = Object.create(null);
     let seen = new Set();
     let c;
-    ptr++;
-    while ((c = str[ptr++]) !== '}' && c) {
-        if (c === ',') {
-            throw new TomlError('expected value, found comma', {
-                toml: str,
-                ptr: ptr - 1,
-            });
+    while (ctx.p < ctx.s.length) {
+        skipVoid(ctx);
+        if ((c = ctx.s.charCodeAt(ctx.p)) === 0x7d /* } */) {
+            ctx.p++;
+            return res;
         }
-        else if (c === '#')
-            ptr = skipComment(str, ptr);
-        else if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') {
-            let k;
-            let t = res;
-            let hasOwn = false;
-            let [key, keyEndPtr] = parseKey(str, ptr - 1);
-            for (let i = 0; i < key.length; i++) {
-                if (i)
-                    t = hasOwn ? t[k] : (t[k] = {});
-                k = key[i];
-                if ((hasOwn = Object.hasOwn(t, k)) && (typeof t[k] !== 'object' || seen.has(t[k]))) {
-                    throw new TomlError('trying to redefine an already defined value', {
-                        toml: str,
-                        ptr: ptr,
-                    });
-                }
-                if (!hasOwn && k === '__proto__') {
-                    Object.defineProperty(t, k, { enumerable: true, configurable: true, writable: true });
-                }
+        let k;
+        let t = res;
+        let hasOwn = false;
+        let errPtr = ctx.p;
+        let key = parseKey(ctx);
+        for (let i = 0; i < key.length; i++) {
+            if (i)
+                t = hasOwn ? t[k] : (t[k] = Object.create(null));
+            k = key[i];
+            if ((hasOwn = Object.hasOwn(t, k)) && (typeof t[k] !== 'object' || seen.has(t[k]))) {
+                TomlError.x('trying to redefine an already defined value', ctx, errPtr);
             }
-            if (hasOwn) {
-                throw new TomlError('trying to redefine an already defined value', {
-                    toml: str,
-                    ptr: ptr,
-                });
+            let unsafe = k === '__proto__';
+            if (ctx.uk && (unsafe || k === 'constructor')) {
+                t = ctx.uk !== 1 && TomlError.x('document contains an unsafe property', ctx, errPtr);
+                break;
             }
-            let [value, valueEndPtr] = extractValue(str, keyEndPtr, '}', depth - 1, integersAsBigInt);
+            if (!hasOwn && unsafe) {
+                Object.defineProperty(t, k, { enumerable: true, configurable: true, writable: true });
+            }
+        }
+        if (hasOwn) {
+            TomlError.x('trying to redefine an already defined value', ctx, errPtr);
+        }
+        skipVoid(ctx, true, true);
+        let value = extractValue(ctx, 0x7d /* } */);
+        if (t && typeof (t[k] = value) === 'object')
             seen.add(value);
-            t[k] = value;
-            ptr = valueEndPtr;
+        skipVoid(ctx);
+        if ((c = ctx.s.charCodeAt(ctx.p++)) === 0x7d /* } */) {
+            return res;
         }
+        if (c !== 0x2c /* , */)
+            TomlError.x('expected comma or end of structure', ctx, ctx.p - 1);
     }
-    if (!c) {
-        throw new TomlError('unfinished table encountered', {
-            toml: str,
-            ptr: ptr,
-        });
-    }
-    return [res, ptr];
+    TomlError.x('unfinished table', ctx, startPtr);
 }
 /** @internal */
-function parseArray(str, ptr, depth, integersAsBigInt) {
+function parseArray(ctx) {
+    let startPtr = ctx.p++;
     let res = [];
     let c;
-    ptr++;
-    while ((c = str[ptr++]) !== ']' && c) {
-        if (c === ',') {
-            throw new TomlError('expected value, found comma', {
-                toml: str,
-                ptr: ptr - 1,
-            });
+    while (ctx.p < ctx.s.length) {
+        skipVoid(ctx);
+        if ((c = ctx.s.charCodeAt(ctx.p)) === 0x5d /* ] */) {
+            ctx.p++;
+            return res;
         }
-        else if (c === '#')
-            ptr = skipComment(str, ptr);
-        else if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') {
-            let e = extractValue(str, ptr - 1, ']', depth - 1, integersAsBigInt);
-            res.push(e[0]);
-            ptr = e[1];
+        res.push(extractValue(ctx, 0x5d /* ] */));
+        skipVoid(ctx);
+        if ((c = ctx.s.charCodeAt(ctx.p++)) === 0x5d /* ] */) {
+            return res;
         }
+        if (c !== 0x2c /* , */)
+            TomlError.x('expected comma or end of structure', ctx, ctx.p - 1);
     }
-    if (!c) {
-        throw new TomlError('unfinished array encountered', {
-            toml: str,
-            ptr: ptr,
-        });
-    }
-    return [res, ptr];
+    TomlError.x('unfinished array', ctx, startPtr);
 }
 
 /*!
@@ -34275,7 +34796,7 @@ function parseArray(str, ptr, depth, integersAsBigInt) {
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-function peekTable(key, table, meta, type) {
+function peekTable(ctx, key, table, meta, type) {
     let t = table;
     let m = meta;
     let k;
@@ -34283,7 +34804,7 @@ function peekTable(key, table, meta, type) {
     let state;
     for (let i = 0; i < key.length; i++) {
         if (i) {
-            t = hasOwn ? t[k] : (t[k] = {});
+            t = hasOwn ? t[k] : (t[k] = Object.create(null));
             m = (state = m[k]).c;
             if (type === 0 /* Type.DOTTED */ && (state.t === 1 /* Type.EXPLICIT */ || state.t === 2 /* Type.ARRAY */)) {
                 return null;
@@ -34299,7 +34820,10 @@ function peekTable(key, table, meta, type) {
             return null;
         }
         if (!hasOwn) {
-            if (k === '__proto__') {
+            let unsafe = k === '__proto__';
+            if (ctx.uk && (unsafe || k === 'constructor'))
+                return false;
+            if (unsafe) {
                 Object.defineProperty(t, k, { enumerable: true, configurable: true, writable: true });
                 Object.defineProperty(m, k, { enumerable: true, configurable: true, writable: true });
             }
@@ -34308,7 +34832,7 @@ function peekTable(key, table, meta, type) {
                     ? 3 /* Type.ARRAY_DOTTED */ : type,
                 d: false,
                 i: 0,
-                c: {},
+                c: Object.create(null),
             };
         }
     }
@@ -34322,8 +34846,8 @@ function peekTable(key, table, meta, type) {
             state.d = true;
             t[k] = [];
         }
-        t[k].push(t = {});
-        state.c[state.i++] = (state = { t: 1 /* Type.EXPLICIT */, d: false, i: 0, c: {} });
+        t[k].push(t = Object.create(null));
+        state.c[state.i++] = (state = { t: 1 /* Type.EXPLICIT */, d: false, i: 0, c: Object.create(null) });
     }
     if (state.d) {
         // Redefining a table!
@@ -34331,63 +34855,77 @@ function peekTable(key, table, meta, type) {
     }
     state.d = true;
     if (type === 1 /* Type.EXPLICIT */) {
-        t = hasOwn ? t[k] : (t[k] = {});
+        t = hasOwn ? t[k] : (t[k] = Object.create(null));
     }
     else if (type === 0 /* Type.DOTTED */ && hasOwn) {
         return null;
     }
     return [k, t, state.c];
 }
-function parse(toml, { maxDepth = 1000, integersAsBigInt } = {}) {
-    let res = {};
-    let meta = {};
+function validateTablePeek(ctx, peek, ptr) {
+    if (peek === null || ctx.uk === 2)
+        TomlError.x(peek === null
+            ? 'trying to redefine an already defined table or value'
+            : 'document contains an unsafe property', ctx, ptr);
+}
+function parse(toml, options = {}) {
+    let ctx = {
+        s: toml,
+        p: 0,
+        d: options.maxDepth ?? 1000,
+        bi: options.integersAsBigInt ?? false,
+        ld: options.useLegacyDate ?? true,
+        uk: options.unsafeKeyBehaviour === 'throw' ? 2 : options.unsafeKeyBehaviour === 'drop' ? 1 : 0,
+    };
+    let res = Object.create(null);
+    let meta = Object.create(null);
+    let tmp;
+    let skipping = false;
     let tbl = res;
     let m = meta;
-    for (let ptr = skipVoid(toml, 0); ptr < toml.length;) {
-        if (toml[ptr] === '[') {
-            let isTableArray = toml[++ptr] === '[';
-            let k = parseKey(toml, (ptr += +isTableArray), ']');
+    // BOM is allowed, skip.
+    // JS is UTF-16, so we have to check for the UTF-16 BOM instead of the UTF-8 BOM sequence!
+    if (toml.charCodeAt(0) === 0xfeff)
+        ctx.p++;
+    skipVoid(ctx);
+    while (ctx.p < toml.length) {
+        if (toml.charCodeAt(ctx.p) === 0x5b /* [ */) {
+            let isTableArray = toml.charCodeAt(++ctx.p) === 0x5b; /* [ */
+            tmp = ctx.p += +isTableArray;
+            skipping = false;
+            let k = parseKey(ctx, 0x5d /* ] */);
             if (isTableArray) {
-                if (toml[k[1] - 1] !== ']') {
-                    throw new TomlError('expected end of table declaration', {
-                        toml: toml,
-                        ptr: k[1] - 1,
-                    });
+                if (toml.charCodeAt(ctx.p) !== 0x5d /* ] */) {
+                    TomlError.x('expected end of table array declaration', ctx);
                 }
-                k[1]++;
+                ctx.p++;
             }
-            let p = peekTable(k[0], res, meta, isTableArray ? 2 /* Type.ARRAY */ : 1 /* Type.EXPLICIT */);
+            let p = peekTable(ctx, k, res, meta, isTableArray ? 2 /* Type.ARRAY */ : 1 /* Type.EXPLICIT */);
             if (!p) {
-                throw new TomlError('trying to redefine an already defined table or value', {
-                    toml: toml,
-                    ptr: ptr,
-                });
+                validateTablePeek(ctx, p, tmp);
+                skipping = true;
             }
-            m = p[2];
-            tbl = p[1];
-            ptr = k[1];
+            else {
+                m = p[2];
+                tbl = p[1];
+            }
         }
         else {
-            let k = parseKey(toml, ptr);
-            let p = peekTable(k[0], tbl, m, 0 /* Type.DOTTED */);
-            if (!p) {
-                throw new TomlError('trying to redefine an already defined table or value', {
-                    toml: toml,
-                    ptr: ptr,
-                });
-            }
-            let v = extractValue(toml, k[1], void 0, maxDepth, integersAsBigInt);
-            p[1][p[0]] = v[0];
-            ptr = v[1];
+            tmp = ctx.p;
+            let k = parseKey(ctx);
+            let p = peekTable(ctx, k, tbl, m, 0 /* Type.DOTTED */);
+            if (!p && !skipping)
+                validateTablePeek(ctx, p, tmp);
+            skipVoid(ctx, true, true);
+            let v = extractValue(ctx, void 0);
+            if (p && !skipping)
+                p[1][p[0]] = v;
         }
-        ptr = skipVoid(toml, ptr, true);
-        if (toml[ptr] && toml[ptr] !== '\n' && toml[ptr] !== '\r') {
-            throw new TomlError('each key-value declaration must be followed by an end-of-line', {
-                toml: toml,
-                ptr: ptr,
-            });
+        skipVoid(ctx, true);
+        if (ctx.p < toml.length && (tmp = toml.charCodeAt(ctx.p)) !== 0xa /* \n */ && (tmp !== 0xd /* \r */ || toml.charCodeAt(ctx.p + 1) !== 0xa /* \n */)) {
+            TomlError.x('each key-value declaration must be followed by an end-of-line', ctx);
         }
-        ptr = skipVoid(toml, ptr);
+        skipVoid(ctx);
     }
     return res;
 }
@@ -34434,10 +34972,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-DrBcWZx-.js');
+            cache = await import('./cache-Dl81DHPs.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-C3QW-iHv.js').then(function (n) { return n.c; });
+            cache = await import('./cache-BzPKClMA.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -34914,12 +35452,12 @@ async function cleanProfileTarget(profileDir, packages, checkTimestamp = false) 
         try {
             // https://github.com/vertexclique/kaos/blob/9876f6c890339741cc5be4b7cb9df72baa5a6d79/src/cargo.rs#L25
             // https://github.com/eupn/macrotest/blob/c4151a5f9f545942f4971980b5d264ebcd0b1d11/src/cargo.rs#L27
-            cleanTargetDir(path__default.join(profileDir, "target"), packages, checkTimestamp);
+            await cleanTargetDir(path__default.join(profileDir, "target"), packages, checkTimestamp);
         }
         catch { }
         try {
             // https://github.com/dtolnay/trybuild/blob/eec8ca6cb9b8f53d0caf1aa499d99df52cae8b40/src/cargo.rs#L50
-            cleanTargetDir(path__default.join(profileDir, "trybuild"), packages, checkTimestamp);
+            await cleanTargetDir(path__default.join(profileDir, "trybuild"), packages, checkTimestamp);
         }
         catch { }
         // Delete everything else.
@@ -35161,4 +35699,4 @@ async function rmRF(dirName) {
     await rmRF$1(dirName);
 }
 
-export { BearerCredentialHandler as B, CacheConfig as C, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, exec as l, mkdirP as m, create as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, commonjsGlobal as v, which as w, requireTunnel as x, getDefaultExportFromCjs as y, getAugmentedNamespace as z };
+export { getAugmentedNamespace as A, BearerCredentialHandler as B, CacheConfig as C, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, exec as l, mkdirP as m, create as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, rmRF$1 as v, which as w, commonjsGlobal as x, requireTunnel as y, getDefaultExportFromCjs as z };

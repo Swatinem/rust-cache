@@ -1,14 +1,11 @@
-import { f as debug, m as mkdirP, n as create, l as exec, w as which, o as warning, i as info, H as HttpCodes, p as HttpClientError, q as HttpClient, t as isDebug, u as setSecret, B as BearerCredentialHandler, e as error } from './cleanup-CXZWJx5g.js';
+import { f as debug, m as mkdirP, n as create, l as exec, w as which, o as warning, i as info, H as HttpCodes, p as HttpClientError, q as HttpClient, t as isDebug, u as setSecret, B as BearerCredentialHandler, v as rmRF, e as error } from './cleanup-e3M0pm4f.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { writeFileSync, existsSync } from 'fs';
 import * as require$$0$1 from 'util';
 import { URL as URL$1 } from 'url';
-import require$$0$5, { Transform, Readable as Readable$1 } from 'node:stream';
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { Transform, Readable as Readable$1 } from 'node:stream';
 import * as require$$0$3 from 'buffer';
 import { Buffer as Buffer$1 } from 'buffer';
 import os, { EOL as EOL$1 } from 'node:os';
@@ -39,6 +36,7 @@ import 'node:tls';
 import 'node:perf_hooks';
 import 'node:util/types';
 import 'node:worker_threads';
+import 'node:url';
 import 'node:async_hooks';
 import 'node:console';
 import 'node:dns';
@@ -4034,7 +4032,7 @@ const errorSanitizer = new Sanitizer();
 /**
  * A custom error type for failed pipeline requests.
  */
-let RestError$1 = class RestError extends Error {
+let RestError$2 = class RestError extends Error {
     /**
      * Something went wrong when making the request.
      * This means the actual request failed for some reason,
@@ -4107,8 +4105,8 @@ let RestError$1 = class RestError extends Error {
  * Typeguard for RestError
  * @param e - Something caught by a catch clause.
  */
-function isRestError$1(e) {
-    if (e instanceof RestError$1) {
+function isRestError$2(e) {
+    if (e instanceof RestError$2) {
         return true;
     }
     return isError$1(e) && e.name === "RestError";
@@ -4243,9 +4241,6 @@ class NodeHttpClient {
                 body = uploadReportStream;
             }
             const res = await this.makeRequest(request, abortController, body);
-            if (timeoutId !== undefined) {
-                clearTimeout(timeoutId);
-            }
             const headers = getResponseHeaders(res);
             const status = res.statusCode ?? 0;
             const response = {
@@ -4283,6 +4278,9 @@ class NodeHttpClient {
             return response;
         }
         finally {
+            if (timeoutId !== undefined) {
+                clearTimeout(timeoutId);
+            }
             // clean up event listener
             if (request.abortSignal && abortListener) {
                 let uploadStreamDone = Promise.resolve();
@@ -4325,7 +4323,7 @@ class NodeHttpClient {
         return new Promise((resolve, reject) => {
             const req = isInsecure ? http.request(options, resolve) : https.request(options, resolve);
             req.once("error", (err) => {
-                reject(new RestError$1(err.message, { code: err.code ?? RestError$1.REQUEST_SEND_ERROR, request }));
+                reject(new RestError$2(err.message, { code: err.code ?? RestError$2.REQUEST_SEND_ERROR, request }));
             });
             abortController.signal.addEventListener("abort", () => {
                 const abortError = new AbortError$3("The operation was aborted. Rejecting from abort signal callback while making request.");
@@ -4346,7 +4344,7 @@ class NodeHttpClient {
                 }
                 else {
                     logger$4.error("Unrecognized body type", body);
-                    reject(new RestError$1("Unrecognized body type"));
+                    reject(new RestError$2("Unrecognized body type"));
                 }
             }
             else {
@@ -4443,8 +4441,8 @@ function streamToText(stream) {
                 reject(e);
             }
             else {
-                reject(new RestError$1(`Error reading response as text: ${e.message}`, {
-                    code: RestError$1.PARSE_ERROR,
+                reject(new RestError$2(`Error reading response as text: ${e.message}`, {
+                    code: RestError$2.PARSE_ERROR,
                 }));
             }
         });
@@ -4484,7 +4482,7 @@ function createNodeHttpClient() {
 /**
  * Create the correct HttpClient for the current environment.
  */
-function createDefaultHttpClient$1() {
+function createDefaultHttpClient$2() {
     return createNodeHttpClient();
 }
 
@@ -4774,7 +4772,6 @@ function retryPolicy(strategies, options = { maxRetries: DEFAULT_RETRY_POLICY_CO
             let retryCount = -1;
             retryRequest: while (true) {
                 retryCount += 1;
-                response = undefined;
                 responseError = undefined;
                 try {
                     logger.info(`Retry ${retryCount}: Attempting to send request`, request.requestId);
@@ -4786,7 +4783,7 @@ function retryPolicy(strategies, options = { maxRetries: DEFAULT_RETRY_POLICY_CO
                     // RestErrors are valid targets for the retry strategies.
                     // If none of the retry strategies can work with them, they will be thrown later in this policy.
                     // If the received error is not a RestError, it is immediately thrown.
-                    if (!isRestError$1(e)) {
+                    if (!isRestError$2(e)) {
                         throw e;
                     }
                     responseError = e;
@@ -5560,21 +5557,22 @@ function getHeaderName() {
 async function setPlatformSpecificData(map) {
     if (process$1 && process$1.versions) {
         const osInfo = `${os.type()} ${os.release()}; ${os.arch()}`;
-        if (process$1.versions.bun) {
-            map.set("Bun", `${process$1.versions.bun} (${osInfo})`);
+        const versions = process$1.versions;
+        if (versions.bun) {
+            map.set("Bun", `${versions.bun} (${osInfo})`);
         }
-        else if (process$1.versions.deno) {
-            map.set("Deno", `${process$1.versions.deno} (${osInfo})`);
+        else if (versions.deno) {
+            map.set("Deno", `${versions.deno} (${osInfo})`);
         }
-        else if (process$1.versions.node) {
-            map.set("Node", `${process$1.versions.node} (${osInfo})`);
+        else if (versions.node) {
+            map.set("Node", `${versions.node} (${osInfo})`);
         }
     }
 }
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const SDK_VERSION$1 = "1.25.0";
+const SDK_VERSION$1 = "1.22.3";
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
@@ -5627,106 +5625,6 @@ function userAgentPolicy(options = {}) {
             return next(request);
         },
     };
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * Private symbol used as key on objects created using createFile containing the
- * original source of the file object.
- *
- * This is used in Node to access the original Node stream without using Blob#stream, which
- * returns a web stream. This is done to avoid a couple of bugs to do with Blob#stream and
- * Readable#to/fromWeb in Node versions we support:
- * - https://github.com/nodejs/node/issues/42694 (fixed in Node 18.14)
- * - https://github.com/nodejs/node/issues/48916 (fixed in Node 20.6)
- *
- * Once these versions are no longer supported, we may be able to stop doing this.
- *
- * @internal
- */
-const rawContent = Symbol("rawContent");
-/**
- * Type guard to check if a given object is a blob-like object with a raw content property.
- */
-function hasRawContent(x) {
-    return typeof x[rawContent] === "function";
-}
-/**
- * Extract the raw content from a given blob-like object. If the input was created using createFile
- * or createFileFromStream, the exact content passed into createFile/createFileFromStream will be used.
- * For true instances of Blob and File, returns the actual blob.
- *
- * @internal
- */
-function getRawContent$1(blob) {
-    if (hasRawContent(blob)) {
-        return blob[rawContent]();
-    }
-    else {
-        return blob;
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * Name of multipart policy
- */
-const multipartPolicyName = multipartPolicyName$1;
-/**
- * Pipeline policy for multipart requests
- */
-function multipartPolicy() {
-    const tspPolicy = multipartPolicy$1();
-    return {
-        name: multipartPolicyName,
-        sendRequest: async (request, next) => {
-            if (request.multipartBody) {
-                for (const part of request.multipartBody.parts) {
-                    if (hasRawContent(part.body)) {
-                        part.body = getRawContent$1(part.body);
-                    }
-                }
-            }
-            return tspPolicy.sendRequest(request, next);
-        },
-    };
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * The programmatic identifier of the decompressResponsePolicy.
- */
-const decompressResponsePolicyName = decompressResponsePolicyName$1;
-/**
- * A policy to enable response decompression according to Accept-Encoding header
- * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
- */
-function decompressResponsePolicy() {
-    return decompressResponsePolicy$1();
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * A policy that retries according to three strategies:
- * - When the server sends a 429 response with a Retry-After header.
- * - When there are errors in the underlying transport layer (e.g. DNS lookup failures).
- * - Or otherwise if the outgoing request fails, it will retry with an exponentially increasing delay.
- */
-function defaultRetryPolicy(options = {}) {
-    return defaultRetryPolicy$1(options);
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * A policy that encodes FormData on the request into the body.
- */
-function formDataPolicy() {
-    return formDataPolicy$1();
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -5892,6 +5790,106 @@ function uint8ArrayToString(bytes, format) {
  */
 function stringToUint8Array(value, format) {
     return stringToUint8Array$1(value, format);
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * Private symbol used as key on objects created using createFile containing the
+ * original source of the file object.
+ *
+ * This is used in Node to access the original Node stream without using Blob#stream, which
+ * returns a web stream. This is done to avoid a couple of bugs to do with Blob#stream and
+ * Readable#to/fromWeb in Node versions we support:
+ * - https://github.com/nodejs/node/issues/42694 (fixed in Node 18.14)
+ * - https://github.com/nodejs/node/issues/48916 (fixed in Node 20.6)
+ *
+ * Once these versions are no longer supported, we may be able to stop doing this.
+ *
+ * @internal
+ */
+const rawContent = Symbol("rawContent");
+/**
+ * Type guard to check if a given object is a blob-like object with a raw content property.
+ */
+function hasRawContent(x) {
+    return typeof x[rawContent] === "function";
+}
+/**
+ * Extract the raw content from a given blob-like object. If the input was created using createFile
+ * or createFileFromStream, the exact content passed into createFile/createFileFromStream will be used.
+ * For true instances of Blob and File, returns the actual blob.
+ *
+ * @internal
+ */
+function getRawContent$1(blob) {
+    if (hasRawContent(blob)) {
+        return blob[rawContent]();
+    }
+    else {
+        return blob;
+    }
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * Name of multipart policy
+ */
+const multipartPolicyName = multipartPolicyName$1;
+/**
+ * Pipeline policy for multipart requests
+ */
+function multipartPolicy() {
+    const tspPolicy = multipartPolicy$1();
+    return {
+        name: multipartPolicyName,
+        sendRequest: async (request, next) => {
+            if (request.multipartBody) {
+                for (const part of request.multipartBody.parts) {
+                    if (hasRawContent(part.body)) {
+                        part.body = getRawContent$1(part.body);
+                    }
+                }
+            }
+            return tspPolicy.sendRequest(request, next);
+        },
+    };
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * The programmatic identifier of the decompressResponsePolicy.
+ */
+const decompressResponsePolicyName = decompressResponsePolicyName$1;
+/**
+ * A policy to enable response decompression according to Accept-Encoding header
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Encoding
+ */
+function decompressResponsePolicy() {
+    return decompressResponsePolicy$1();
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * A policy that retries according to three strategies:
+ * - When the server sends a 429 response with a Retry-After header.
+ * - When there are errors in the underlying transport layer (e.g. DNS lookup failures).
+ * - Or otherwise if the outgoing request fails, it will retry with an exponentially increasing delay.
+ */
+function defaultRetryPolicy(options = {}) {
+    return defaultRetryPolicy$1(options);
+}
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * A policy that encodes FormData on the request into the body.
+ */
+function formDataPolicy() {
+    return formDataPolicy$1();
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -6153,13 +6151,13 @@ function createTracingClient(options) {
  * A custom error type for failed pipeline requests.
  */
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-const RestError = RestError$1;
+const RestError$1 = RestError$2;
 /**
  * Typeguard for RestError
  * @param e - Something caught by a catch clause.
  */
-function isRestError(e) {
-    return isRestError$1(e);
+function isRestError$1(e) {
+    return isRestError$2(e);
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -6255,7 +6253,7 @@ function tryProcessError(span, error) {
             status: "error",
             error: isError(error) ? error : undefined,
         });
-        if (isRestError(error) && error.statusCode) {
+        if (isRestError$1(error) && error.statusCode) {
             span.setAttribute("http.status_code", error.statusCode);
         }
         span.end();
@@ -6294,14 +6292,12 @@ function tryProcessResponse(span, response) {
  * @param abortSignalLike - The AbortSignalLike to wrap.
  * @returns - An object containing the native AbortSignal and an optional cleanup function. The cleanup function should be called when the AbortSignal is no longer needed.
  */
-function wrapAbortSignalLike(abortSignalLike) {
+function wrapAbortSignalLike$1(abortSignalLike) {
     if (abortSignalLike instanceof AbortSignal) {
         return { abortSignal: abortSignalLike };
     }
     if (abortSignalLike.aborted) {
-        return {
-            abortSignal: AbortSignal.abort("reason" in abortSignalLike ? abortSignalLike.reason : undefined),
-        };
+        return { abortSignal: AbortSignal.abort(abortSignalLike.reason) };
     }
     const controller = new AbortController();
     let needsCleanup = true;
@@ -6312,7 +6308,7 @@ function wrapAbortSignalLike(abortSignalLike) {
         }
     }
     function listener() {
-        controller.abort("reason" in abortSignalLike ? abortSignalLike.reason : undefined);
+        controller.abort(abortSignalLike.reason);
         cleanup();
     }
     abortSignalLike.addEventListener("abort", listener);
@@ -6335,7 +6331,7 @@ function wrapAbortSignalLikePolicy() {
             if (!request.abortSignal) {
                 return next(request);
             }
-            const { abortSignal, cleanup } = wrapAbortSignalLike(request.abortSignal);
+            const { abortSignal, cleanup } = wrapAbortSignalLike$1(request.abortSignal);
             request.abortSignal = abortSignal;
             try {
                 return await next(request);
@@ -6391,14 +6387,14 @@ function createPipelineFromOptions(options) {
 /**
  * Create the correct HttpClient for the current environment.
  */
-function createDefaultHttpClient() {
-    const client = createDefaultHttpClient$1();
+function createDefaultHttpClient$1() {
+    const client = createDefaultHttpClient$2();
     return {
         async sendRequest(request) {
             // we wrap any AbortSignalLike here since the TypeSpec runtime expects a native AbortSignal.
             // 99% of the time, this should be a no-op since a native AbortSignal is passed in.
             const { abortSignal, cleanup } = request.abortSignal
-                ? wrapAbortSignalLike(request.abortSignal)
+                ? wrapAbortSignalLike$1(request.abortSignal)
                 : {};
             try {
                 request.abortSignal = abortSignal;
@@ -6519,16 +6515,13 @@ function createTokenCycler(credential, tokenCyclerOptions) {
          * window and not already refreshing)
          */
         get shouldRefresh() {
-            if (token === null) {
-                return true;
-            }
             if (cycler.isRefreshing) {
                 return false;
             }
-            if (token.refreshAfterTimestamp && token.refreshAfterTimestamp < Date.now()) {
+            if (token?.refreshAfterTimestamp && token.refreshAfterTimestamp < Date.now()) {
                 return true;
             }
-            return token.expiresOnTimestamp - options.refreshWindowInMs < Date.now();
+            return (token?.expiresOnTimestamp ?? 0) - options.refreshWindowInMs < Date.now();
         },
         /**
          * Produces true if the cycler MUST refresh (null or nearly-expired
@@ -6620,7 +6613,7 @@ async function trySendRequest(request, next) {
         return [await next(request), undefined];
     }
     catch (e) {
-        if (isRestError(e) && e.response) {
+        if (isRestError$1(e) && e.response) {
             return [e.response, e];
         }
         else {
@@ -6755,7 +6748,7 @@ function bearerTokenAuthenticationPolicy(options) {
                     }
                     // If we get another CAE Claim, we will handle it by default and return whatever value we receive for this
                     if (isChallengeResponse(response)) {
-                        claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate") ?? "");
+                        claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate"));
                         if (claims) {
                             let parsedClaim;
                             try {
@@ -8170,7 +8163,7 @@ async function deserializeResponseBody(jsonContentTypes, xmlContentTypes, respon
                 parsedResponse.parsedBody = operationSpec.serializer.deserialize(responseSpec.bodyMapper, valueToDeserialize, "operationRes.parsedBody", options);
             }
             catch (deserializeError) {
-                const restError = new RestError(`Error ${deserializeError} occurred in deserializing the responseBody - ${parsedResponse.bodyAsText}`, {
+                const restError = new RestError$1(`Error ${deserializeError} occurred in deserializing the responseBody - ${parsedResponse.bodyAsText}`, {
                     statusCode: parsedResponse.status,
                     request: parsedResponse.request,
                     response: parsedResponse,
@@ -8212,7 +8205,7 @@ function handleErrorResponse(parsedResponse, operationSpec, responseSpec, option
     const initialErrorMessage = parsedResponse.request.streamResponseStatusCodes?.has(parsedResponse.status)
         ? `Unexpected status code: ${parsedResponse.status}`
         : parsedResponse.bodyAsText;
-    const error = new RestError(initialErrorMessage, {
+    const error = new RestError$1(initialErrorMessage, {
         statusCode: parsedResponse.status,
         request: parsedResponse.request,
         response: parsedResponse,
@@ -8288,8 +8281,8 @@ async function parse(jsonContentTypes, xmlContentTypes, operationResponse, opts,
         }
         catch (err) {
             const msg = `Error "${err}" occurred while parsing the response body - ${operationResponse.bodyAsText}.`;
-            const errCode = err.code || RestError.PARSE_ERROR;
-            const e = new RestError(msg, {
+            const errCode = err.code || RestError$1.PARSE_ERROR;
+            const e = new RestError$1(msg, {
                 code: errCode,
                 statusCode: operationResponse.status,
                 request: operationResponse.request,
@@ -8445,7 +8438,7 @@ function serializeRequestBody(request, operationArguments, operationSpec, string
             }
         }
         catch (error) {
-            throw new Error(`Error "${error.message}" occurred in serializing the payload - ${JSON.stringify(serializedName, undefined, "  ")}.`);
+            throw new Error(`Error "${error.message}" occurred in serializing the payload - ${JSON.stringify(serializedName, undefined, "  ")}.`, { cause: error });
         }
     }
     else if (operationSpec.formDataParameters && operationSpec.formDataParameters.length > 0) {
@@ -8513,7 +8506,7 @@ function createClientPipeline(options = {}) {
 let cachedHttpClient;
 function getCachedDefaultHttpClient$1() {
     if (!cachedHttpClient) {
-        cachedHttpClient = createDefaultHttpClient();
+        cachedHttpClient = createDefaultHttpClient$1();
     }
     return cachedHttpClient;
 }
@@ -9823,9 +9816,102 @@ function readAttributeStr(xmlData, i) {
 }
 
 /**
- * Select all the attributes whether valid or invalid.
+ * Walk `attrStr` once, left to right, splitting it into attribute tokens.
+ *
+ * This replaces a regex that used to do the same job
+ * (`(\s*)([^\s=]+)(\s*=)?(\s*(['"])(([\s\S])*?)\5)?`). That regex led with an
+ * optional whitespace group followed by a required "non-whitespace" group.
+ * On a long run of whitespace that never resolves into an attribute name
+ * (e.g. a tag with thousands of trailing spaces before `>`), the engine
+ * backtracks the whitespace group one character at a time before giving up
+ * and moving to the next starting position — one full backtrack per
+ * position, which is quadratic in the length of the run.
+ *
+ * A single forward-only scan can never backtrack, so it can't be made slow
+ * this way no matter how much whitespace the input contains — it's always
+ * proportional to the length of the string, once.
+ *
+ * Each returned token mirrors the shape the old regex match array had, so
+ * the validation logic below (which reads token[1]..token[6]) didn't need
+ * to change:
+ *   token.startIndex - where this token begins in attrStr
+ *   token[1]          - leading whitespace before the name
+ *   token[2]          - the attribute name
+ *   token[3]          - whitespace + '=' if present, else undefined
+ *   token[4]          - marker (any defined value) if a quoted value was found
+ *   token[5]          - the quote character used ('"' or "'")
+ *   token[6]          - the value's text, without the surrounding quotes
+ *
+ * A malformed leading character (e.g. a stray '=' with no name before it)
+ * is simply skipped over, one character at a time — the same outcome the
+ * old regex produced by failing to match at that position and retrying at
+ * the next one.
  */
-const validAttrStrRegxp = new RegExp('(\\s*)([^\\s=]+)(\\s*=)?(\\s*([\'"])(([\\s\\S])*?)\\5)?', 'g');
+function scanAttributeTokens(attrStr) {
+  const tokens = [];
+  const len = attrStr.length;
+  let i = 0;
+
+  while (i < len) {
+    const tokenStart = i;
+
+    // Leading whitespace before the name.
+    while (i < len && isWhiteSpace(attrStr[i])) i++;
+    if (i >= len) break; // trailing whitespace only — nothing left to read
+
+    if (attrStr[i] === '=') {
+      // No name before this '=' — not a valid attribute start. Move past
+      // just this one character and try again from the next position.
+      i = tokenStart + 1;
+      continue;
+    }
+
+    const leadingWs = attrStr.slice(tokenStart, i);
+
+    // Attribute name — everything up to the next whitespace or '='.
+    const nameStart = i;
+    while (i < len && !isWhiteSpace(attrStr[i]) && attrStr[i] !== '=') i++;
+    const name = attrStr.slice(nameStart, i);
+
+    // Optional whitespace + '='.
+    let equalsGroup; // whitespace + '=' text, or undefined if absent
+    let j = i;
+    while (j < len && isWhiteSpace(attrStr[j])) j++;
+    if (j < len && attrStr[j] === '=') {
+      equalsGroup = attrStr.slice(i, j + 1);
+      i = j + 1;
+    }
+
+    // Optional whitespace + quoted value.
+    let quoteChar;
+    let value;
+    let k = i;
+    while (k < len && isWhiteSpace(attrStr[k])) k++;
+    if (k < len && (attrStr[k] === '"' || attrStr[k] === "'")) {
+      const valueStart = k + 1;
+      const closeIdx = attrStr.indexOf(attrStr[k], valueStart);
+      if (closeIdx !== -1) {
+        quoteChar = attrStr[k];
+        value = attrStr.slice(valueStart, closeIdx);
+        i = closeIdx + 1;
+      }
+      // No closing quote found anywhere in the rest of the string — leave
+      // quoteChar/value undefined, same as the old regex's group failing
+      // to match a backreference-less run.
+    }
+
+    const token = { startIndex: tokenStart };
+    token[1] = leadingWs;
+    token[2] = name;
+    token[3] = equalsGroup;
+    token[4] = quoteChar !== undefined ? true : undefined;
+    token[5] = quoteChar;
+    token[6] = value;
+    tokens.push(token);
+  }
+
+  return tokens;
+}
 
 //attr, ="sd", a="amit's", a="sd"b="saf", ab  cd=""
 
@@ -9834,7 +9920,7 @@ function validateAttributeString(attrStr, options) {
 
   //if(attrStr.trim().length === 0) return true; //empty string
 
-  const matches = getAllMatches(attrStr, validAttrStrRegxp);
+  const matches = scanAttributeTokens(attrStr);
   const attrNames = {};
 
   for (let i = 0; i < matches.length; i++) {
@@ -10832,10 +10918,24 @@ class XmlNode {
       this.child.push({ [node.tagname]: node.child });
     }
     // if requested, add the startIndex
+    this.addStartIndex(startIndex);
+  }
+
+  addStartIndex(startIndex) {
     if (startIndex !== undefined) {
       // Note: for now we just overwrite the metadata. If we had more complex metadata,
       // we might need to do an object append here:  metadata = { ...metadata, startIndex }
       this.child[this.child.length - 1][METADATA_SYMBOL$1] = { startIndex };
+    }
+  }
+
+  addEndIndex(endIndex) {
+    const lastChild = this.child[this.child.length - 1];
+    // endIndex is write-once: when updateTag drops a node, the last child is a
+    // previously completed sibling whose endIndex must not be overwritten
+    if (lastChild !== undefined && lastChild[METADATA_SYMBOL$1] !== undefined
+      && lastChild[METADATA_SYMBOL$1].endIndex === undefined) {
+      lastChild[METADATA_SYMBOL$1].endIndex = endIndex;
     }
   }
   /** symbol used for metadata */
@@ -11082,8 +11182,23 @@ class DocTypeReader {
             i = i + 9;
             let angleBracketsCount = 1;
             let hasBody = false, comment = false;
+            let quoteChar = null; // tracks an open SYSTEM/PUBLIC literal before the '[' body
             let exp = "";
             for (; i < xmlData.length; i++) {
+                // Inside a quoted external-identifier literal — XML allows '<'
+                // and '>' as plain data here, so they must not be interpreted
+                // as DOCTYPE structure until the matching quote closes.
+                if (quoteChar !== null) {
+                    if (xmlData[i] === quoteChar) quoteChar = null;
+                    exp += xmlData[i];
+                    continue;
+                }
+                if (!hasBody && !comment && (xmlData[i] === '"' || xmlData[i] === "'")) {
+                    quoteChar = xmlData[i];
+                    exp += xmlData[i];
+                    continue;
+                }
+
                 if (xmlData[i] === '<' && !comment) { //Determine the tag type
                     if (hasBody && hasSeq(xmlData, "!ENTITY", i)) {
                         i += 7;
@@ -11138,7 +11253,7 @@ class DocTypeReader {
                     exp += xmlData[i];
                 }
             }
-            if (angleBracketsCount !== 0) {
+            if (quoteChar !== null || angleBracketsCount !== 0) {
                 throw new Error(`Unclosed DOCTYPE`);
             }
         } else {
@@ -11750,8 +11865,10 @@ function toNumber(str, options = {}) {
         return parse_int(trimmedStr, 2);
     } else if (options.octal && octRegex.test(trimmedStr)) {
         return parse_int(trimmedStr, 8);
-    } else if (!isFinite(trimmedStr)) { //Infinity
-        return handleInfinity(str, Number(trimmedStr), options);
+    } else if (!isFinite(trimmedStr)) { //Infinity or not a number
+        const num = Number(trimmedStr);
+        if (Number.isNaN(num)) return str; //not a number: always the original string
+        return handleInfinity(str, num, options); //only +/-Infinity reaches here
     } else if (trimmedStr.includes('e') || trimmedStr.includes('E')) { //eNotation
         return resolveEnotation(str, trimmedStr, options);
     } else {
@@ -11763,8 +11880,8 @@ function toNumber(str, options = {}) {
             const leadingZeros = match[2];
             let numTrimmedByZeros = trimZeros(match[3]); //complete num without leading zeros
             const decimalAdjacentToLeadingZeros = sign ? // 0., -00., 000.
-                str[leadingZeros.length + 1] === "."
-                : str[leadingZeros.length] === ".";
+                trimmedStr[leadingZeros.length + 1] === "."
+                : trimmedStr[leadingZeros.length] === ".";
 
             //trim ending zeros for floating number
             if (!options.leadingZeros //leading zeros are not allowed
@@ -11812,8 +11929,8 @@ function resolveEnotation(str, trimmedStr, options) {
         const eChar = notation[3].indexOf("e") === -1 ? "E" : "e";
         const leadingZeros = notation[2];
         const eAdjacentToLeadingZeros = sign ? // 0E.
-            str[leadingZeros.length + 1] === eChar
-            : str[leadingZeros.length] === eChar;
+            trimmedStr[leadingZeros.length + 1] === eChar
+            : trimmedStr[leadingZeros.length] === eChar;
 
         if (leadingZeros.length > 1 && eAdjacentToLeadingZeros) return str;
         else if (leadingZeros.length === 1
@@ -11822,8 +11939,7 @@ function resolveEnotation(str, trimmedStr, options) {
         } else if (leadingZeros.length > 0) {
             // Has leading zeros — only accept if leadingZeros option allows it
             if (options.leadingZeros && !eAdjacentToLeadingZeros) {
-                trimmedStr = (notation[1] || "") + notation[3];
-                return Number(trimmedStr);
+                return Number(trimmedStr); // Number() accepts leading zeros; stripping can leave a mantissa-less ".e0"
             } else return str;
         } else {
             // No leading zeros — always valid e-notation, parse it
@@ -11841,7 +11957,11 @@ function resolveEnotation(str, trimmedStr, options) {
  */
 function trimZeros(numStr) {
     if (numStr && numStr.indexOf(".") !== -1) {//float
-        numStr = numStr.replace(/0+$/, ""); //remove ending zeros
+        //remove ending zeros without the O(n^2) backtracking that /0+$/ hits
+        //when the string doesn't end in 0 but has a long internal zero-run
+        let end = numStr.length;
+        while (end > 0 && numStr.charCodeAt(end - 1) === 48 /* '0' */) end--;
+        numStr = numStr.slice(0, end);
         if (numStr === ".") numStr = "0";
         else if (numStr[0] === ".") numStr = "0" + numStr;
         else if (numStr[numStr.length - 1] === ".") numStr = numStr.substring(0, numStr.length - 1);
@@ -13182,7 +13302,8 @@ const XML_PATTERNS = [
   {
     id: 'xml-namespace-confusion',
     description: 'xmlns: attribute injection — can redefine namespaces to confuse parsers',
-    pattern: /\bxmlns\s*(?::\w{1,40})?\s*=/i,
+    // pattern: /\bxmlns\s*(?::\w{1,40})?\s*=/i,
+    pattern: /\bxmlns(?::\w{1,40})?\s*=/i,
   },
   {
     id: 'xml-comment-injection',
@@ -14269,7 +14390,12 @@ const parseXml = function (xmlData) {
         this.matcher.pop();
         this.isCurrentNodeStopNode = false; // Reset flag when closing tag
 
-        currentNode = this.tagsNodeStack.pop();//avoid recursion, set the parent tag scope
+        //a closing tag with no matching opening tag leaves the stack empty
+        currentNode = this.tagsNodeStack.pop() || xmlObj;//avoid recursion, set the parent tag scope
+
+        if (options.captureMetaData && currentNode) {
+          currentNode.addEndIndex(closeIndex + 1);
+        }
         textData = "";
         i = closeIndex;
       } else if (c1 === 63) { //'?'
@@ -14293,6 +14419,11 @@ const parseXml = function (xmlData) {
             childNode[":@"] = attsMap;
           }
           this.addChild(currentNode, childNode, this.readonlyMatcher, i);
+
+          if (options.captureMetaData) {
+            // closeIndex points at '?' of the closing '?>'
+            currentNode.addEndIndex(tagData.closeIndex + 2);
+          }
         }
 
 
@@ -14456,6 +14587,10 @@ const parseXml = function (xmlData) {
           this.isCurrentNodeStopNode = false; // Reset flag
 
           this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+
+          if (options.captureMetaData) {
+            currentNode.addEndIndex(i + 1);
+          }
         } else {
           //selfClosing tag
           if (isSelfClosing) {
@@ -14466,6 +14601,10 @@ const parseXml = function (xmlData) {
               childNode[":@"] = prefixedAttrs;
             }
             this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+
+            if (options.captureMetaData) {
+              currentNode.addEndIndex(closeIndex + 1);
+            }
             this.matcher.pop(); // Pop self-closing tag
             this.isCurrentNodeStopNode = false; // Reset flag
           }
@@ -14475,6 +14614,10 @@ const parseXml = function (xmlData) {
               childNode[":@"] = prefixedAttrs;
             }
             this.addChild(currentNode, childNode, this.readonlyMatcher, startIndex);
+
+            if (options.captureMetaData) {
+              currentNode.addEndIndex(result.closeIndex + 1);
+            }
             this.matcher.pop(); // Pop unpaired tag
             this.isCurrentNodeStopNode = false; // Reset flag
             i = result.closeIndex;
@@ -14939,6 +15082,8 @@ function isLeafTag(obj, options) {
   return false;
 }
 
+/* global Uint8Array */
+
 class XMLParser {
 
     constructor(options) {
@@ -14953,7 +15098,12 @@ class XMLParser {
      */
     parse(xmlData, validationOption) {
         if (typeof xmlData !== "string" && xmlData.toString) {
-            xmlData = xmlData.toString();
+            if (xmlData instanceof Uint8Array &&
+                !(typeof Buffer !== "undefined" && Buffer.isBuffer(xmlData))) {
+                xmlData = new TextDecoder("utf-8", { ignoreBOM: true }).decode(xmlData);
+            } else {
+                xmlData = xmlData.toString();
+            }
         } else if (typeof xmlData !== "string") {
             throw new Error("XML data is accepted in String or Bytes[] form.")
         }
@@ -15005,19 +15155,26 @@ class XMLParser {
     }
 }
 
+// String(val)/val.toString() drop the sign of -0 (e.g. String(-0) === '0'), silently
+// corrupting a round-tripped negative-zero value. XML has no separate int/float syntax,
+// so this is the single place every raw value gets turned into text.
+function valToStr(val) {
+  return typeof val === 'number' && Object.is(val, -0) ? '-0' : String(val)
+}
+
 function safeComment(val) {
-  return String(val)
+  return valToStr(val)
     .replace(/--/g, '- -')   // -- is illegal anywhere in comment content
     .replace(/--/g, '- -')   // handle the scenario when 2 consiucative dashes appears 
     .replace(/-$/, '- ');    // trailing - would form -- with the closing -->
 }
 
 function safeCdata(val) {
-  return String(val).replace(/\]\]>/g, ']]]]><![CDATA[>')
+  return valToStr(val).replace(/\]\]>/g, ']]]]><![CDATA[>')
 }
 
 function escapeAttribute(val) {
-  return String(val).replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+  return valToStr(val).replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
 
 const EOL = "\n";
@@ -15106,7 +15263,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
     if (!Array.isArray(arr)) {
         // Non-array values (e.g. string tag values) should be treated as text content
         if (arr !== undefined && arr !== null) {
-            let text = arr.toString();
+            let text = valToStr(arr);
             text = replaceEntitiesValue(text, options);
             return text;
         }
@@ -15145,6 +15302,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
                 tagText = options.tagValueProcessor(tagName, tagText);
                 tagText = replaceEntitiesValue(tagText, options);
             }
+            tagText = valToStr(tagText);
             if (isPreviousElementTag) {
                 xmlStr += indentation;
             }
@@ -15253,7 +15411,7 @@ function getRawContent(arr, options) {
     if (!Array.isArray(arr)) {
         // Non-array values return as-is
         if (arr !== undefined && arr !== null) {
-            return arr.toString();
+            return valToStr(arr);
         }
         return "";
     }
@@ -15265,7 +15423,7 @@ function getRawContent(arr, options) {
 
         if (tagName === options.textNodeName) {
             // Raw text content - NO processing, NO entity replacement
-            content += item[tagName];
+            content += valToStr(item[tagName]);
         } else if (tagName === options.cdataPropName) {
             // CDATA content
             content += item[tagName][0][options.textNodeName];
@@ -15598,11 +15756,11 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
       if (attr && !this.ignoreAttributesFn(attr, jPath)) {
         // Resolve the attribute name through sanitizeName
         const resolvedAttr = resolveTagName(attr, true, this.options, matcher, qNameValidator);
-        attrStr += this.buildAttrPairStr(resolvedAttr, '' + jObj[key], isCurrentStopNode);
+        attrStr += this.buildAttrPairStr(resolvedAttr, valToStr(jObj[key]), isCurrentStopNode);
       } else if (!attr) {
         //tag value
         if (key === this.options.textNodeName) {
-          let newval = this.options.tagValueProcessor(key, '' + jObj[key]);
+          let newval = this.options.tagValueProcessor(key, valToStr(jObj[key]));
           val += this.replaceEntitiesValue(newval);
         } else {
           // Check if this is a stopNode before building
@@ -15612,7 +15770,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
 
           if (isStopNode) {
             // Build as raw content without encoding
-            const textValue = '' + jObj[key];
+            const textValue = valToStr(jObj[key]);
             if (textValue === '') {
               val += this.indentate(level) + '<' + resolvedKey + this.closeTag(resolvedKey) + this.tagEndChar;
             } else {
@@ -15652,6 +15810,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
           if (this.options.oneListGroup) {
             let textValue = this.options.tagValueProcessor(resolvedKey, item);
             textValue = this.replaceEntitiesValue(textValue);
+            textValue = valToStr(textValue);
             listTagVal += textValue;
           } else {
             // Check if this is a stopNode before building
@@ -15661,7 +15820,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
 
             if (isStopNode) {
               // Build as raw content without encoding
-              const textValue = '' + item;
+              const textValue = valToStr(item);
               if (textValue === '') {
                 listTagVal += this.indentate(level) + '<' + resolvedKey + this.closeTag(resolvedKey) + this.tagEndChar;
               } else {
@@ -15685,7 +15844,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
         for (let j = 0; j < L; j++) {
           // Resolve attribute names inside attributesGroupName
           const resolvedAttr = resolveTagName(Ks[j], true, this.options, matcher, qNameValidator);
-          attrStr += this.buildAttrPairStr(resolvedAttr, '' + jObj[key][Ks[j]], isCurrentStopNode);
+          attrStr += this.buildAttrPairStr(resolvedAttr, valToStr(jObj[key][Ks[j]]), isCurrentStopNode);
         }
       } else {
         val += this.processTextOrObjNode(jObj[key], resolvedKey, level, matcher, qNameValidator);
@@ -15697,7 +15856,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
 
 Builder.prototype.buildAttrPairStr = function (attrName, val, isStopNode) {
   if (!isStopNode) {
-    val = this.options.attributeValueProcessor(attrName, '' + val);
+    val = this.options.attributeValueProcessor(attrName, valToStr(val));
     val = this.replaceEntitiesValue(val);
   }
   if (this.options.suppressBooleanAttributes && val === "true") {
@@ -15946,6 +16105,10 @@ Builder.prototype.buildTextValNode = function (val, key, attrStr, level, matcher
     // Normal processing: apply tagValueProcessor and entity replacement
     let textValue = this.options.tagValueProcessor(key, val);
     textValue = this.replaceEntitiesValue(textValue);
+    // tagValueProcessor may return the raw value unchanged (default is identity), and
+    // replaceEntitiesValue no-ops on non-strings, so a plain number can still reach here;
+    // stringify it now, sign-preserving, before it's implicitly ToString'd below.
+    textValue = valToStr(textValue);
 
     if (textValue === '') {
       return this.indentate(level) + '<' + key + attrStr + this.closeTag(key) + this.tagEndChar;
@@ -16582,23 +16745,8 @@ let AbortError$1 = class AbortError extends Error {
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-const __isNode__ =
-  typeof process === "object" &&
-  typeof process.versions === "object" &&
-  typeof process.versions.node === "string";
-let require$1;
-let __filename$1;
-let __dirname$1;
-if (__isNode__) {
-  require$1 = createRequire(import.meta.url);
-  __filename$1 = fileURLToPath(import.meta.url);
-  __dirname$1 = dirname(__filename$1);
-}
-// ESM-COMPAT-END
-
-var NativeCRC64 = (() => {
-  var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
-  if (typeof __filename$1 !== 'undefined') _scriptDir = _scriptDir || __filename$1;
+(() => {
+  typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
   return (
 function(NativeCRC64) {
   NativeCRC64 = NativeCRC64 || {};
@@ -16676,24 +16824,10 @@ function locateFile(path) {
 
 if (ENVIRONMENT_IS_NODE) {
   if (typeof process == 'undefined' || !process.release || process.release.name !== 'node') throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
-// NODE-READ-START (this block is replaced with a no-op in dist/browser and dist/react-native by copyJSFiles.cjs)
-  // `require()` is no-op in an ESM module, use `createRequire()` to construct
-  // the require()` function.  This is only necessary for multi-environment
-  // builds, `-sENVIRONMENT=node` emits a static import declaration instead.
-  // TODO: Swap all `require()`'s with `import()`'s?
-  // These modules will usually be used on Node.js. Load them eagerly to avoid
-  // the complexity of lazy-loading.
-  require$1('fs');
-  var nodePath = require$1('path');
-
-  if (ENVIRONMENT_IS_WORKER) {
-    scriptDirectory = nodePath.dirname(scriptDirectory) + '/';
-  } else {
-    scriptDirectory = __dirname$1 + '/';
-  }
-
-// end include: node_shell_read.js
-// NODE-READ-END
+  // The wasm is base64-embedded (see `binaryInString`) and loaded via `getBinary()`,
+  // so the Node fs/path read hooks emitted by Emscripten are never exercised and
+  // have been removed. This keeps the file free of Node built-in imports so it can be
+  // consumed as-is by web bundlers and by ESM-to-CommonJS bundlers (see issue #39057).
   if (process['argv'].length > 1) {
     process['argv'][1].replace(/\\/g, '/');
   }
@@ -16721,7 +16855,7 @@ if (ENVIRONMENT_IS_NODE) {
 } else
 if (ENVIRONMENT_IS_SHELL) {
 
-  if ((typeof process == 'object' && typeof require$1 === 'function') || typeof window == 'object' || typeof importScripts == 'function') throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
+  if ((typeof process == 'object' && typeof require === 'function') || typeof window == 'object' || typeof importScripts == 'function') throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
 
   if (typeof scriptArgs != 'undefined') {
     scriptArgs;
@@ -16740,29 +16874,9 @@ if (ENVIRONMENT_IS_SHELL) {
 // Node.js workers are detected as a combination of ENVIRONMENT_IS_WORKER and
 // ENVIRONMENT_IS_NODE.
 if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
-  if (ENVIRONMENT_IS_WORKER) { // Check worker, not web, since window could be polyfilled
-    scriptDirectory = self.location.href;
-  } else if (typeof document != 'undefined' && document.currentScript) { // web
-    scriptDirectory = document.currentScript.src;
-  }
-  // When MODULARIZE, this JS may be executed later, after document.currentScript
-  // is gone, so we saved it, and we use it here instead of any other info.
-  if (_scriptDir) {
-    scriptDirectory = _scriptDir;
-  }
-  // blob urls look like blob:http://site.com/etc/etc and we cannot infer anything from them.
-  // otherwise, slice off the final part of the url to find the script directory.
-  // if scriptDirectory does not contain a slash, lastIndexOf will return -1,
-  // and scriptDirectory will correctly be replaced with an empty string.
-  // If scriptDirectory contains a query (starting with ?) or a fragment (starting with #),
-  // they are removed because they could contain a slash.
-  if (scriptDirectory.indexOf('blob:') !== 0) {
-    scriptDirectory = scriptDirectory.substr(0, scriptDirectory.replace(/[?#].*/, "").lastIndexOf('/')+1);
-  } else {
-    scriptDirectory = '';
-  }
-
   if (!(typeof window == 'object' || typeof importScripts == 'function')) throw new Error('not compiled for this environment (did you build to HTML and try to run it not on the web, or set ENVIRONMENT to something - like node - and run it someplace else - like on the web?)');
+  // The XHR-based read hooks emitted by Emscripten are unused because the wasm is
+  // base64-embedded; they have been removed so the file contains no DOM/XHR I/O.
 } else
 {
   throw new Error('environment detection error');
@@ -18929,77 +19043,6 @@ Crc64Hash.prototype['OnFinal'] = Crc64Hash.prototype.OnFinal = /** @suppress {un
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-// @ts-expect-error the crc64 js file is auto generated
-/**
- * Class used to calculator CRC64 checksum
- */
-class StorageCRC64Calculator {
-    nativeCrc64Hash;
-    static nativeInstance;
-    constructor() {
-        this.nativeCrc64Hash = new StorageCRC64Calculator.nativeInstance.Crc64Hash();
-    }
-    static initPromise;
-    /**
-     * Initialize environment for CRC64 checksum calculator
-     */
-    static async init() {
-        if (!this.initPromise) {
-            this.initPromise = NativeCRC64().then((instance) => {
-                this.nativeInstance = instance;
-                return;
-            });
-        }
-        return this.initPromise;
-    }
-    /**
-     * Append data for CRC64 checksum calculator
-     * @param body - content to be append
-     * @param length - length of the content
-     */
-    append(body, length) {
-        const ptr = StorageCRC64Calculator.nativeInstance._malloc(length);
-        StorageCRC64Calculator.nativeInstance.HEAPU8.set(body, ptr);
-        this.nativeCrc64Hash.OnAppend(ptr, length);
-        StorageCRC64Calculator.nativeInstance._free(ptr);
-    }
-    /**
-     * Complete CRC64 checksum calculating and get the final result.
-     * @param body -
-     * @param length -
-     * @returns
-     */
-    final(body, length) {
-        const ptr = StorageCRC64Calculator.nativeInstance._malloc(length);
-        StorageCRC64Calculator.nativeInstance.HEAPU8.set(body, ptr);
-        const result = StorageCRC64Calculator.nativeInstance._malloc(8);
-        this.nativeCrc64Hash.OnFinal(ptr, length, result);
-        StorageCRC64Calculator.nativeInstance._free(ptr);
-        const resultArray = new Uint8Array(8);
-        resultArray.set(StorageCRC64Calculator.nativeInstance.HEAPU8.subarray(result, result + 8));
-        StorageCRC64Calculator.nativeInstance._free(result);
-        return resultArray;
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-/**
- * Signals the end of a stream by pushing null.
- * In Node.js, this is required to signal the end of a Readable stream.
- * @internal
- */
-function signalStreamEnd(pushData) {
-    pushData(null);
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-const MESSAGE_VERSION$1 = 1;
-const MESSAGE_HEADER_LENGTH$1 = 13;
-const SEGMENT_HEADER_LENGTH$1 = 10;
-const FOOTER_LENGTH$1 = 8;
-const MAX_SEGMENT_CONTENT_LENGTH = 4 * 1024 * 1024;
 var SMRegion$1;
 (function (SMRegion) {
     SMRegion[SMRegion["StreamHeader"] = 0] = "StreamHeader";
@@ -19009,311 +19052,9 @@ var SMRegion$1;
     SMRegion[SMRegion["SegmentContent"] = 4] = "SegmentContent";
     SMRegion[SMRegion["Completed"] = 5] = "Completed";
 })(SMRegion$1 || (SMRegion$1 = {}));
-class StructuredMessageEncoding {
-    pushData;
-    contentLength;
-    messageLength;
-    constructor(pushData, contentLength) {
-        this.pushData = pushData;
-        this.contentLength = contentLength;
-        this.contentOffset = 0;
-        this.currentDataOffset = 0;
-        this.segmentsCount = Math.ceil(this.contentLength / MAX_SEGMENT_CONTENT_LENGTH);
-        this.messageLength =
-            this.contentLength +
-                MESSAGE_HEADER_LENGTH$1 +
-                (SEGMENT_HEADER_LENGTH$1 + FOOTER_LENGTH$1) * this.segmentsCount +
-                FOOTER_LENGTH$1;
-        this.messageHeaderBuffer = new Uint8Array(MESSAGE_HEADER_LENGTH$1);
-        this.segmentNumber = 0;
-        this.segmentContentLength = 0;
-        this.segmentContentOffset = 0;
-        this.state = SMRegion$1.StreamHeader;
-        this.segmentCrc64 = new StorageCRC64Calculator();
-        this.messageCrc64 = new StorageCRC64Calculator();
-    }
-    currentDataOffset;
-    contentOffset;
-    segmentsCount;
-    messageHeaderBuffer;
-    segmentNumber;
-    segmentContentLength;
-    segmentContentOffset;
-    segmentCrc64;
-    messageCrc64;
-    state;
-    sourceDataHandler = (data) => {
-        this.currentDataOffset = 0;
-        if (this.state === SMRegion$1.StreamHeader) {
-            this.handlingMessageHeader();
-        }
-        while (this.segmentNumber < this.segmentsCount) {
-            this.segmentContentLength = Math.min(MAX_SEGMENT_CONTENT_LENGTH, this.contentLength - this.contentOffset);
-            if (this.state === SMRegion$1.SegmentHeader) {
-                this.handlingSegmentHeader();
-            }
-            if (this.state === SMRegion$1.SegmentContent) {
-                this.handlingSegmentContent(data);
-            }
-            if (this.state === SMRegion$1.SegmentFooter) {
-                this.handlingSegmentFooter();
-                this.contentOffset += this.segmentContentLength;
-            }
-            if (this.currentDataOffset === data.length) {
-                break;
-            }
-        }
-        if (this.state === SMRegion$1.StreamFooter) {
-            this.handlingMessageFooter();
-        }
-    };
-    handlingMessageHeader() {
-        this.messageHeaderBuffer[0] = MESSAGE_VERSION$1;
-        this.fillInt64(this.messageHeaderBuffer, 1, this.messageLength); // content length
-        this.fillInt16(this.messageHeaderBuffer, 9, 1);
-        this.fillInt16(this.messageHeaderBuffer, 11, this.segmentsCount);
-        this.pushData(this.messageHeaderBuffer);
-        this.state = SMRegion$1.SegmentHeader;
-    }
-    handlingSegmentHeader() {
-        const segmentHeaderBuffer = new Uint8Array(SEGMENT_HEADER_LENGTH$1);
-        this.fillInt16(segmentHeaderBuffer, 0, this.segmentNumber + 1);
-        this.fillInt64(segmentHeaderBuffer, 2, this.segmentContentLength);
-        this.segmentContentOffset = 0;
-        this.pushData(segmentHeaderBuffer);
-        this.state = SMRegion$1.SegmentContent;
-    }
-    handlingSegmentContent(data) {
-        const length = Math.min(this.segmentContentLength - this.segmentContentOffset, data.length - this.currentDataOffset);
-        if (length !== 0) {
-            const current_content = Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length);
-            this.messageCrc64.append(current_content, length);
-            this.segmentCrc64.append(current_content, length);
-            this.pushData(current_content);
-        }
-        this.segmentContentOffset += length;
-        this.currentDataOffset += length;
-        if (this.segmentContentOffset === this.segmentContentLength) {
-            this.state = SMRegion$1.SegmentFooter;
-        }
-    }
-    handlingSegmentFooter() {
-        const crc64Result = this.segmentCrc64.final(new Uint8Array([]), 0);
-        this.pushData(crc64Result);
-        this.segmentCrc64 = new StorageCRC64Calculator();
-        ++this.segmentNumber;
-        if (this.segmentNumber === this.segmentsCount) {
-            this.state = SMRegion$1.StreamFooter;
-        }
-        else {
-            this.state = SMRegion$1.SegmentHeader;
-        }
-    }
-    handlingMessageFooter() {
-        const crc64Result = this.messageCrc64.final(new Uint8Array([]), 0);
-        this.pushData(crc64Result);
-        signalStreamEnd(this.pushData);
-        this.state = SMRegion$1.Completed;
-    }
-    fillInt64(buffer, offset, input) {
-        if (buffer.length < offset + 8) {
-            throw new Error("Uint8Array length is not expected.");
-        }
-        const view = new DataView(buffer.buffer, buffer.byteOffset + offset, 8);
-        view.setBigUint64(0, BigInt(input), true);
-    }
-    fillInt16(buffer, offset, input) {
-        if (buffer.length < offset + 2) {
-            throw new Error("Uint8Array length is not expected.");
-        }
-        const view = new DataView(buffer.buffer, buffer.byteOffset + offset, 2);
-        view.setUint16(0, input, true);
-    }
-}
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-function isNodeReadableStream(source) {
-    return (source !== null &&
-        source instanceof require$$0$5 &&
-        typeof source._read === "function" &&
-        typeof source._readableState === "object" &&
-        typeof source.pipe === "function");
-}
-/**
- *
- * To encode structured body for CRC64 content validtion in storage uploading.
- * @param source -
- * @param contentLength -
- * @returns
- */
-async function structuredMessageEncoding(source, contentLength) {
-    if (source === null) {
-        return {
-            body: source,
-            encodedContentLength: contentLength,
-        };
-    }
-    if (isNodeReadableStream(source)) {
-        const encodingMessage = new StructuredMessageEncodingStream(source, contentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    if (typeof source === "function") {
-        const encodingMessage = new StructuredMessageEncodingStream(source(), contentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    if (source instanceof Blob) {
-        const encoding = await BrowserStream(source, contentLength);
-        return {
-            body: encoding.content,
-            encodedContentLength: encoding.encodedContentLength,
-        };
-    }
-    if (typeof source === "string") {
-        const s = new Readable$1();
-        s._read = () => { };
-        s.push(source);
-        s.push(null);
-        const stringContentLength = Buffer.byteLength(source);
-        const encodingMessage = await new StructuredMessageEncodingStream(s, stringContentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    if (source instanceof ArrayBuffer) {
-        const stream = Readable$1.from(Buffer.from(source));
-        const encodingMessage = await new StructuredMessageEncodingStream(stream, contentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    if (source instanceof Buffer) {
-        const stream = Readable$1.from(source);
-        const encodingMessage = await new StructuredMessageEncodingStream(stream, contentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    if (ArrayBuffer.isView(source)) {
-        const stream = Readable$1.from(Buffer.from(source.buffer, source.byteOffset, source.byteLength));
-        const encodingMessage = await new StructuredMessageEncodingStream(stream, contentLength, {});
-        return {
-            body: encodingMessage,
-            encodedContentLength: encodingMessage.messageLength(),
-        };
-    }
-    throw new Error("The specified request body type is not supported for CRC64 checksum");
-}
-async function pump(reader, controller, encodingStream) {
-    const { done, value } = await reader.read();
-    // When no more data needs to be consumed, close the stream
-    if (done) {
-        controller.close();
-        return;
-    }
-    // Enqueue the next data chunk into our target stream
-    encodingStream.sourceDataHandler(Buffer.from(value));
-}
-async function BrowserStream(source, contentLength) {
-    const sourceStream = source instanceof Blob ? source.stream() : source;
-    const reader = sourceStream.getReader();
-    let encodingStream = undefined;
-    const stream = new ReadableStream({
-        start(controller) {
-            encodingStream = new StructuredMessageEncoding((data) => {
-                controller.enqueue(data);
-            }, contentLength);
-        },
-        pull(controller) {
-            pump(reader, controller, encodingStream)
-                .then(() => {
-                return;
-            })
-                .catch(function (error) {
-                controller.error(error);
-            });
-        },
-    });
-    const response = new Response(stream);
-    return {
-        content: await response.blob(),
-        encodedContentLength: encodingStream.messageLength,
-    };
-}
-class StructuredMessageEncodingStream extends Readable$1 {
-    source;
-    encodingMethods;
-    constructor(source, contentLength, options) {
-        super({ highWaterMark: options.highWaterMark });
-        this.source = source;
-        this.encodingMethods = new StructuredMessageEncoding((dataToHandle) => {
-            if (!this.push(dataToHandle)) {
-                source.pause();
-            }
-        }, contentLength);
-        this.setSourceEventHandlers();
-    }
-    messageLength() {
-        return this.encodingMethods.messageLength;
-    }
-    setSourceEventHandlers() {
-        this.source.on("data", this.sourceDataHandler);
-        this.source.on("end", this.sourceErrorOrEndHandler);
-        this.source.on("error", this.sourceErrorOrEndHandler);
-        // needed for Node14
-        this.source.on("aborted", this.sourceAbortedHandler);
-    }
-    removeSourceEventHandlers() {
-        this.source.removeListener("data", this.sourceDataHandler);
-        this.source.removeListener("end", this.sourceErrorOrEndHandler);
-        this.source.removeListener("error", this.sourceErrorOrEndHandler);
-        this.source.removeListener("aborted", this.sourceAbortedHandler);
-    }
-    sourceDataHandler = (data) => {
-        this.encodingMethods.sourceDataHandler(data);
-    };
-    sourceAbortedHandler = () => {
-        const abortError = new AbortError$1("The operation was aborted.");
-        this.destroy(abortError);
-    };
-    sourceErrorOrEndHandler = (err) => {
-        if (err && err.name === "AbortError") {
-            this.destroy(err);
-            return;
-        }
-        // console.log(
-        //   `Source stream emits end or error, offset: ${
-        //     this.offset
-        //   }, dest end : ${this.end}`
-        // );
-        this.removeSourceEventHandlers();
-    };
-    _read() {
-        this.source.resume();
-    }
-    _destroy(error, callback) {
-        // remove listener from source and release source
-        this.removeSourceEventHandlers();
-        this.source.destroy();
-        callback(error === null ? undefined : error);
-    }
-}
-
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-const MESSAGE_VERSION = 1;
-const MESSAGE_HEADER_LENGTH = 13;
-const SEGMENT_HEADER_LENGTH = 10;
-const FOOTER_LENGTH = 8;
 var SMRegion;
 (function (SMRegion) {
     SMRegion[SMRegion["StreamHeader"] = 0] = "StreamHeader";
@@ -19322,238 +19063,78 @@ var SMRegion;
     SMRegion[SMRegion["SegmentFooter"] = 3] = "SegmentFooter";
     SMRegion[SMRegion["SegmentContent"] = 4] = "SegmentContent";
 })(SMRegion || (SMRegion = {}));
-class StructuredMessageDecoding {
-    pushData;
-    segmentsCount;
-    //   private currentState: SMRegion;
-    currentOffset;
-    currentDataOffset;
-    messageHeaderBuffer;
-    messageHeaderOffset;
-    segmentNumber;
-    segmentHeaderOffset;
-    segmentHeaderBuffer;
-    segmentContentOffset;
-    segmentContentLength;
-    segmentFooterOffset;
-    segmentFooterBuffer;
-    messageFooterOffset;
-    messageFooterBuffer;
-    segmentCrc64;
-    messageCrc64;
-    state;
-    constructor(pushData) {
-        this.pushData = pushData;
-        this.currentOffset = 0;
-        this.segmentsCount = 0;
-        this.messageHeaderOffset = 0;
-        this.messageHeaderBuffer = new Uint8Array(MESSAGE_HEADER_LENGTH);
-        this.currentDataOffset = 0;
-        this.segmentNumber = 0;
-        this.segmentHeaderOffset = 0;
-        this.segmentHeaderBuffer = new Uint8Array(SEGMENT_HEADER_LENGTH);
-        this.segmentContentOffset = 0;
-        this.segmentContentLength = 0;
-        this.state = SMRegion.StreamHeader;
-        this.segmentFooterOffset = 0;
-        this.segmentFooterBuffer = new Uint8Array(FOOTER_LENGTH);
-        this.messageFooterOffset = 0;
-        this.messageFooterBuffer = new Uint8Array(FOOTER_LENGTH);
-        this.segmentCrc64 = new StorageCRC64Calculator();
-        this.messageCrc64 = new StorageCRC64Calculator();
-    }
-    sourceDataHandler = (data) => {
-        this.currentDataOffset = 0;
-        if (this.state === SMRegion.StreamHeader) {
-            this.parseMessageHeader(data);
-        }
-        while (this.segmentNumber < this.segmentsCount && this.currentDataOffset < data.length) {
-            if (this.state === SMRegion.SegmentHeader) {
-                this.parseSegmentHeader(data);
-            }
-            if (this.state === SMRegion.SegmentContent) {
-                this.parseSegmentContent(data);
-            }
-            if (this.state === SMRegion.SegmentFooter) {
-                this.parseSegmentFooter(data);
-            }
-        }
-        if (this.state === SMRegion.StreamFooter) {
-            this.parseMessageFooter(data);
-        }
-    };
-    parseMessageHeader(data) {
-        const length = Math.min(MESSAGE_HEADER_LENGTH - this.messageHeaderOffset, data.length - this.currentDataOffset);
-        this.messageHeaderBuffer.set(Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length), this.messageHeaderOffset);
-        this.currentDataOffset += length;
-        this.messageHeaderOffset += length;
-        this.currentOffset += length;
-        if (this.messageHeaderOffset === MESSAGE_HEADER_LENGTH) {
-            const currentVersion = this.messageHeaderBuffer[0];
-            if (currentVersion !== MESSAGE_VERSION) {
-                throw new Error("Unexpected message version");
-            }
-            this.segmentsCount = this.toInt16(Uint8Array.prototype.slice.call(this.messageHeaderBuffer, 11, 13));
-            this.state = SMRegion.SegmentHeader;
-        }
-    }
-    parseSegmentHeader(data) {
-        const length = Math.min(SEGMENT_HEADER_LENGTH - this.segmentHeaderOffset, data.length - this.currentDataOffset);
-        this.segmentHeaderBuffer.set(Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length), this.segmentHeaderOffset);
-        this.currentDataOffset += length;
-        this.segmentHeaderOffset += length;
-        this.currentOffset += length;
-        if (this.segmentHeaderOffset === SEGMENT_HEADER_LENGTH) {
-            const currentSegmentNumber = this.toInt16(Uint8Array.prototype.slice.call(this.segmentHeaderBuffer, 0, 2));
-            if (currentSegmentNumber !== this.segmentNumber + 1) {
-                throw new Error("Segment number is unexpected.");
-            }
-            this.segmentContentLength = this.toInt64(this.segmentHeaderBuffer, 2);
-            this.segmentContentOffset = 0;
-            this.state = SMRegion.SegmentContent;
-        }
-    }
-    parseSegmentContent(data) {
-        const length = Math.min(this.segmentContentLength - this.segmentContentOffset, data.length - this.currentDataOffset);
-        const dataToHandle = Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length);
-        this.segmentCrc64.append(dataToHandle, length);
-        this.messageCrc64.append(dataToHandle, length);
-        this.pushData(dataToHandle);
-        this.currentDataOffset += length;
-        this.segmentContentOffset += length;
-        this.currentOffset += length;
-        if (this.segmentContentOffset === this.segmentContentLength) {
-            this.state = SMRegion.SegmentFooter;
-        }
-    }
-    parseSegmentFooter(data) {
-        const length = Math.min(FOOTER_LENGTH - this.segmentFooterOffset, data.length - this.currentDataOffset);
-        this.segmentFooterBuffer.set(Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length), this.segmentFooterOffset);
-        this.currentDataOffset += length;
-        this.segmentFooterOffset += length;
-        this.currentOffset += length;
-        if (this.segmentFooterOffset === FOOTER_LENGTH) {
-            const crc64Result = this.segmentCrc64.final(new Uint8Array([]), 0);
-            if (!this.checkCrc64CheckSum(crc64Result, this.segmentFooterBuffer)) {
-                throw new Error(`Segment check sum mismatch, segmentNumber: ${this.segmentNumber}`);
-            }
-            ++this.segmentNumber;
-            if (this.segmentNumber === this.segmentsCount) {
-                this.state = SMRegion.StreamFooter;
-            }
-            else {
-                this.segmentHeaderOffset = 0;
-                this.segmentFooterOffset = 0;
-                this.segmentCrc64 = new StorageCRC64Calculator();
-                this.state = SMRegion.SegmentHeader;
-            }
-        }
-    }
-    parseMessageFooter(data) {
-        const length = Math.min(FOOTER_LENGTH - this.messageFooterOffset, data.length - this.currentDataOffset);
-        this.messageFooterBuffer.set(Uint8Array.prototype.slice.call(data, this.currentDataOffset, this.currentDataOffset + length), this.messageFooterOffset);
-        this.currentDataOffset += length;
-        this.messageFooterOffset += length;
-        this.currentOffset += length;
-        if (this.messageFooterOffset === FOOTER_LENGTH) {
-            const crc64Result = this.messageCrc64.final(new Uint8Array([]), 0);
-            if (!this.checkCrc64CheckSum(crc64Result, this.messageFooterBuffer)) {
-                throw new Error("Check sum mismatch");
-            }
-            this.pushData(null);
-        }
-    }
-    toInt64(input, offset) {
-        if (input.length < offset + 8) {
-            throw new Error("CRC64 buffer error, something wrong with crc64 calculator");
-        }
-        const view = new DataView(input.buffer, input.byteOffset + offset, 8);
-        return Number(view.getBigUint64(0, true));
-    }
-    toInt16(input) {
-        if (input.length !== 2) {
-            throw new Error("CRC64 buffer error, something wrong with crc64 calculator");
-        }
-        return input[0] + input[1] * 256;
-    }
-    checkCrc64CheckSum(first, second) {
-        if (first.length !== 8 || second.length !== 8) {
-            throw new Error("CRC64 buffer error, something wrong with crc64 calculator");
-        }
-        for (let index = 0; index < 8; ++index) {
-            if (first[index] !== second[index]) {
-                return false;
-            }
-        }
-        return true;
-    }
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * A custom error type for failed pipeline requests.
+ */
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+const RestError = RestError$2;
+/**
+ * Typeguard for RestError
+ * @param e - Something caught by a catch clause.
+ */
+function isRestError(e) {
+    return isRestError$2(e);
 }
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 /**
- * To decode structured body for CRC64 content validtion in storage downloading.
- * @param source -
- * @param options -
- * @returns
+ * Creates a native AbortSignal which reflects the state of the provided AbortSignalLike.
+ * If the AbortSignalLike is already a native AbortSignal, it is returned as is.
+ * @param abortSignalLike - The AbortSignalLike to wrap.
+ * @returns - An object containing the native AbortSignal and an optional cleanup function. The cleanup function should be called when the AbortSignal is no longer needed.
  */
-function structuredMessageDecodingStream(source, options) {
-    return new StructuredMessageDecodingStream(source, options);
+function wrapAbortSignalLike(abortSignalLike) {
+    if (abortSignalLike instanceof AbortSignal) {
+        return { abortSignal: abortSignalLike };
+    }
+    if (abortSignalLike.aborted) {
+        return {
+            abortSignal: AbortSignal.abort("reason" in abortSignalLike ? abortSignalLike.reason : undefined),
+        };
+    }
+    const controller = new AbortController();
+    let needsCleanup = true;
+    function cleanup() {
+        if (needsCleanup) {
+            abortSignalLike.removeEventListener("abort", listener);
+            needsCleanup = false;
+        }
+    }
+    function listener() {
+        controller.abort("reason" in abortSignalLike ? abortSignalLike.reason : undefined);
+        cleanup();
+    }
+    abortSignalLike.addEventListener("abort", listener);
+    return { abortSignal: controller.signal, cleanup };
 }
-class StructuredMessageDecodingStream extends Readable$1 {
-    source;
-    decodingMethods;
-    constructor(source, options) {
-        super({ highWaterMark: options.highWaterMark });
-        this.source = source;
-        this.decodingMethods = new StructuredMessageDecoding((dataToHandle) => {
-            if (!this.push(dataToHandle)) {
-                source.pause();
+
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+/**
+ * Create the correct HttpClient for the current environment.
+ */
+function createDefaultHttpClient() {
+    const client = createDefaultHttpClient$2();
+    return {
+        async sendRequest(request) {
+            // we wrap any AbortSignalLike here since the TypeSpec runtime expects a native AbortSignal.
+            // 99% of the time, this should be a no-op since a native AbortSignal is passed in.
+            const { abortSignal, cleanup } = request.abortSignal
+                ? wrapAbortSignalLike(request.abortSignal)
+                : {};
+            try {
+                request.abortSignal = abortSignal;
+                return await client.sendRequest(request);
             }
-        });
-        this.setSourceEventHandlers();
-    }
-    _read() {
-        this.source.resume();
-    }
-    setSourceEventHandlers() {
-        this.source.on("data", this.sourceDataHandler);
-        this.source.on("end", this.sourceErrorOrEndHandler);
-        this.source.on("error", this.sourceErrorOrEndHandler);
-        // needed for Node14
-        this.source.on("aborted", this.sourceAbortedHandler);
-    }
-    removeSourceEventHandlers() {
-        this.source.removeListener("data", this.sourceDataHandler);
-        this.source.removeListener("end", this.sourceErrorOrEndHandler);
-        this.source.removeListener("error", this.sourceErrorOrEndHandler);
-        this.source.removeListener("aborted", this.sourceAbortedHandler);
-    }
-    sourceDataHandler = (data) => {
-        try {
-            this.decodingMethods.sourceDataHandler(data);
-        }
-        catch (err) {
-            this.destroy(err);
-        }
+            finally {
+                cleanup?.();
+            }
+        },
     };
-    sourceAbortedHandler = () => {
-        const abortError = new AbortError$1("The operation was aborted.");
-        this.destroy(abortError);
-    };
-    sourceErrorOrEndHandler = (err) => {
-        if (err) {
-            this.destroy(err);
-            return;
-        }
-        this.removeSourceEventHandlers();
-    };
-    _destroy(error, callback) {
-        // remove listener from source and release source
-        this.removeSourceEventHandlers();
-        this.source.destroy();
-        callback(error === null ? undefined : error);
-    }
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -20281,8 +19862,7 @@ class StorageRetryPolicy extends BaseRequestPolicy {
      */
     shouldRetry(isPrimaryRetry, attempt, response, err) {
         if (attempt >= this.retryOptions.maxTries) {
-            logger.info(`RetryPolicy: Attempt(s) ${attempt} >= maxTries ${this.retryOptions
-                .maxTries}, no further try.`);
+            logger.info(`RetryPolicy: Attempt(s) ${attempt} >= maxTries ${this.retryOptions.maxTries}, no further try.`);
             return false;
         }
         // Handle network failures, you may need to customize the list when you implement
@@ -20742,6 +20322,18 @@ function storageRequestFailureDetailsParserPolicy() {
         async sendRequest(request, next) {
             try {
                 const response = await next(request);
+                if (response.status === 400 &&
+                    response.bodyAsText?.includes("<Error><Code>InvalidHeaderValue</Code>") &&
+                    response.bodyAsText.includes("<HeaderName>x-ms-version</HeaderName>")) {
+                    // replace the error message with a more user-friendly one that includes a link to documentation
+                    /* example response text:
+                    `<?xml version="1.0" encoding="utf-8"?>
+          <Error><Code>InvalidHeaderValue</Code><Message>The value for one of the HTTP headers is not in the correct format.
+          RequestId:e5ea566c-101e-001c-1ec4-acf180000000
+          Time:2026-03-05T17:24:34.6688015Z</Message><HeaderName>x-ms-version</HeaderName><HeaderValue>3025-01-01</HeaderValue></Error>`
+                    */
+                    response.bodyAsText = response.bodyAsText.replace(/<Message>.*<\/Message>/s, "<Message>The provided service version is not enabled on this storage account. Please see https://learn.microsoft.com/rest/api/storageservices/versioning-for-the-azure-storage-services for additional information.</Message>");
+                }
                 return response;
             }
             catch (err) {
@@ -20804,8 +20396,8 @@ class UserDelegationKeyCredential {
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const SDK_VERSION = "12.33.0";
-const SERVICE_VERSION = "2026-06-06";
+const SDK_VERSION = "12.31.0";
+const SERVICE_VERSION = "2026-02-06";
 const BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES = 256 * 1024 * 1024; // 256MB
 const BLOCK_BLOB_MAX_STAGE_BLOCK_BYTES = 4000 * 1024 * 1024; // 4000MB
 const BLOCK_BLOB_MAX_BLOCKS = 50000;
@@ -21404,8 +20996,8 @@ var KnownStorageErrorCode;
     KnownStorageErrorCode["FeatureVersionMismatch"] = "FeatureVersionMismatch";
     /** IncrementalCopyBlobMismatch */
     KnownStorageErrorCode["IncrementalCopyBlobMismatch"] = "IncrementalCopyBlobMismatch";
-    /** IncrementalCopyOfEarlierSnapshotNotAllowed */
-    KnownStorageErrorCode["IncrementalCopyOfEarlierSnapshotNotAllowed"] = "IncrementalCopyOfEarlierSnapshotNotAllowed";
+    /** IncrementalCopyOfEarlierVersionSnapshotNotAllowed */
+    KnownStorageErrorCode["IncrementalCopyOfEarlierVersionSnapshotNotAllowed"] = "IncrementalCopyOfEarlierVersionSnapshotNotAllowed";
     /** IncrementalCopySourceMustBeSnapshot */
     KnownStorageErrorCode["IncrementalCopySourceMustBeSnapshot"] = "IncrementalCopySourceMustBeSnapshot";
     /** InfiniteLeaseDurationRequired */
@@ -22134,13 +21726,6 @@ const KeyInfo = {
                     name: "String",
                 },
             },
-            delegatedUserTid: {
-                serializedName: "DelegatedUserTid",
-                xmlName: "DelegatedUserTid",
-                type: {
-                    name: "String",
-                },
-            },
         },
     },
 };
@@ -22194,13 +21779,6 @@ const UserDelegationKey = {
                 serializedName: "SignedVersion",
                 required: true,
                 xmlName: "SignedVersion",
-                type: {
-                    name: "String",
-                },
-            },
-            signedDelegatedUserTenantId: {
-                serializedName: "SignedDelegatedUserTid",
-                xmlName: "SignedDelegatedUserTid",
                 type: {
                     name: "String",
                 },
@@ -22832,7 +22410,6 @@ const BlobPropertiesInternal = {
                         "Cool",
                         "Archive",
                         "Cold",
-                        "Smart",
                     ],
                 },
             },
@@ -22852,32 +22429,6 @@ const BlobPropertiesInternal = {
                         "rehydrate-pending-to-hot",
                         "rehydrate-pending-to-cool",
                         "rehydrate-pending-to-cold",
-                        "rehydrate-pending-to-smart",
-                    ],
-                },
-            },
-            smartAccessTier: {
-                serializedName: "SmartAccessTier",
-                xmlName: "SmartAccessTier",
-                type: {
-                    name: "Enum",
-                    allowedValues: [
-                        "P4",
-                        "P6",
-                        "P10",
-                        "P15",
-                        "P20",
-                        "P30",
-                        "P40",
-                        "P50",
-                        "P60",
-                        "P70",
-                        "P80",
-                        "Hot",
-                        "Cool",
-                        "Archive",
-                        "Cold",
-                        "Smart",
                     ],
                 },
             },
@@ -23859,9 +23410,6 @@ const ServiceGetAccountInfoHeaders = {
                         "Standard_RAGRS",
                         "Standard_ZRS",
                         "Premium_LRS",
-                        "Standard_GZRS",
-                        "Premium_ZRS",
-                        "Standard_RAGZRS",
                     ],
                 },
             },
@@ -25313,9 +24861,6 @@ const ContainerGetAccountInfoHeaders = {
                         "Standard_RAGRS",
                         "Standard_ZRS",
                         "Premium_LRS",
-                        "Standard_GZRS",
-                        "Premium_ZRS",
-                        "Standard_RAGZRS",
                     ],
                 },
             },
@@ -25682,20 +25227,6 @@ const BlobDownloadHeaders = {
                     name: "Boolean",
                 },
             },
-            structuredBodyType: {
-                serializedName: "x-ms-structured-body",
-                xmlName: "x-ms-structured-body",
-                type: {
-                    name: "String",
-                },
-            },
-            structuredContentLength: {
-                serializedName: "x-ms-structured-content-length",
-                xmlName: "x-ms-structured-content-length",
-                type: {
-                    name: "Number",
-                },
-            },
             errorCode: {
                 serializedName: "x-ms-error-code",
                 xmlName: "x-ms-error-code",
@@ -26021,13 +25552,6 @@ const BlobGetPropertiesHeaders = {
                 xmlName: "x-ms-access-tier-change-time",
                 type: {
                     name: "DateTimeRfc1123",
-                },
-            },
-            smartAccessTier: {
-                serializedName: "x-ms-smart-access-tier",
-                xmlName: "x-ms-smart-access-tier",
-                type: {
-                    name: "String",
                 },
             },
             versionId: {
@@ -27536,9 +27060,6 @@ const BlobGetAccountInfoHeaders = {
                         "Standard_RAGRS",
                         "Standard_ZRS",
                         "Premium_LRS",
-                        "Standard_GZRS",
-                        "Premium_ZRS",
-                        "Standard_RAGZRS",
                     ],
                 },
             },
@@ -28173,13 +27694,6 @@ const PageBlobUploadPagesHeaders = {
             encryptionScope: {
                 serializedName: "x-ms-encryption-scope",
                 xmlName: "x-ms-encryption-scope",
-                type: {
-                    name: "String",
-                },
-            },
-            structuredBodyType: {
-                serializedName: "x-ms-structured-body",
-                xmlName: "x-ms-structured-body",
                 type: {
                     name: "String",
                 },
@@ -29047,13 +28561,6 @@ const AppendBlobAppendBlockHeaders = {
                     name: "String",
                 },
             },
-            structuredBodyType: {
-                serializedName: "x-ms-structured-body",
-                xmlName: "x-ms-structured-body",
-                type: {
-                    name: "String",
-                },
-            },
             errorCode: {
                 serializedName: "x-ms-error-code",
                 xmlName: "x-ms-error-code",
@@ -29367,13 +28874,6 @@ const BlockBlobUploadHeaders = {
                     name: "String",
                 },
             },
-            structuredBodyType: {
-                serializedName: "x-ms-structured-body",
-                xmlName: "x-ms-structured-body",
-                type: {
-                    name: "String",
-                },
-            },
             errorCode: {
                 serializedName: "x-ms-error-code",
                 xmlName: "x-ms-error-code",
@@ -29588,13 +29088,6 @@ const BlockBlobStageBlockHeaders = {
             encryptionScope: {
                 serializedName: "x-ms-encryption-scope",
                 xmlName: "x-ms-encryption-scope",
-                type: {
-                    name: "String",
-                },
-            },
-            structuredBodyType: {
-                serializedName: "x-ms-structured-body",
-                xmlName: "x-ms-structured-body",
                 type: {
                     name: "String",
                 },
@@ -30205,7 +29698,7 @@ const timeoutInSeconds = {
 const version$1 = {
     parameterPath: "version",
     mapper: {
-        defaultValue: "2026-06-06",
+        defaultValue: "2026-02-06",
         isConstant: true,
         serializedName: "x-ms-version",
         type: {
@@ -30811,16 +30304,6 @@ const rangeGetContentCRC64 = {
         },
     },
 };
-const structuredBodyType = {
-    parameterPath: ["options", "structuredBodyType"],
-    mapper: {
-        serializedName: "x-ms-structured-body",
-        xmlName: "x-ms-structured-body",
-        type: {
-            name: "String",
-        },
-    },
-};
 const encryptionKey = {
     parameterPath: ["options", "cpkInfo", "encryptionKey"],
     mapper: {
@@ -30899,26 +30382,6 @@ const blobDeleteType = {
         xmlName: "deletetype",
         type: {
             name: "String",
-        },
-    },
-};
-const accessTierIfModifiedSince = {
-    parameterPath: ["options", "accessTierIfModifiedSince"],
-    mapper: {
-        serializedName: "x-ms-access-tier-if-modified-since",
-        xmlName: "x-ms-access-tier-if-modified-since",
-        type: {
-            name: "DateTimeRfc1123",
-        },
-    },
-};
-const accessTierIfUnmodifiedSince = {
-    parameterPath: ["options", "accessTierIfUnmodifiedSince"],
-    mapper: {
-        serializedName: "x-ms-access-tier-if-unmodified-since",
-        xmlName: "x-ms-access-tier-if-unmodified-since",
-        type: {
-            name: "DateTimeRfc1123",
         },
     },
 };
@@ -31112,7 +30575,6 @@ const tier = {
                 "Cool",
                 "Archive",
                 "Cold",
-                "Smart",
             ],
         },
     },
@@ -31351,7 +30813,6 @@ const tier1 = {
                 "Cool",
                 "Archive",
                 "Cold",
-                "Smart",
             ],
         },
     },
@@ -31580,16 +31041,6 @@ const ifSequenceNumberEqualTo = {
         },
     },
 };
-const structuredContentLength = {
-    parameterPath: ["options", "structuredContentLength"],
-    mapper: {
-        serializedName: "x-ms-structured-content-length",
-        xmlName: "x-ms-structured-content-length",
-        type: {
-            name: "Number",
-        },
-    },
-};
 const pageWrite1 = {
     parameterPath: "pageWrite",
     mapper: {
@@ -31639,36 +31090,6 @@ const range1 = {
         serializedName: "x-ms-range",
         required: true,
         xmlName: "x-ms-range",
-        type: {
-            name: "String",
-        },
-    },
-};
-const sourceEncryptionKey = {
-    parameterPath: ["options", "sourceCpkInfo", "sourceEncryptionKey"],
-    mapper: {
-        serializedName: "x-ms-source-encryption-key",
-        xmlName: "x-ms-source-encryption-key",
-        type: {
-            name: "String",
-        },
-    },
-};
-const sourceEncryptionKeySha256 = {
-    parameterPath: ["options", "sourceCpkInfo", "sourceEncryptionKeySha256"],
-    mapper: {
-        serializedName: "x-ms-source-encryption-key-sha256",
-        xmlName: "x-ms-source-encryption-key-sha256",
-        type: {
-            name: "String",
-        },
-    },
-};
-const sourceEncryptionAlgorithm = {
-    parameterPath: ["options", "sourceCpkInfo", "sourceEncryptionAlgorithm"],
-    mapper: {
-        serializedName: "x-ms-source-encryption-algorithm",
-        xmlName: "x-ms-source-encryption-algorithm",
         type: {
             name: "String",
         },
@@ -33173,7 +32594,6 @@ const downloadOperationSpec = {
         range,
         rangeGetContentMD5,
         rangeGetContentCRC64,
-        structuredBodyType,
         encryptionKey,
         encryptionKeySha256,
         encryptionAlgorithm,
@@ -33249,8 +32669,6 @@ const deleteOperationSpec = {
         ifNoneMatch,
         ifTags,
         deleteSnapshots,
-        accessTierIfModifiedSince,
-        accessTierIfUnmodifiedSince,
     ],
     isXML: true,
     serializer: xmlSerializer$3,
@@ -34113,7 +33531,6 @@ const uploadPagesOperationSpec = {
         ifModifiedSince,
         ifUnmodifiedSince,
         range,
-        structuredBodyType,
         encryptionKey,
         encryptionKeySha256,
         encryptionAlgorithm,
@@ -34129,7 +33546,6 @@ const uploadPagesOperationSpec = {
         ifSequenceNumberLessThanOrEqualTo,
         ifSequenceNumberLessThan,
         ifSequenceNumberEqualTo,
-        structuredContentLength,
     ],
     isXML: true,
     contentType: "application/xml; charset=utf-8",
@@ -34218,9 +33634,6 @@ const uploadPagesFromURLOperationSpec = {
         sourceRange,
         sourceContentCrc64,
         range1,
-        sourceEncryptionKey,
-        sourceEncryptionKeySha256,
-        sourceEncryptionAlgorithm,
     ],
     isXML: true,
     serializer: xmlSerializer$2,
@@ -34517,7 +33930,6 @@ const appendBlockOperationSpec = {
         leaseId,
         ifModifiedSince,
         ifUnmodifiedSince,
-        structuredBodyType,
         encryptionKey,
         encryptionKeySha256,
         encryptionAlgorithm,
@@ -34529,7 +33941,6 @@ const appendBlockOperationSpec = {
         transactionalContentCrc64,
         contentType1,
         accept2,
-        structuredContentLength,
         maxSize,
         appendPosition,
     ],
@@ -34577,9 +33988,6 @@ const appendBlockFromUrlOperationSpec = {
         transactionalContentMD5,
         sourceUrl,
         sourceContentCrc64,
-        sourceEncryptionKey,
-        sourceEncryptionKeySha256,
-        sourceEncryptionAlgorithm,
         maxSize,
         appendPosition,
         sourceRange1,
@@ -34736,7 +34144,6 @@ const uploadOperationSpec = {
         leaseId,
         ifModifiedSince,
         ifUnmodifiedSince,
-        structuredBodyType,
         encryptionKey,
         encryptionKeySha256,
         encryptionAlgorithm,
@@ -34759,7 +34166,6 @@ const uploadOperationSpec = {
         transactionalContentCrc64,
         contentType1,
         accept2,
-        structuredContentLength,
         blobType2,
     ],
     isXML: true,
@@ -34816,9 +34222,6 @@ const putBlobFromUrlOperationSpec = {
         copySourceTags,
         fileRequestIntent,
         transactionalContentMD5,
-        sourceEncryptionKey,
-        sourceEncryptionKeySha256,
-        sourceEncryptionAlgorithm,
         blobType2,
         copySourceBlobProperties,
     ],
@@ -34849,7 +34252,6 @@ const stageBlockOperationSpec = {
         requestId,
         contentLength,
         leaseId,
-        structuredBodyType,
         encryptionKey,
         encryptionKeySha256,
         encryptionAlgorithm,
@@ -34858,7 +34260,6 @@ const stageBlockOperationSpec = {
         transactionalContentCrc64,
         contentType1,
         accept2,
-        structuredContentLength,
     ],
     isXML: true,
     contentType: "application/xml; charset=utf-8",
@@ -34902,9 +34303,6 @@ const stageBlockFromURLOperationSpec = {
         fileRequestIntent,
         sourceUrl,
         sourceContentCrc64,
-        sourceEncryptionKey,
-        sourceEncryptionKeySha256,
-        sourceEncryptionAlgorithm,
         sourceRange1,
     ],
     isXML: true,
@@ -35018,7 +34416,7 @@ let StorageClient$1 = class StorageClient extends ExtendedServiceClient {
         const defaults = {
             requestContentType: "application/json; charset=utf-8",
         };
-        const packageDetails = `azsdk-js-azure-storage-blob/12.33.0`;
+        const packageDetails = `azsdk-js-azure-storage-blob/12.30.0`;
         const userAgentPrefix = options.userAgentOptions && options.userAgentOptions.userAgentPrefix
             ? `${options.userAgentOptions.userAgentPrefix} ${packageDetails}`
             : `${packageDetails}`;
@@ -35034,7 +34432,7 @@ let StorageClient$1 = class StorageClient extends ExtendedServiceClient {
         // Parameter assignments
         this.url = url;
         // Assigning values to Constant parameters
-        this.version = options.version || "2026-06-06";
+        this.version = options.version || "2026-02-06";
         this.service = new ServiceImpl(this);
         this.container = new ContainerImpl(this);
         this.blob = new BlobImpl(this);
@@ -35068,13 +34466,6 @@ class StorageContextClient extends StorageClient$1 {
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const accountNameSuffixes = [
-    "-secondary-ipv6",
-    "-secondary-dualstack",
-    "-ipv6",
-    "-dualstack",
-    "-secondary",
-];
 /**
  * Reserved URL characters must be properly escaped for Storage services like Blob or File.
  *
@@ -35421,15 +34812,7 @@ function getAccountNameFromUrl(url) {
     try {
         if (parsedUrl.hostname.split(".")[1] === "blob") {
             // `${defaultEndpointsProtocol}://${accountName}.blob.${endpointSuffix}`;
-            // `${defaultEndpointsProtocol}://${accountName}-suffix.blob.${endpointSuffix}`;
             accountName = parsedUrl.hostname.split(".")[0];
-            for (let i = 0; i < accountNameSuffixes.length; ++i) {
-                const suffix = accountNameSuffixes[i];
-                if (accountName.endsWith(suffix)) {
-                    accountName = accountName.substring(0, accountName.length - suffix.length);
-                    break;
-                }
-            }
         }
         else if (isIpEndpointStyle(parsedUrl)) {
             // IPv4/IPv6 address hosts... Example - http://192.0.0.10:10001/devstoreaccount1/
@@ -35652,31 +35035,6 @@ function assertResponse(response) {
         return response;
     }
     throw new TypeError(`Unexpected response object ${response}`);
-}
-async function setUploadChecksumParameters(body, contentLength, parameters, uploadOptions, configContentChecksumAlgorithm) {
-    let contentChecksumAlgorithm = uploadOptions.contentChecksumAlgorithm ?? configContentChecksumAlgorithm;
-    if (contentChecksumAlgorithm === undefined) {
-        contentChecksumAlgorithm = "Customized";
-    }
-    if (contentChecksumAlgorithm === "Auto") {
-        contentChecksumAlgorithm = "StorageCrc64";
-    }
-    let bodyInfo = undefined;
-    if (contentChecksumAlgorithm === "Customized") {
-        parameters.transactionalContentMD5 = uploadOptions.transactionalContentMD5;
-        parameters.transactionalContentCrc64 = uploadOptions.transactionalContentCrc64;
-    }
-    else if (contentChecksumAlgorithm === "StorageCrc64") {
-        await StorageCRC64Calculator.init();
-        bodyInfo = await structuredMessageEncoding(body, contentLength);
-        parameters.structuredBodyType = "XSM/1.0; properties=crc64";
-        parameters.structuredContentLength = contentLength;
-    }
-    return {
-        body: contentChecksumAlgorithm === "StorageCrc64" ? bodyInfo.body : body,
-        contentLength: contentChecksumAlgorithm === "StorageCrc64" ? bodyInfo.encodedContentLength : contentLength,
-        contentChecksumAlgorithm: contentChecksumAlgorithm,
-    };
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -36303,11 +35661,6 @@ class SASQueryParameters {
      */
     signedVersion;
     /**
-     * The delegated user tenant id in Azure AD.
-     * Property of user delegation key.
-     */
-    signedDelegatedUserTid;
-    /**
      * Authorized AAD Object ID in GUID format. The AAD Object ID of a user authorized by the owner of the User Delegation Key
      * to perform the action granted by the SAS. The Azure Storage service will ensure that the owner of the user delegation key
      * has the required permissions before granting access but no additional permission check for the user specified in
@@ -36319,18 +35672,6 @@ class SASQueryParameters {
      * This is only used for User Delegation SAS.
      */
     correlationId;
-    /**
-     * Keys for request headers required in the SAS token
-     */
-    requestHeaderKeys;
-    /**
-     * Keys for request query parameters required in the SAS token
-     */
-    requestQueryParameterKeys;
-    /** To indicate the depth of the virtual blob directory specified
-     * in the canonicalizedresource field of the string-to-sign.
-     */
-    directoryDepth;
     /**
      * Optional. IP range allowed for this SAS.
      *
@@ -36345,7 +35686,7 @@ class SASQueryParameters {
         }
         return undefined;
     }
-    constructor(version, signature, permissionsOrOptions, services, resourceTypes, protocol, startsOn, expiresOn, ipRange, identifier, resource, cacheControl, contentDisposition, contentEncoding, contentLanguage, contentType, userDelegationKey, preauthorizedAgentObjectId, correlationId, encryptionScope, delegatedUserObjectId, requestHeaderKeys, requestQueryParameterKeys, directoryDepth) {
+    constructor(version, signature, permissionsOrOptions, services, resourceTypes, protocol, startsOn, expiresOn, ipRange, identifier, resource, cacheControl, contentDisposition, contentEncoding, contentLanguage, contentType, userDelegationKey, preauthorizedAgentObjectId, correlationId, encryptionScope, delegatedUserObjectId) {
         this.version = version;
         this.signature = signature;
         if (permissionsOrOptions !== undefined && typeof permissionsOrOptions !== "string") {
@@ -36366,9 +35707,6 @@ class SASQueryParameters {
             this.contentEncoding = permissionsOrOptions.contentEncoding;
             this.contentLanguage = permissionsOrOptions.contentLanguage;
             this.contentType = permissionsOrOptions.contentType;
-            this.requestHeaderKeys = permissionsOrOptions.requestHeaderKeys;
-            this.requestQueryParameterKeys = permissionsOrOptions.requestQueryParameterKeys;
-            this.directoryDepth = permissionsOrOptions.directoryDepth;
             if (permissionsOrOptions.userDelegationKey) {
                 this.signedOid = permissionsOrOptions.userDelegationKey.signedObjectId;
                 this.signedTenantId = permissionsOrOptions.userDelegationKey.signedTenantId;
@@ -36376,8 +35714,6 @@ class SASQueryParameters {
                 this.signedExpiresOn = permissionsOrOptions.userDelegationKey.signedExpiresOn;
                 this.signedService = permissionsOrOptions.userDelegationKey.signedService;
                 this.signedVersion = permissionsOrOptions.userDelegationKey.signedVersion;
-                this.signedDelegatedUserTid =
-                    permissionsOrOptions.userDelegationKey.signedDelegatedUserTenantId;
                 this.preauthorizedAgentObjectId = permissionsOrOptions.preauthorizedAgentObjectId;
                 this.correlationId = permissionsOrOptions.correlationId;
             }
@@ -36399,9 +35735,6 @@ class SASQueryParameters {
             this.contentEncoding = contentEncoding;
             this.contentLanguage = contentLanguage;
             this.contentType = contentType;
-            this.requestHeaderKeys = requestHeaderKeys;
-            this.requestQueryParameterKeys = requestQueryParameterKeys;
-            this.directoryDepth = directoryDepth;
             if (userDelegationKey) {
                 this.signedOid = userDelegationKey.signedObjectId;
                 this.signedTenantId = userDelegationKey.signedTenantId;
@@ -36409,7 +35742,6 @@ class SASQueryParameters {
                 this.signedExpiresOn = userDelegationKey.signedExpiresOn;
                 this.signedService = userDelegationKey.signedService;
                 this.signedVersion = userDelegationKey.signedVersion;
-                this.signedDelegatedUserTid = userDelegationKey.signedDelegatedUserTenantId;
                 this.preauthorizedAgentObjectId = preauthorizedAgentObjectId;
                 this.correlationId = correlationId;
             }
@@ -36438,6 +35770,7 @@ class SASQueryParameters {
             "skv", // Signed key version
             "sr",
             "sp",
+            "sig",
             "rscc",
             "rscd",
             "rsce",
@@ -36445,12 +35778,7 @@ class SASQueryParameters {
             "rsct",
             "saoid",
             "scid",
-            "sdd",
             "sduoid", // Signed key user delegation object ID
-            "skdutid", // Signed key user delegation tenant ID
-            "srh", // Request Headers
-            "srq", // Request QueryParameters
-            "sig",
         ];
         const queries = [];
         for (const param of params) {
@@ -36500,9 +35828,6 @@ class SASQueryParameters {
                 case "skv": // Signed key version
                     this.tryAppendQueryParameter(queries, param, this.signedVersion);
                     break;
-                case "skdutid":
-                    this.tryAppendQueryParameter(queries, param, this.signedDelegatedUserTid);
-                    break;
                 case "sr":
                     this.tryAppendQueryParameter(queries, param, this.resource);
                     break;
@@ -36535,15 +35860,6 @@ class SASQueryParameters {
                     break;
                 case "sduoid":
                     this.tryAppendQueryParameter(queries, param, this.delegatedUserObjectId);
-                    break;
-                case "srh": // Request headers
-                    this.tryAppendQueryParameter(queries, param, this.requestHeaderKeys);
-                    break;
-                case "srq": // Request headers
-                    this.tryAppendQueryParameter(queries, param, this.requestQueryParameterKeys);
-                    break;
-                case "sdd": // Directory depth
-                    this.tryAppendQueryParameter(queries, param, this.directoryDepth !== undefined ? this.directoryDepth.toString() : "");
                     break;
             }
         }
@@ -36591,10 +35907,7 @@ function generateBlobSASQueryParametersInternal(blobSASSignatureValues, sharedKe
             return generateBlobSASQueryParameters20201206(blobSASSignatureValues, sharedKeyCredential);
         }
         else {
-            if (version >= "2026-04-06") {
-                return generateBlobSASQueryParametersUDK20260406(blobSASSignatureValues, userDelegationKeyCredential);
-            }
-            else if (version >= "2025-07-05") {
+            if (version >= "2025-07-05") {
                 return generateBlobSASQueryParametersUDK20250705(blobSASSignatureValues, userDelegationKeyCredential);
             }
             else {
@@ -36607,13 +35920,7 @@ function generateBlobSASQueryParametersInternal(blobSASSignatureValues, sharedKe
     // https://learn.microsoft.com/rest/api/storageservices/constructing-a-service-sas#constructing-the-signature-string
     if (version >= "2018-11-09") {
         if (sharedKeyCredential !== undefined) {
-            // Version 2020-02-10 delegation SAS signature construction supports blob name as a virtual directory.
-            if (version >= "2020-02-10") {
-                return generateBlobSASQueryParameters20200210(blobSASSignatureValues, sharedKeyCredential);
-            }
-            else {
-                return generateBlobSASQueryParameters20181109(blobSASSignatureValues, sharedKeyCredential);
-            }
+            return generateBlobSASQueryParameters20181109(blobSASSignatureValues, sharedKeyCredential);
         }
         else {
             // Version 2020-02-10 delegation SAS signature construction includes preauthorizedAgentObjectId, agentObjectId, correlationId.
@@ -36771,85 +36078,6 @@ function generateBlobSASQueryParameters20181109(blobSASSignatureValues, sharedKe
 }
 /**
  * ONLY AVAILABLE IN NODE.JS RUNTIME.
- * IMPLEMENTATION FOR API VERSION FROM 2020-02-10.
- *
- * Creates an instance of SASQueryParameters.
- *
- * Only accepts required settings needed to create a SAS. For optional settings please
- * set corresponding properties directly, such as permissions, startsOn and identifier.
- *
- * WARNING: When identifier is not provided, permissions and expiresOn are required.
- * You MUST assign value to identifier or expiresOn & permissions manually if you initial with
- * this constructor.
- *
- * @param blobSASSignatureValues -
- * @param sharedKeyCredential -
- */
-function generateBlobSASQueryParameters20200210(blobSASSignatureValues, sharedKeyCredential) {
-    blobSASSignatureValues = SASSignatureValuesSanityCheckAndAutofill(blobSASSignatureValues);
-    if (!blobSASSignatureValues.identifier &&
-        !(blobSASSignatureValues.permissions && blobSASSignatureValues.expiresOn)) {
-        throw new RangeError("Must provide 'permissions' and 'expiresOn' for Blob SAS generation when 'identifier' is not provided.");
-    }
-    let resource = "c";
-    let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
-    if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
-        }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
-        }
-    }
-    // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
-    let verifiedPermissions;
-    if (blobSASSignatureValues.permissions) {
-        if (blobSASSignatureValues.blobName) {
-            verifiedPermissions = BlobSASPermissions.parse(blobSASSignatureValues.permissions.toString()).toString();
-        }
-        else {
-            verifiedPermissions = ContainerSASPermissions.parse(blobSASSignatureValues.permissions.toString()).toString();
-        }
-    }
-    // Signature is generated on the un-url-encoded values.
-    const stringToSign = [
-        verifiedPermissions ? verifiedPermissions : "",
-        blobSASSignatureValues.startsOn
-            ? truncatedISO8061Date(blobSASSignatureValues.startsOn, false)
-            : "",
-        blobSASSignatureValues.expiresOn
-            ? truncatedISO8061Date(blobSASSignatureValues.expiresOn, false)
-            : "",
-        getCanonicalName(sharedKeyCredential.accountName, blobSASSignatureValues.containerName, blobSASSignatureValues.blobName),
-        blobSASSignatureValues.identifier,
-        blobSASSignatureValues.ipRange ? ipRangeToString(blobSASSignatureValues.ipRange) : "",
-        blobSASSignatureValues.protocol ? blobSASSignatureValues.protocol : "",
-        blobSASSignatureValues.version,
-        resource,
-        timestamp,
-        blobSASSignatureValues.cacheControl ? blobSASSignatureValues.cacheControl : "",
-        blobSASSignatureValues.contentDisposition ? blobSASSignatureValues.contentDisposition : "",
-        blobSASSignatureValues.contentEncoding ? blobSASSignatureValues.contentEncoding : "",
-        blobSASSignatureValues.contentLanguage ? blobSASSignatureValues.contentLanguage : "",
-        blobSASSignatureValues.contentType ? blobSASSignatureValues.contentType : "",
-    ].join("\n");
-    const signature = sharedKeyCredential.computeHMACSHA256(stringToSign);
-    return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, undefined, undefined, undefined, undefined, undefined, undefined, undefined, directoryDepth),
-        stringToSign: stringToSign,
-    };
-}
-/**
- * ONLY AVAILABLE IN NODE.JS RUNTIME.
  * IMPLEMENTATION FOR API VERSION FROM 2020-12-06.
  *
  * Creates an instance of SASQueryParameters.
@@ -36872,21 +36100,14 @@ function generateBlobSASQueryParameters20201206(blobSASSignatureValues, sharedKe
     }
     let resource = "c";
     let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
     if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
+        resource = "b";
+        if (blobSASSignatureValues.snapshotTime) {
+            resource = "bs";
         }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
+        else if (blobSASSignatureValues.versionId) {
+            resource = "bv";
+            timestamp = blobSASSignatureValues.versionId;
         }
     }
     // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
@@ -36924,7 +36145,7 @@ function generateBlobSASQueryParameters20201206(blobSASSignatureValues, sharedKe
     ].join("\n");
     const signature = sharedKeyCredential.computeHMACSHA256(stringToSign);
     return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, undefined, undefined, undefined, blobSASSignatureValues.encryptionScope, undefined, undefined, undefined, directoryDepth),
+        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, undefined, undefined, undefined, blobSASSignatureValues.encryptionScope),
         stringToSign: stringToSign,
     };
 }
@@ -37029,21 +36250,14 @@ function generateBlobSASQueryParametersUDK20200210(blobSASSignatureValues, userD
     }
     let resource = "c";
     let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
     if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
+        resource = "b";
+        if (blobSASSignatureValues.snapshotTime) {
+            resource = "bs";
         }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
+        else if (blobSASSignatureValues.versionId) {
+            resource = "bv";
+            timestamp = blobSASSignatureValues.versionId;
         }
     }
     // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
@@ -37092,7 +36306,7 @@ function generateBlobSASQueryParametersUDK20200210(blobSASSignatureValues, userD
     ].join("\n");
     const signature = userDelegationKeyCredential.computeHMACSHA256(stringToSign);
     return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, undefined, undefined, undefined, undefined, directoryDepth),
+        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId),
         stringToSign: stringToSign,
     };
 }
@@ -37118,21 +36332,14 @@ function generateBlobSASQueryParametersUDK20201206(blobSASSignatureValues, userD
     }
     let resource = "c";
     let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
     if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
+        resource = "b";
+        if (blobSASSignatureValues.snapshotTime) {
+            resource = "bs";
         }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
+        else if (blobSASSignatureValues.versionId) {
+            resource = "bv";
+            timestamp = blobSASSignatureValues.versionId;
         }
     }
     // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
@@ -37182,7 +36389,7 @@ function generateBlobSASQueryParametersUDK20201206(blobSASSignatureValues, userD
     ].join("\n");
     const signature = userDelegationKeyCredential.computeHMACSHA256(stringToSign);
     return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, blobSASSignatureValues.encryptionScope, undefined, undefined, undefined, directoryDepth),
+        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, blobSASSignatureValues.encryptionScope),
         stringToSign: stringToSign,
     };
 }
@@ -37208,21 +36415,14 @@ function generateBlobSASQueryParametersUDK20250705(blobSASSignatureValues, userD
     }
     let resource = "c";
     let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
     if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
+        resource = "b";
+        if (blobSASSignatureValues.snapshotTime) {
+            resource = "bs";
         }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
+        else if (blobSASSignatureValues.versionId) {
+            resource = "bv";
+            timestamp = blobSASSignatureValues.versionId;
         }
     }
     // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
@@ -37258,7 +36458,7 @@ function generateBlobSASQueryParametersUDK20250705(blobSASSignatureValues, userD
         blobSASSignatureValues.preauthorizedAgentObjectId,
         undefined, // agentObjectId
         blobSASSignatureValues.correlationId,
-        userDelegationKeyCredential.userDelegationKey.signedDelegatedUserTenantId, // SignedKeyDelegatedUserTenantId, will be added in a future release.
+        undefined, // SignedKeyDelegatedUserTenantId, will be added in a future release.
         blobSASSignatureValues.delegatedUserObjectId,
         blobSASSignatureValues.ipRange ? ipRangeToString(blobSASSignatureValues.ipRange) : "",
         blobSASSignatureValues.protocol ? blobSASSignatureValues.protocol : "",
@@ -37274,144 +36474,9 @@ function generateBlobSASQueryParametersUDK20250705(blobSASSignatureValues, userD
     ].join("\n");
     const signature = userDelegationKeyCredential.computeHMACSHA256(stringToSign);
     return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, blobSASSignatureValues.encryptionScope, blobSASSignatureValues.delegatedUserObjectId, undefined, undefined, directoryDepth),
+        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, blobSASSignatureValues.encryptionScope, blobSASSignatureValues.delegatedUserObjectId),
         stringToSign: stringToSign,
     };
-}
-/**
- * ONLY AVAILABLE IN NODE.JS RUNTIME.
- * IMPLEMENTATION FOR API VERSION FROM 2020-12-06.
- *
- * Creates an instance of SASQueryParameters.
- *
- * Only accepts required settings needed to create a SAS. For optional settings please
- * set corresponding properties directly, such as permissions, startsOn.
- *
- * WARNING: identifier will be ignored, permissions and expiresOn are required.
- *
- * @param blobSASSignatureValues -
- * @param userDelegationKeyCredential -
- */
-function generateBlobSASQueryParametersUDK20260406(blobSASSignatureValues, userDelegationKeyCredential) {
-    blobSASSignatureValues = SASSignatureValuesSanityCheckAndAutofill(blobSASSignatureValues);
-    // Stored access policies are not supported for a user delegation SAS.
-    if (!blobSASSignatureValues.permissions || !blobSASSignatureValues.expiresOn) {
-        throw new RangeError("Must provide 'permissions' and 'expiresOn' for Blob SAS generation when generating user delegation SAS.");
-    }
-    let resource = "c";
-    let timestamp = blobSASSignatureValues.snapshotTime;
-    let directoryDepth = undefined;
-    if (blobSASSignatureValues.blobName) {
-        if (blobSASSignatureValues.isDirectory === true) {
-            resource = "d";
-            directoryDepth = trimBlobName(blobSASSignatureValues.blobName).split("/").length;
-        }
-        else {
-            resource = "b";
-            if (blobSASSignatureValues.snapshotTime) {
-                resource = "bs";
-            }
-            else if (blobSASSignatureValues.versionId) {
-                resource = "bv";
-                timestamp = blobSASSignatureValues.versionId;
-            }
-        }
-    }
-    // Calling parse and toString guarantees the proper ordering and throws on invalid characters.
-    let verifiedPermissions;
-    if (blobSASSignatureValues.permissions) {
-        if (blobSASSignatureValues.blobName) {
-            verifiedPermissions = BlobSASPermissions.parse(blobSASSignatureValues.permissions.toString()).toString();
-        }
-        else {
-            verifiedPermissions = ContainerSASPermissions.parse(blobSASSignatureValues.permissions.toString()).toString();
-        }
-    }
-    // Signature is generated on the un-url-encoded values.
-    const stringToSign = [
-        verifiedPermissions ? verifiedPermissions : "",
-        blobSASSignatureValues.startsOn
-            ? truncatedISO8061Date(blobSASSignatureValues.startsOn, false)
-            : "",
-        blobSASSignatureValues.expiresOn
-            ? truncatedISO8061Date(blobSASSignatureValues.expiresOn, false)
-            : "",
-        getCanonicalName(userDelegationKeyCredential.accountName, blobSASSignatureValues.containerName, blobSASSignatureValues.blobName),
-        userDelegationKeyCredential.userDelegationKey.signedObjectId,
-        userDelegationKeyCredential.userDelegationKey.signedTenantId,
-        userDelegationKeyCredential.userDelegationKey.signedStartsOn
-            ? truncatedISO8061Date(userDelegationKeyCredential.userDelegationKey.signedStartsOn, false)
-            : "",
-        userDelegationKeyCredential.userDelegationKey.signedExpiresOn
-            ? truncatedISO8061Date(userDelegationKeyCredential.userDelegationKey.signedExpiresOn, false)
-            : "",
-        userDelegationKeyCredential.userDelegationKey.signedService,
-        userDelegationKeyCredential.userDelegationKey.signedVersion,
-        blobSASSignatureValues.preauthorizedAgentObjectId,
-        undefined, // agentObjectId
-        blobSASSignatureValues.correlationId,
-        userDelegationKeyCredential.userDelegationKey.signedDelegatedUserTenantId, // SignedKeyDelegatedUserTenantId, will be added in a future release.
-        blobSASSignatureValues.delegatedUserObjectId,
-        blobSASSignatureValues.ipRange ? ipRangeToString(blobSASSignatureValues.ipRange) : "",
-        blobSASSignatureValues.protocol ? blobSASSignatureValues.protocol : "",
-        blobSASSignatureValues.version,
-        resource,
-        timestamp,
-        blobSASSignatureValues.encryptionScope,
-        formatRequestHeadersForSasSigning(blobSASSignatureValues.requestHeaders),
-        formatRequestQueryParametersForSasSigning(blobSASSignatureValues.requestQueryParameters),
-        blobSASSignatureValues.cacheControl,
-        blobSASSignatureValues.contentDisposition,
-        blobSASSignatureValues.contentEncoding,
-        blobSASSignatureValues.contentLanguage,
-        blobSASSignatureValues.contentType,
-    ].join("\n");
-    const signature = userDelegationKeyCredential.computeHMACSHA256(stringToSign);
-    return {
-        sasQueryParameters: new SASQueryParameters(blobSASSignatureValues.version, signature, verifiedPermissions, undefined, undefined, blobSASSignatureValues.protocol, blobSASSignatureValues.startsOn, blobSASSignatureValues.expiresOn, blobSASSignatureValues.ipRange, blobSASSignatureValues.identifier, resource, blobSASSignatureValues.cacheControl, blobSASSignatureValues.contentDisposition, blobSASSignatureValues.contentEncoding, blobSASSignatureValues.contentLanguage, blobSASSignatureValues.contentType, userDelegationKeyCredential.userDelegationKey, blobSASSignatureValues.preauthorizedAgentObjectId, blobSASSignatureValues.correlationId, blobSASSignatureValues.encryptionScope, blobSASSignatureValues.delegatedUserObjectId, getKeysOfRequestHeaders(blobSASSignatureValues.requestHeaders), getKeysOfRequestHeaders(blobSASSignatureValues.requestQueryParameters), directoryDepth),
-        stringToSign: stringToSign,
-    };
-}
-function formatRequestHeadersForSasSigning(requestHeaders) {
-    if (requestHeaders === undefined) {
-        return undefined;
-    }
-    let canonicalValue = "";
-    Object.keys(requestHeaders).forEach(function (key) {
-        // key: the name of the object key
-        // index: the ordinal position of the key within the object
-        canonicalValue = canonicalValue + key + ":" + requestHeaders[key] + "\n";
-    });
-    return canonicalValue;
-}
-function formatRequestQueryParametersForSasSigning(queryParameters) {
-    if (queryParameters === undefined) {
-        return undefined;
-    }
-    let canonicalValue = "";
-    Object.keys(queryParameters).forEach(function (key) {
-        // key: the name of the object key
-        // index: the ordinal position of the key within the object
-        canonicalValue = canonicalValue + "\n" + key + ":" + queryParameters[key];
-    });
-    return canonicalValue;
-}
-function getKeysOfRequestHeaders(requestHeaders) {
-    if (requestHeaders === undefined) {
-        return undefined;
-    }
-    let requestKeys = "";
-    let index = 0;
-    Object.keys(requestHeaders).forEach(function (key) {
-        // key: the name of the object key
-        // index: the ordinal position of the key within the object
-        if (index !== 0) {
-            requestKeys = requestKeys + ",";
-        }
-        requestKeys = requestKeys + key;
-        ++index;
-    });
-    return requestKeys;
 }
 function getCanonicalName(accountName, containerName, blobName) {
     // Container: "/blob/account/containerName"
@@ -37475,16 +36540,6 @@ function SASSignatureValuesSanityCheckAndAutofill(blobSASSignatureValues) {
     }
     blobSASSignatureValues.version = version;
     return blobSASSignatureValues;
-}
-function trimBlobName(blobName) {
-    let internalName = blobName;
-    while (internalName.startsWith("/")) {
-        internalName = internalName.substring(1);
-    }
-    while (internalName.endsWith("/")) {
-        internalName = internalName.substring(0, internalName.length - 1);
-    }
-    return internalName;
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -37815,7 +36870,6 @@ class RetriableReadableStream extends Readable$1 {
             this.push(null);
         }
         else if (this.offset <= this.end) {
-            // TODO if error is CRC64 not match, directly throw out the error.
             // console.log(
             //   `retries: ${this.retries}, max retries: ${this.maxRetries}`
             // );
@@ -38267,9 +37321,6 @@ class BlobDownloadResponse {
     get legalHold() {
         return this.originalResponse.legalHold;
     }
-    get structuredBodyType() {
-        return this.originalResponse.structuredBodyType;
-    }
     /**
      * The response body as a browser Blob.
      * Always undefined in node.js.
@@ -38309,10 +37360,7 @@ class BlobDownloadResponse {
      */
     constructor(originalResponse, getter, offset, count, options = {}) {
         this.originalResponse = originalResponse;
-        const streamBody = this.originalResponse.structuredBodyType === undefined
-            ? this.originalResponse.readableStreamBody
-            : structuredMessageDecodingStream(this.originalResponse.readableStreamBody, options);
-        this.blobDownloadStream = new RetriableReadableStream(streamBody, getter, offset, count, options);
+        this.blobDownloadStream = new RetriableReadableStream(this.originalResponse.readableStreamBody, getter, offset, count, options);
     }
 }
 
@@ -40178,30 +39226,22 @@ async function streamToBuffer(stream, buffer, offset, end, encoding) {
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error(`The operation cannot be completed in timeout.`)), REQUEST_TIMEOUT);
         stream.on("readable", () => {
-            // Already filled the requested amount; ignore any further `readable` events.
             if (pos >= count) {
                 clearTimeout(timeout);
                 resolve();
                 return;
             }
-            // Drain all currently-buffered chunks. Required since Node.js v26, where
-            // `stream.read()` returns one buffered chunk at a time instead of the
-            // concatenation of all queued data (see nodejs/node#60441).
-            let chunk;
-            while ((chunk = stream.read()) !== null) {
-                if (typeof chunk === "string") {
-                    chunk = Buffer.from(chunk, encoding);
-                }
-                // How much data needed in this chunk
-                const chunkLength = pos + chunk.length > count ? count - pos : chunk.length;
-                buffer.fill(chunk.slice(0, chunkLength), offset + pos, offset + pos + chunkLength);
-                pos += chunkLength;
-                if (pos >= count) {
-                    clearTimeout(timeout);
-                    resolve();
-                    return;
-                }
+            let chunk = stream.read();
+            if (!chunk) {
+                return;
             }
+            if (typeof chunk === "string") {
+                chunk = Buffer.from(chunk, encoding);
+            }
+            // How much data needed in this chunk
+            const chunkLength = pos + chunk.length > count ? count - pos : chunk.length;
+            buffer.fill(chunk.slice(0, chunkLength), offset + pos, offset + pos + chunkLength);
+            pos += chunkLength;
         });
         stream.on("end", () => {
             clearTimeout(timeout);
@@ -40261,10 +39301,6 @@ class BlobClient extends StorageClient {
     _versionId;
     _snapshot;
     /**
-     * Config used in creating blob client instances.
-     */
-    blobClientConfig;
-    /**
      * The name of the blob.
      */
     get name() {
@@ -40287,7 +39323,6 @@ class BlobClient extends StorageClient {
             // (url: string, pipeline: Pipeline)
             url = urlOrConnectionString;
             pipeline = credentialOrPipelineOrContainerName;
-            options = blobNameOrOptions;
         }
         else if ((credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential) ||
             credentialOrPipelineOrContainerName instanceof AnonymousCredential ||
@@ -40345,7 +39380,6 @@ class BlobClient extends StorageClient {
         this.blobContext = this.storageClientContext.blob;
         this._snapshot = getURLParameter(this.url, URLConstants.Parameters.SNAPSHOT);
         this._versionId = getURLParameter(this.url, URLConstants.Parameters.VERSIONID);
-        this.blobClientConfig = options;
     }
     /**
      * Creates a new BlobClient object identical to the source but with the specified snapshot timestamp.
@@ -40355,7 +39389,7 @@ class BlobClient extends StorageClient {
      * @returns A new BlobClient object identical to the source but with the specified snapshot timestamp
      */
     withSnapshot(snapshot) {
-        return new BlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline, this.blobClientConfig);
+        return new BlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline);
     }
     /**
      * Creates a new BlobClient object pointing to a version of this blob.
@@ -40365,28 +39399,28 @@ class BlobClient extends StorageClient {
      * @returns A new BlobClient object pointing to the version of this blob.
      */
     withVersion(versionId) {
-        return new BlobClient(setURLParameter(this.url, URLConstants.Parameters.VERSIONID, versionId.length === 0 ? undefined : versionId), this.pipeline, this.blobClientConfig);
+        return new BlobClient(setURLParameter(this.url, URLConstants.Parameters.VERSIONID, versionId.length === 0 ? undefined : versionId), this.pipeline);
     }
     /**
      * Creates a AppendBlobClient object.
      *
      */
     getAppendBlobClient() {
-        return new AppendBlobClient(this.url, this.pipeline, this.blobClientConfig);
+        return new AppendBlobClient(this.url, this.pipeline);
     }
     /**
      * Creates a BlockBlobClient object.
      *
      */
     getBlockBlobClient() {
-        return new BlockBlobClient(this.url, this.pipeline, this.blobClientConfig);
+        return new BlockBlobClient(this.url, this.pipeline);
     }
     /**
      * Creates a PageBlobClient object.
      *
      */
     getPageBlobClient() {
-        return new PageBlobClient(this.url, this.pipeline, this.blobClientConfig);
+        return new PageBlobClient(this.url, this.pipeline);
     }
     /**
      * Reads or downloads a blob from the system, including its metadata and properties.
@@ -40407,7 +39441,6 @@ class BlobClient extends StorageClient {
      * ```ts snippet:ReadmeSampleDownloadBlob_Node
      * import { BlobServiceClient } from "@azure/storage-blob";
      * import { DefaultAzureCredential } from "@azure/identity";
-     * import { buffer } from "node:stream/consumers";
      *
      * const account = "<account>";
      * const blobServiceClient = new BlobServiceClient(
@@ -40424,10 +39457,22 @@ class BlobClient extends StorageClient {
      * // In Node.js, get downloaded data by accessing downloadBlockBlobResponse.readableStreamBody
      * const downloadBlockBlobResponse = await blobClient.download();
      * if (downloadBlockBlobResponse.readableStreamBody) {
-     *   // Download the raw bytes of the blob. Use `text` from "node:stream/consumers"
-     *   // instead if you want to read the content as a string directly.
-     *   const downloaded = await buffer(downloadBlockBlobResponse.readableStreamBody);
-     *   console.log(`Downloaded blob content: ${downloaded.toString()}`);
+     *   const downloaded = await streamToString(downloadBlockBlobResponse.readableStreamBody);
+     *   console.log(`Downloaded blob content: ${downloaded}`);
+     * }
+     *
+     * async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
+     *   const result = await new Promise<Buffer<ArrayBuffer>>((resolve, reject) => {
+     *     const chunks: Buffer[] = [];
+     *     stream.on("data", (data) => {
+     *       chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+     *     });
+     *     stream.on("end", () => {
+     *       resolve(Buffer.concat(chunks));
+     *     });
+     *     stream.on("error", reject);
+     *   });
+     *   return result.toString();
      * }
      * ```
      *
@@ -40463,16 +39508,6 @@ class BlobClient extends StorageClient {
         options.conditions = options.conditions || {};
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
         return tracingClient.withSpan("BlobClient-download", options, async (updatedOptions) => {
-            let contentChecksumAlgorithm = options.contentChecksumAlgorithm ?? this.blobClientConfig?.downloadContentChecksumAlgorithm;
-            if (contentChecksumAlgorithm === undefined) {
-                contentChecksumAlgorithm = "Customized";
-            }
-            else if (contentChecksumAlgorithm === "Auto") {
-                contentChecksumAlgorithm = "StorageCrc64";
-            }
-            if (contentChecksumAlgorithm === "StorageCrc64") {
-                await StorageCRC64Calculator.init();
-            }
             const res = assertResponse((await this.blobContext.download({
                 abortSignal: options.abortSignal,
                 leaseAccessConditions: options.conditions,
@@ -40489,7 +39524,6 @@ class BlobClient extends StorageClient {
                 snapshot: options.snapshot,
                 cpkInfo: options.customerProvidedKey,
                 tracingOptions: updatedOptions.tracingOptions,
-                structuredBodyType: contentChecksumAlgorithm === "StorageCrc64" ? "XSM/1.0; properties=crc64" : undefined,
             })));
             const wrappedRes = {
                 ...res,
@@ -40509,16 +39543,9 @@ class BlobClient extends StorageClient {
             if (res.contentLength === undefined) {
                 throw new RangeError(`File download response doesn't contain valid content length header`);
             }
-            if (contentChecksumAlgorithm === "StorageCrc64" &&
-                res.structuredContentLength === undefined) {
-                throw new RangeError(`Unexpected structured content length`);
-            }
             if (!res.etag) {
                 throw new RangeError(`File download response doesn't contain valid etag header`);
             }
-            const expectedContentLength = contentChecksumAlgorithm === "StorageCrc64"
-                ? res.structuredContentLength
-                : res.contentLength;
             return new BlobDownloadResponse(wrappedRes, async (start) => {
                 const updatedDownloadOptions = {
                     leaseAccessConditions: options.conditions,
@@ -40530,14 +39557,13 @@ class BlobClient extends StorageClient {
                         ifTags: options.conditions?.tagConditions,
                     },
                     range: rangeToString({
-                        count: offset + expectedContentLength - start,
+                        count: offset + res.contentLength - start,
                         offset: start,
                     }),
                     rangeGetContentMD5: options.rangeGetContentMD5,
                     rangeGetContentCRC64: options.rangeGetContentCrc64,
                     snapshot: options.snapshot,
                     cpkInfo: options.customerProvidedKey,
-                    structuredBodyType: contentChecksumAlgorithm === "StorageCrc64" ? "XSM/1.0; properties=crc64" : undefined,
                 };
                 // Debug purpose only
                 // console.log(
@@ -40545,17 +39571,11 @@ class BlobClient extends StorageClient {
                 //     updatedOptions.range
                 //   }, options: ${JSON.stringify(updatedOptions)}`
                 // );
-                const resBody = (await this.blobContext.download({
+                return (await this.blobContext.download({
                     abortSignal: options.abortSignal,
                     ...updatedDownloadOptions,
                 })).readableStreamBody;
-                if (contentChecksumAlgorithm === "StorageCrc64") {
-                    return structuredMessageDecodingStream(resBody, {});
-                }
-                else {
-                    return resBody;
-                }
-            }, offset, expectedContentLength, {
+            }, offset, res.contentLength, {
                 maxRetryRequests: options.maxRetryRequests,
                 onProgress: options.onProgress,
             });
@@ -40652,8 +39672,6 @@ class BlobClient extends StorageClient {
                     ifTags: options.conditions?.tagConditions,
                 },
                 tracingOptions: updatedOptions.tracingOptions,
-                accessTierIfModifiedSince: options.conditions?.accessTierIfModifiedSince,
-                accessTierIfUnmodifiedSince: options.conditions?.accessTierIfUnmodifiedSince,
             }));
         });
     }
@@ -41090,7 +40108,6 @@ class BlobClient extends StorageClient {
                         conditions: options.conditions,
                         maxRetryRequests: options.maxRetryRequestsPerBlock,
                         customerProvidedKey: options.customerProvidedKey,
-                        contentChecksumAlgorithm: options.contentChecksumAlgorithm,
                         tracingOptions: updatedOptions.tracingOptions,
                     });
                     const stream = response.readableStreamBody;
@@ -41402,7 +40419,6 @@ class AppendBlobClient extends BlobClient {
             // (url: string, pipeline: Pipeline)
             url = urlOrConnectionString;
             pipeline = credentialOrPipelineOrContainerName;
-            options = blobNameOrOptions;
         }
         else if ((credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential) ||
             credentialOrPipelineOrContainerName instanceof AnonymousCredential ||
@@ -41416,7 +40432,6 @@ class AppendBlobClient extends BlobClient {
             typeof credentialOrPipelineOrContainerName !== "string") {
             // (url: string, credential?: StorageSharedKeyCredential | AnonymousCredential | TokenCredential, options?: StoragePipelineOptions)
             url = urlOrConnectionString;
-            options = blobNameOrOptions;
             // The second parameter is undefined. Use anonymous credential.
             pipeline = newPipeline(new AnonymousCredential(), options);
         }
@@ -41454,7 +40469,6 @@ class AppendBlobClient extends BlobClient {
         }
         super(url, pipeline);
         this.appendBlobContext = this.storageClientContext.appendBlob;
-        this.blobClientConfig = options;
     }
     /**
      * Creates a new AppendBlobClient object identical to the source but with the
@@ -41465,7 +40479,7 @@ class AppendBlobClient extends BlobClient {
      * @returns A new AppendBlobClient object identical to the source but with the specified snapshot timestamp.
      */
     withSnapshot(snapshot) {
-        return new AppendBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline, this.blobClientConfig);
+        return new AppendBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline);
     }
     /**
      * Creates a 0-length append blob. Call AppendBlock to append data to an append blob.
@@ -41611,7 +40625,7 @@ class AppendBlobClient extends BlobClient {
         options.conditions = options.conditions || {};
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
         return tracingClient.withSpan("AppendBlobClient-appendBlock", options, async (updatedOptions) => {
-            const parameters = {
+            return assertResponse(await this.appendBlobContext.appendBlock(contentLength, body, {
                 abortSignal: options.abortSignal,
                 appendPositionAccessConditions: options.conditions,
                 leaseAccessConditions: options.conditions,
@@ -41622,12 +40636,12 @@ class AppendBlobClient extends BlobClient {
                 requestOptions: {
                     onUploadProgress: options.onProgress,
                 },
+                transactionalContentMD5: options.transactionalContentMD5,
+                transactionalContentCrc64: options.transactionalContentCrc64,
                 cpkInfo: options.customerProvidedKey,
                 encryptionScope: options.encryptionScope,
                 tracingOptions: updatedOptions.tracingOptions,
-            };
-            const uploadBodyParameters = await setUploadChecksumParameters(body, contentLength, parameters, options, this.blobClientConfig?.uploadContentChecksumAlgorithm);
-            return assertResponse(await this.appendBlobContext.appendBlock(uploadBodyParameters.contentLength, uploadBodyParameters.body, parameters));
+            }));
         });
     }
     /**
@@ -41671,11 +40685,6 @@ class AppendBlobClient extends BlobClient {
                 encryptionScope: options.encryptionScope,
                 fileRequestIntent: options.sourceShareTokenIntent,
                 tracingOptions: updatedOptions.tracingOptions,
-                sourceCpkInfo: {
-                    sourceEncryptionKey: options.sourceCustomerProvidedKey?.encryptionKey,
-                    sourceEncryptionAlgorithm: options.sourceCustomerProvidedKey?.encryptionAlgorithm,
-                    sourceEncryptionKeySha256: options.sourceCustomerProvidedKey?.encryptionKeySha256,
-                },
             }));
         });
     }
@@ -41708,7 +40717,6 @@ class BlockBlobClient extends BlobClient {
             // (url: string, pipeline: Pipeline)
             url = urlOrConnectionString;
             pipeline = credentialOrPipelineOrContainerName;
-            options = blobNameOrOptions;
         }
         else if ((credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential) ||
             credentialOrPipelineOrContainerName instanceof AnonymousCredential ||
@@ -41763,7 +40771,6 @@ class BlockBlobClient extends BlobClient {
         super(url, pipeline);
         this.blockBlobContext = this.storageClientContext.blockBlob;
         this._blobContext = this.storageClientContext.blob;
-        this.blobClientConfig = options;
     }
     /**
      * Creates a new BlockBlobClient object identical to the source but with the
@@ -41774,7 +40781,7 @@ class BlockBlobClient extends BlobClient {
      * @returns A new BlockBlobClient object identical to the source but with the specified snapshot timestamp.
      */
     withSnapshot(snapshot) {
-        return new BlockBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline, this.blobClientConfig);
+        return new BlockBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline);
     }
     /**
      * ONLY AVAILABLE IN NODE.JS RUNTIME.
@@ -41786,7 +40793,6 @@ class BlockBlobClient extends BlobClient {
      * ```ts snippet:ClientsQuery
      * import { BlobServiceClient } from "@azure/storage-blob";
      * import { DefaultAzureCredential } from "@azure/identity";
-     * import { buffer } from "node:stream/consumers";
      *
      * const account = "<account>";
      * const blobServiceClient = new BlobServiceClient(
@@ -41802,10 +40808,22 @@ class BlockBlobClient extends BlobClient {
      * // Query and convert a blob to a string
      * const queryBlockBlobResponse = await blockBlobClient.query("select from BlobStorage");
      * if (queryBlockBlobResponse.readableStreamBody) {
-     *   // Read the response bytes. Use `text` from "node:stream/consumers" instead
-     *   // if you want the response as a string directly.
-     *   const downloadedBuffer = await buffer(queryBlockBlobResponse.readableStreamBody);
-     *   console.log(`Query blob content: ${downloadedBuffer.toString()}`);
+     *   const downloadedBuffer = await streamToBuffer(queryBlockBlobResponse.readableStreamBody);
+     *   const downloaded = downloadedBuffer.toString();
+     *   console.log(`Query blob content: ${downloaded}`);
+     * }
+     *
+     * async function streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+     *   return new Promise((resolve, reject) => {
+     *     const chunks: Buffer[] = [];
+     *     readableStream.on("data", (data) => {
+     *       chunks.push(data instanceof Buffer ? data : Buffer.from(data));
+     *     });
+     *     readableStream.on("end", () => {
+     *       resolve(Buffer.concat(chunks));
+     *     });
+     *     readableStream.on("error", reject);
+     *   });
      * }
      * ```
      *
@@ -41883,7 +40901,7 @@ class BlockBlobClient extends BlobClient {
         options.conditions = options.conditions || {};
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
         return tracingClient.withSpan("BlockBlobClient-upload", options, async (updatedOptions) => {
-            const parameters = {
+            return assertResponse(await this.blockBlobContext.upload(contentLength, body, {
                 abortSignal: options.abortSignal,
                 blobHttpHeaders: options.blobHTTPHeaders,
                 leaseAccessConditions: options.conditions,
@@ -41903,9 +40921,7 @@ class BlockBlobClient extends BlobClient {
                 tier: toAccessTier(options.tier),
                 blobTagsString: toBlobTagsString(options.tags),
                 tracingOptions: updatedOptions.tracingOptions,
-            };
-            const uploadBodyParameters = await setUploadChecksumParameters(body, contentLength, parameters, options, this.blobClientConfig?.uploadContentChecksumAlgorithm);
-            return assertResponse(await this.blockBlobContext.upload(uploadBodyParameters.contentLength, uploadBodyParameters.body, parameters));
+            }));
         });
     }
     /**
@@ -41952,11 +40968,6 @@ class BlockBlobClient extends BlobClient {
                 copySourceTags: options.copySourceTags,
                 fileRequestIntent: options.sourceShareTokenIntent,
                 tracingOptions: updatedOptions.tracingOptions,
-                sourceCpkInfo: {
-                    sourceEncryptionKey: options.sourceCustomerProvidedKey?.encryptionKey,
-                    sourceEncryptionAlgorithm: options.sourceCustomerProvidedKey?.encryptionAlgorithm,
-                    sourceEncryptionKeySha256: options.sourceCustomerProvidedKey?.encryptionKeySha256,
-                },
             }));
         });
     }
@@ -41974,18 +40985,18 @@ class BlockBlobClient extends BlobClient {
     async stageBlock(blockId, body, contentLength, options = {}) {
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
         return tracingClient.withSpan("BlockBlobClient-stageBlock", options, async (updatedOptions) => {
-            const parameters = {
+            return assertResponse(await this.blockBlobContext.stageBlock(blockId, contentLength, body, {
                 abortSignal: options.abortSignal,
                 leaseAccessConditions: options.conditions,
                 requestOptions: {
                     onUploadProgress: options.onProgress,
                 },
+                transactionalContentMD5: options.transactionalContentMD5,
+                transactionalContentCrc64: options.transactionalContentCrc64,
                 cpkInfo: options.customerProvidedKey,
                 encryptionScope: options.encryptionScope,
                 tracingOptions: updatedOptions.tracingOptions,
-            };
-            const uploadBodyParameters = await setUploadChecksumParameters(body, contentLength, parameters, options, this.blobClientConfig?.uploadContentChecksumAlgorithm);
-            return assertResponse(await this.blockBlobContext.stageBlock(blockId, uploadBodyParameters.contentLength, uploadBodyParameters.body, parameters));
+            }));
         });
     }
     /**
@@ -42023,11 +41034,6 @@ class BlockBlobClient extends BlobClient {
                 copySourceAuthorization: httpAuthorizationToString(options.sourceAuthorization),
                 fileRequestIntent: options.sourceShareTokenIntent,
                 tracingOptions: updatedOptions.tracingOptions,
-                sourceCpkInfo: {
-                    sourceEncryptionKey: options.sourceCustomerProvidedKey?.encryptionKey,
-                    sourceEncryptionAlgorithm: options.sourceCustomerProvidedKey?.encryptionAlgorithm,
-                    sourceEncryptionKeySha256: options.sourceCustomerProvidedKey?.encryptionKeySha256,
-                },
             }));
         });
     }
@@ -42222,7 +41228,6 @@ class BlockBlobClient extends BlobClient {
                         conditions: options.conditions,
                         encryptionScope: options.encryptionScope,
                         tracingOptions: updatedOptions.tracingOptions,
-                        contentChecksumAlgorithm: options.contentChecksumAlgorithm,
                     });
                     // Update progress after block is successfully uploaded to server, in case of block trying
                     // TODO: Hook with convenience layer progress event in finer level
@@ -42303,7 +41308,6 @@ class BlockBlobClient extends BlobClient {
                     conditions: options.conditions,
                     encryptionScope: options.encryptionScope,
                     tracingOptions: updatedOptions.tracingOptions,
-                    contentChecksumAlgorithm: options.contentChecksumAlgorithm,
                 });
                 // Update progress after block is successfully uploaded to server, in case of block trying
                 transferProgress += length;
@@ -42345,7 +41349,6 @@ class PageBlobClient extends BlobClient {
             // (url: string, pipeline: Pipeline)
             url = urlOrConnectionString;
             pipeline = credentialOrPipelineOrContainerName;
-            options = blobNameOrOptions;
         }
         else if ((credentialOrPipelineOrContainerName instanceof StorageSharedKeyCredential) ||
             credentialOrPipelineOrContainerName instanceof AnonymousCredential ||
@@ -42360,7 +41363,6 @@ class PageBlobClient extends BlobClient {
             // (url: string, credential?: StorageSharedKeyCredential | AnonymousCredential | TokenCredential, options?: StoragePipelineOptions)
             // The second parameter is undefined. Use anonymous credential.
             url = urlOrConnectionString;
-            options = blobNameOrOptions;
             pipeline = newPipeline(new AnonymousCredential(), options);
         }
         else if (credentialOrPipelineOrContainerName &&
@@ -42397,7 +41399,6 @@ class PageBlobClient extends BlobClient {
         }
         super(url, pipeline);
         this.pageBlobContext = this.storageClientContext.pageBlob;
-        this.blobClientConfig = options;
     }
     /**
      * Creates a new PageBlobClient object identical to the source but with the
@@ -42408,7 +41409,7 @@ class PageBlobClient extends BlobClient {
      * @returns A new PageBlobClient object identical to the source but with the specified snapshot timestamp.
      */
     withSnapshot(snapshot) {
-        return new PageBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline, this.blobClientConfig);
+        return new PageBlobClient(setURLParameter(this.url, URLConstants.Parameters.SNAPSHOT, snapshot.length === 0 ? undefined : snapshot), this.pipeline);
     }
     /**
      * Creates a page blob of the specified length. Call uploadPages to upload data
@@ -42494,7 +41495,7 @@ class PageBlobClient extends BlobClient {
         options.conditions = options.conditions || {};
         ensureCpkIfSpecified(options.customerProvidedKey, this.isHttps);
         return tracingClient.withSpan("PageBlobClient-uploadPages", options, async (updatedOptions) => {
-            const parameters = {
+            return assertResponse(await this.pageBlobContext.uploadPages(count, body, {
                 abortSignal: options.abortSignal,
                 leaseAccessConditions: options.conditions,
                 modifiedAccessConditions: {
@@ -42506,12 +41507,12 @@ class PageBlobClient extends BlobClient {
                 },
                 range: rangeToString({ offset, count }),
                 sequenceNumberAccessConditions: options.conditions,
+                transactionalContentMD5: options.transactionalContentMD5,
+                transactionalContentCrc64: options.transactionalContentCrc64,
                 cpkInfo: options.customerProvidedKey,
                 encryptionScope: options.encryptionScope,
                 tracingOptions: updatedOptions.tracingOptions,
-            };
-            const uploadBodyParameters = await setUploadChecksumParameters(body, count, parameters, options, this.blobClientConfig?.uploadContentChecksumAlgorithm);
-            return assertResponse(await this.pageBlobContext.uploadPages(uploadBodyParameters.contentLength, uploadBodyParameters.body, parameters));
+            }));
         });
     }
     /**
@@ -42551,11 +41552,6 @@ class PageBlobClient extends BlobClient {
                 copySourceAuthorization: httpAuthorizationToString(options.sourceAuthorization),
                 fileRequestIntent: options.sourceShareTokenIntent,
                 tracingOptions: updatedOptions.tracingOptions,
-                sourceCpkInfo: {
-                    sourceEncryptionKey: options.sourceCustomerProvidedKey?.encryptionKey,
-                    sourceEncryptionAlgorithm: options.sourceCustomerProvidedKey?.encryptionAlgorithm,
-                    sourceEncryptionKeySha256: options.sourceCustomerProvidedKey?.encryptionKeySha256,
-                },
             }));
         });
     }
@@ -43846,7 +42842,7 @@ function getCacheServiceURL() {
     }
 }
 
-var version = "6.2.0";
+var version = "6.3.0";
 var require$$0 = {
 	version: version};
 
@@ -47915,7 +46911,9 @@ function getTarArgs(tarPath_1, compressionMethod_1, type_1) {
             case 'extract':
                 args.push('-xf', BSD_TAR_ZSTD
                     ? tarFile
-                    : archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'), '-P', '-C', workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/'));
+                    : archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'), '-P', '-C', BSD_TAR_ZSTD
+                    ? quoteAbsolutePath(workingDirectory)
+                    : workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/'));
                 break;
             case 'list':
                 args.push('-tf', BSD_TAR_ZSTD
@@ -47955,15 +46953,18 @@ function getCommands(compressionMethod_1, type_1) {
         else {
             args = [[...tarArgs].join(' '), [...compressionArgs].join(' ')];
         }
-        if (BSD_TAR_ZSTD) {
-            return args;
-        }
-        return [args.join(' ')];
+        return {
+            commands: BSD_TAR_ZSTD ? args : [args.join(' ')],
+            requiresTempDirectory: BSD_TAR_ZSTD && type !== 'create'
+        };
     });
 }
 function getWorkingDirectory() {
     var _a;
     return (_a = process.env['GITHUB_WORKSPACE']) !== null && _a !== void 0 ? _a : process.cwd();
+}
+function quoteAbsolutePath(filePath) {
+    return `"${path.resolve(filePath).replace(new RegExp(`\\${path.sep}`, 'g'), '/')}"`;
 }
 // Common function for extractTar and listTar to get the compression method
 function getDecompressionProgram(tarPath, compressionMethod, archivePath) {
@@ -47981,7 +46982,7 @@ function getDecompressionProgram(tarPath, compressionMethod, archivePath) {
                     ? [
                         'zstd -d --long=30 --force -o',
                         TarFilename,
-                        archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
+                        quoteAbsolutePath(archivePath)
                     ]
                     : [
                         '--use-compress-program',
@@ -47989,11 +46990,7 @@ function getDecompressionProgram(tarPath, compressionMethod, archivePath) {
                     ];
             case CompressionMethod.ZstdWithoutLong:
                 return BSD_TAR_ZSTD
-                    ? [
-                        'zstd -d --force -o',
-                        TarFilename,
-                        archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
-                    ]
+                    ? ['zstd -d --force -o', TarFilename, quoteAbsolutePath(archivePath)]
                     : ['--use-compress-program', IS_WINDOWS ? '"zstd -d"' : 'unzstd'];
             default:
                 return ['-z'];
@@ -48053,11 +47050,34 @@ function execCommands(commands, cwd) {
         }
     });
 }
+function execReadCommands(archivePath, compressionMethod, type) {
+    return __awaiter$1(this, void 0, void 0, function* () {
+        const { commands, requiresTempDirectory } = yield getCommands(compressionMethod, type, archivePath);
+        // The Windows BSD-tar fallback decompresses into cache.tar before reading
+        // it. Isolate that intermediate for each list/extract operation, including
+        // debug listings during saves.
+        const tempDirectory = requiresTempDirectory
+            ? yield createTempDirectory()
+            : undefined;
+        try {
+            yield execCommands(commands, tempDirectory);
+        }
+        finally {
+            if (tempDirectory) {
+                try {
+                    yield rmRF(tempDirectory);
+                }
+                catch (error) {
+                    debug(`Failed to delete temporary tar directory: ${error}`);
+                }
+            }
+        }
+    });
+}
 // List the contents of a tar
 function listTar(archivePath, compressionMethod) {
     return __awaiter$1(this, void 0, void 0, function* () {
-        const commands = yield getCommands(compressionMethod, 'list', archivePath);
-        yield execCommands(commands);
+        yield execReadCommands(archivePath, compressionMethod, 'list');
     });
 }
 // Extract a tar
@@ -48066,8 +47086,7 @@ function extractTar(archivePath, compressionMethod) {
         // Create directory to extract tar into
         const workingDirectory = getWorkingDirectory();
         yield mkdirP(workingDirectory);
-        const commands = yield getCommands(compressionMethod, 'extract', archivePath);
-        yield execCommands(commands);
+        yield execReadCommands(archivePath, compressionMethod, 'extract');
     });
 }
 // Create a tar
@@ -48075,7 +47094,7 @@ function createTar(archiveFolder, sourceDirectories, compressionMethod) {
     return __awaiter$1(this, void 0, void 0, function* () {
         // Write source directories to manifest.txt to avoid command length limits
         writeFileSync(path.join(archiveFolder, ManifestFilename), sourceDirectories.join('\n'));
-        const commands = yield getCommands(compressionMethod, 'create');
+        const { commands } = yield getCommands(compressionMethod, 'create');
         yield execCommands(commands, archiveFolder);
     });
 }
