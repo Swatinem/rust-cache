@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.3
+
+- Fix timestamp based pruning
+- Add missing `await`s
+- Do not emit warning on missing `rustup`
+
 ## 2.9.2
 
 - Fix `credentials.toml` cleanup
