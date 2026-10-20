@@ -40,9 +40,9 @@
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.4.0",
     "linefix": "^0.1.1",
-    "rollup": "^4.62.4",
+    "rollup": "^4.63.1",
     "typescript": "7.0.2"
   },
   "scripts": {
