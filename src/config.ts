@@ -396,7 +396,7 @@ async function getRustVersions(cmdFormat: string): Promise<Array<string>> {
     try {
       return await getCmdOutput(cmdFormat, "rustup toolchain list --quiet");
     } catch (e) {
-      core.warning(`Error running rustup toolchain list, falling back to default toolchain only: ${e}`);
+      core.info(`Error running rustup toolchain list, falling back to default toolchain only: ${e}`);
       return undefined;
     }
   })();
