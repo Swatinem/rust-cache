@@ -34972,10 +34972,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-Dl81DHPs.js');
+            cache = await import('./cache-DoD2J4WY.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-BzPKClMA.js').then(function (n) { return n.c; });
+            cache = await import('./cache-BaeW9gVW.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -35006,6 +35006,7 @@ class Workspace {
     async getPackages(cmdFormat, filter, extraArgs) {
         const cmd = "cargo metadata --all-features --format-version 1" + (extraArgs ? ` ${extraArgs}` : "");
         let packages = [];
+        let workspaceRoot = this.root;
         try {
             debug(`collecting metadata for "${this.root}"`);
             const meta = JSON.parse(await getCmdOutput(cmdFormat, cmd, {
@@ -35013,6 +35014,7 @@ class Workspace {
                 env: { ...process.env, CARGO_ENCODED_RUSTFLAGS: "" },
             }));
             debug(`workspace "${this.root}" has ${meta.packages.length} packages`);
+            workspaceRoot = meta.workspace_root;
             for (const pkg of meta.packages.filter(filter)) {
                 const targets = pkg.targets.filter((t) => t.kind.some((kind) => SAVE_TARGETS.has(kind))).map((t) => t.name);
                 packages.push({ name: pkg.name, version: pkg.version, targets, path: path__default.dirname(pkg.manifest_path) });
@@ -35021,13 +35023,16 @@ class Workspace {
         catch (err) {
             console.error(err);
         }
-        return packages;
+        return { packages, workspaceRoot };
     }
     async getPackagesOutsideWorkspaceRoot(cmdFormat) {
-        return await this.getPackages(cmdFormat, (pkg) => !pkg.manifest_path.startsWith(this.root));
+        const filter = (pkg) => !pkg.manifest_path.startsWith(this.root);
+        return (await this.getPackages(cmdFormat, filter)).packages;
     }
+    /** The workspace's members, and the root directory of the cargo workspace they belong to. */
     async getWorkspaceMembers(cmdFormat) {
-        return await this.getPackages(cmdFormat, (_) => true, "--no-deps");
+        const { packages, workspaceRoot } = await this.getPackages(cmdFormat, (_) => true, "--no-deps");
+        return { members: packages, workspaceRoot };
     }
 }
 
@@ -35155,9 +35160,15 @@ class CacheConfig {
             for (const workspace of workspaces) {
                 const root = workspace.root;
                 keyFiles.push(...(await globFiles(`${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`)));
-                const workspaceMembers = await workspace.getWorkspaceMembers(cmdFormat);
-                const cargo_manifests = sort_and_uniq(workspaceMembers.map((member) => path__default.join(member.path, "Cargo.toml")));
-                for (const cargo_manifest of cargo_manifests) {
+                const { members, workspaceRoot } = await workspace.getWorkspaceMembers(cmdFormat);
+                const cargo_manifests = members.map((member) => path__default.join(member.path, "Cargo.toml"));
+                // A virtual workspace's root manifest belongs to no member, yet its `[profile]` and `[patch]`
+                // sections apply to every member.
+                const root_manifest = path__default.join(workspaceRoot, "Cargo.toml");
+                if (await exists(root_manifest)) {
+                    cargo_manifests.push(root_manifest);
+                }
+                for (const cargo_manifest of sort_and_uniq(cargo_manifests)) {
                     try {
                         const content = await fs$1.readFile(cargo_manifest, { encoding: "utf8" });
                         // Use any since TomlPrimitive is not exposed
@@ -35168,12 +35179,16 @@ class CacheConfig {
                                 pack["version"] = "0.0.0";
                             }
                         }
-                        for (const prefix of ["", "build-", "dev-"]) {
-                            const section_name = `${prefix}dependencies`;
-                            if (!(section_name in parsed)) {
+                        const workspace_table = parsed.workspace ?? {};
+                        if ("package" in workspace_table && "version" in workspace_table.package) {
+                            workspace_table.package["version"] = "0.0.0";
+                        }
+                        const dependency_tables = ["", "build-", "dev-"].map((prefix) => parsed[`${prefix}dependencies`]);
+                        dependency_tables.push(workspace_table.dependencies);
+                        for (const deps of dependency_tables) {
+                            if (deps === undefined) {
                                 continue;
                             }
-                            const deps = parsed[section_name];
                             for (const key of Object.keys(deps)) {
                                 const dep = deps[key];
                                 try {
@@ -35198,7 +35213,7 @@ class CacheConfig {
                         keyFiles.push(cargo_manifest);
                     }
                 }
-                const cargo_lock = path__default.join(workspace.root, "Cargo.lock");
+                const cargo_lock = path__default.join(workspaceRoot, "Cargo.lock");
                 if (await exists(cargo_lock)) {
                     try {
                         const content = await fs$1.readFile(cargo_lock, { encoding: "utf8" });
