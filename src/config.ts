@@ -167,11 +167,17 @@ export class CacheConfig {
           )),
         );
 
-        const workspaceMembers = await workspace.getWorkspaceMembers(cmdFormat);
+        const { members, workspaceRoot } = await workspace.getWorkspaceMembers(cmdFormat);
 
-        const cargo_manifests = sort_and_uniq(workspaceMembers.map((member) => path.join(member.path, "Cargo.toml")));
+        const cargo_manifests = members.map((member) => path.join(member.path, "Cargo.toml"));
+        // A virtual workspace's root manifest belongs to no member, yet its `[profile]` and `[patch]`
+        // sections apply to every member.
+        const root_manifest = path.join(workspaceRoot, "Cargo.toml");
+        if (await exists(root_manifest)) {
+          cargo_manifests.push(root_manifest);
+        }
 
-        for (const cargo_manifest of cargo_manifests) {
+        for (const cargo_manifest of sort_and_uniq(cargo_manifests)) {
           try {
             const content = await fs.readFile(cargo_manifest, { encoding: "utf8" });
             // Use any since TomlPrimitive is not exposed
@@ -184,12 +190,17 @@ export class CacheConfig {
               }
             }
 
-            for (const prefix of ["", "build-", "dev-"]) {
-              const section_name = `${prefix}dependencies`;
-              if (!(section_name in parsed)) {
+            const workspace_table = parsed.workspace ?? {};
+            if ("package" in workspace_table && "version" in workspace_table.package) {
+              workspace_table.package["version"] = "0.0.0";
+            }
+
+            const dependency_tables = ["", "build-", "dev-"].map((prefix) => parsed[`${prefix}dependencies`]);
+            dependency_tables.push(workspace_table.dependencies);
+            for (const deps of dependency_tables) {
+              if (deps === undefined) {
                 continue;
               }
-              const deps = parsed[section_name];
 
               for (const key of Object.keys(deps)) {
                 const dep = deps[key];
@@ -217,7 +228,7 @@ export class CacheConfig {
           }
         }
 
-        const cargo_lock = path.join(workspace.root, "Cargo.lock");
+        const cargo_lock = path.join(workspaceRoot, "Cargo.lock");
         if (await exists(cargo_lock)) {
           try {
             const content = await fs.readFile(cargo_lock, { encoding: "utf8" });

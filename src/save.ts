@@ -41,8 +41,8 @@ async function run() {
     for (const workspace of config.workspaces) {
       const packages = await workspace.getPackagesOutsideWorkspaceRoot(config.cmdFormat);
       if (workspaceCrates === "true") {
-        const wsMembers = await workspace.getWorkspaceMembers(config.cmdFormat);
-        packages.push(...wsMembers);
+        const { members } = await workspace.getWorkspaceMembers(config.cmdFormat);
+        packages.push(...members);
       }
       allPackages.push(...packages);
       try {

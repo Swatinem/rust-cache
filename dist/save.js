@@ -1,4 +1,4 @@
-import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError, l as exec } from './cleanup-e3M0pm4f.js';
+import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError, l as exec } from './cleanup-DYJDrBaf.js';
 import 'os';
 import 'crypto';
 import 'fs';
@@ -63,8 +63,8 @@ async function run() {
         for (const workspace of config.workspaces) {
             const packages = await workspace.getPackagesOutsideWorkspaceRoot(config.cmdFormat);
             if (workspaceCrates === "true") {
-                const wsMembers = await workspace.getWorkspaceMembers(config.cmdFormat);
-                packages.push(...wsMembers);
+                const { members } = await workspace.getWorkspaceMembers(config.cmdFormat);
+                packages.push(...members);
             }
             allPackages.push(...packages);
             try {
