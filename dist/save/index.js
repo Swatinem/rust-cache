@@ -206000,13 +206000,27 @@ async function s3_cache_restoreCache(paths, primaryKey, restoreKeys, options) {
     return undefined;
 }
 async function s3_cache_saveCache(paths, key) {
+    const existingPaths = [];
+    for (const path of paths) {
+        try {
+            await external_fs_.promises.lstat(path);
+            existingPaths.push(path);
+        }
+        catch {
+            info(`Skipping non-existent cache path: ${path}`);
+        }
+    }
+    if (existingPaths.length === 0) {
+        warning("None of the cache paths exist, not saving cache.");
+        return key;
+    }
     const bucket = getBucket();
     const aws = await s3_cache_getClient();
     const tmpFile = (0,external_path_.join)((0,external_os_.tmpdir)(), `rust-cache-upload-${Date.now()}.tar.zst`);
     try {
         // Write tar+zstd to temp file
         await new Promise((resolve, reject) => {
-            const tar = (0,external_child_process_.spawn)("tar", ["--use-compress-program=zstd -T0 -1", "-cf", tmpFile, "-C", "/", "--", ...paths], { stdio: ["ignore", "inherit", "inherit"] });
+            const tar = (0,external_child_process_.spawn)("tar", ["--use-compress-program=zstd -T0 -1", "-cf", tmpFile, "-C", "/", "--", ...existingPaths], { stdio: ["ignore", "inherit", "inherit"] });
             tar.on("close", (code) => code === 0 ? resolve() : reject(new Error(`tar exited with code ${code}`)));
             tar.on("error", reject);
         });

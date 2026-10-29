@@ -71,6 +71,21 @@ export async function restoreCache(
 }
 
 export async function saveCache(paths: string[], key: string): Promise<string> {
+  const existingPaths: string[] = [];
+  for (const path of paths) {
+    try {
+      await fs.lstat(path);
+      existingPaths.push(path);
+    } catch {
+      core.info(`Skipping non-existent cache path: ${path}`);
+    }
+  }
+
+  if (existingPaths.length === 0) {
+    core.warning("None of the cache paths exist, not saving cache.");
+    return key;
+  }
+
   const bucket = getBucket();
   const aws = await getClient();
 
@@ -80,7 +95,7 @@ export async function saveCache(paths: string[], key: string): Promise<string> {
     await new Promise<void>((resolve, reject) => {
       const tar = spawn(
         "tar",
-        ["--use-compress-program=zstd -T0 -1", "-cf", tmpFile, "-C", "/", "--", ...paths],
+        ["--use-compress-program=zstd -T0 -1", "-cf", tmpFile, "-C", "/", "--", ...existingPaths],
         { stdio: ["ignore", "inherit", "inherit"] },
       );
       tar.on("close", (code) =>
