@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
-import * as exec from "@actions/exec";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { cleanBin, cleanGit, cleanRegistry, cleanTargetDir } from "./cleanup.js";
 import { CacheConfig, isCacheUpToDate } from "./config.js";
@@ -94,6 +95,7 @@ async function macOsWorkaround() {
   try {
     // Workaround for https://github.com/actions/cache/issues/403
     // Also see https://github.com/rust-lang/cargo/issues/8603
-    await exec.exec("sudo", ["/usr/sbin/purge"], { silent: true });
+    // Unlike @actions/exec, execFile also rejects when spawning sudo is denied.
+    await promisify(execFile)("sudo", ["/usr/sbin/purge"]);
   } catch {}
 }

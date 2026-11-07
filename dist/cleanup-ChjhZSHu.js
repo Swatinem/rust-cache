@@ -34972,10 +34972,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-DoD2J4WY.js');
+            cache = await import('./cache-BqdT1UO_.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-BaeW9gVW.js').then(function (n) { return n.c; });
+            cache = await import('./cache-DOeVf6hi.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -35714,4 +35714,4 @@ async function rmRF(dirName) {
     await rmRF$1(dirName);
 }
 
-export { getAugmentedNamespace as A, BearerCredentialHandler as B, CacheConfig as C, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, exec as l, mkdirP as m, create as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, rmRF$1 as v, which as w, commonjsGlobal as x, requireTunnel as y, getDefaultExportFromCjs as z };
+export { getAugmentedNamespace as A, BearerCredentialHandler as B, CacheConfig as C, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, create as l, mkdirP as m, exec as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, rmRF$1 as v, which as w, commonjsGlobal as x, requireTunnel as y, getDefaultExportFromCjs as z };
