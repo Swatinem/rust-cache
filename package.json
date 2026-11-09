@@ -31,7 +31,7 @@
     "@actions/warpbuild-cache": "npm:github-actions.warp-cache@1.4.7",
     "@aws-lite/client": "^0.23.5",
     "@aws-lite/s3": "^0.2.6",
-    "smol-toml": "^1.6.1"
+    "smol-toml": "^1.7.1"
   },
   "devDependencies": {
     "@aws-lite/s3-types": "^0.2.7",
@@ -44,7 +44,7 @@
     "prepare": "ncc build --target es2020 -o dist/restore src/restore.ts && ncc build --target es2020 -o dist/save src/save.ts && linefix dist"
   },
   "overrides": {
-    "undici": "^6.25.0",
+    "undici": "^6.28.1",
     "@tootallnate/once": "^3.0.1"
   }
 }
