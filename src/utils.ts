@@ -1,8 +1,5 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
-import * as buildjetCache from "@actions/buildjet-cache";
-import * as warpbuildCache from "@actions/warpbuild-cache";
-import * as ghCache from "@actions/cache";
 import * as s3Cache from "./s3-cache";
 import fs from "fs";
 
@@ -47,40 +44,20 @@ export async function getCmdOutput(
   return stdout;
 }
 
-export interface GhCache {
-  isFeatureAvailable: typeof ghCache.isFeatureAvailable;
-  restoreCache: typeof ghCache.restoreCache;
-  saveCache: (paths: string[], key: string) => Promise<string | number>;
-}
-
 export interface CacheProvider {
   name: string;
-  cache: GhCache;
+  cache: typeof s3Cache;
 }
 
 export function getCacheProvider(): CacheProvider {
   const cacheProvider = core.getInput("cache-provider");
-  let cache: GhCache;
-  switch (cacheProvider) {
-    case "github":
-      cache = ghCache;
-      break;
-    case "buildjet":
-      cache = buildjetCache;
-      break;
-    case "warpbuild":
-      cache = warpbuildCache;
-      break;
-    case "s3":
-      cache = s3Cache;
-      break;
-    default:
-      throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
+  if (cacheProvider !== "s3") {
+    throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid. Only \`s3\` is supported.`);
   }
 
   return {
     name: cacheProvider,
-    cache: cache,
+    cache: s3Cache,
   };
 }
 

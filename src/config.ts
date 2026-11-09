@@ -1,5 +1,4 @@
 import * as core from "@actions/core";
-import * as glob from "@actions/glob";
 import crypto from "crypto";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
@@ -161,7 +160,7 @@ export class CacheConfig {
     // Add hash suffix of all rust environment lockfiles + manifests if
     // 'add-rust-environment-hash-key' is true
     if (core.getInput("add-rust-environment-hash-key").toLowerCase() == "true") {
-      let keyFiles = await globFiles(".cargo/config.toml\nrust-toolchain\nrust-toolchain.toml");
+      let keyFiles = await globFiles(process.cwd(), [".cargo/config.toml", "rust-toolchain", "rust-toolchain.toml"]);
       const parsedKeyFiles = []; // keyFiles that are parsed, pre-processed and hashed
 
       hasher = crypto.createHash("sha1");
@@ -169,9 +168,7 @@ export class CacheConfig {
       for (const workspace of workspaces) {
         const root = workspace.root;
         keyFiles.push(
-          ...(await globFiles(
-            `${root}/**/.cargo/config.toml\n${root}/**/rust-toolchain\n${root}/**/rust-toolchain.toml`,
-          )),
+          ...(await globFiles(root, ["**/.cargo/config.toml", "**/rust-toolchain", "**/rust-toolchain.toml"])),
         );
 
         const workspaceMembers = await workspace.getWorkspaceMembers(cmdFormat);
@@ -419,15 +416,13 @@ function parseRustVersion(stdout: string): RustVersion {
   return Object.fromEntries(splits);
 }
 
-async function globFiles(pattern: string): Promise<string[]> {
-  const globber = await glob.create(pattern, {
-    followSymbolicLinks: false,
-  });
-  // fs.stat resolve the symbolic link and returns stat for the
-  // file it pointed to, so isFile would make sure the resolved
-  // file is actually a regular file.
+async function globFiles(cwd: string, patterns: string[]): Promise<string[]> {
   const files = [];
-  for (const file of await globber.glob()) {
+  for await (const match of fs.glob(patterns, { cwd })) {
+    const file = path.resolve(cwd, match);
+    // fs.stat resolve the symbolic link and returns stat for the
+    // file it pointed to, so isFile would make sure the resolved
+    // file is actually a regular file.
     const stats = await fs.stat(file);
     if (stats.isFile()) {
       files.push(file);

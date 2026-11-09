@@ -92,9 +92,16 @@ sensible defaults.
     lookup-only: ""
 
     # Specifies what to use as the backend providing cache
-    # Can be set to "github", "buildjet", or "warpbuild"
-    # default: "github"
+    # Only "s3" is supported
+    # default: "s3"
     cache-provider: ""
+
+    # The S3 bucket used to store caches. Caching is skipped if it is not set.
+    s3-bucket: ""
+
+    # The AWS region of the S3 bucket.
+    # default: the `AWS_REGION` or `AWS_DEFAULT_REGION` env var
+    s3-region: ""
 
     # Determines whether to cache the ~/.cargo/bin directory.
     # default: "true"
@@ -182,19 +189,10 @@ otherwise corrupt the cache on macOS builds.
 
 ## Cache Limits and Control
 
-This specialized cache action is built on top of the upstream cache action
-maintained by GitHub. The same restrictions and limits apply, which are
-documented here:
-[Caching dependencies to speed up workflows](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows)
-
-In particular, caches are currently limited to 10 GB in total and exceeding that
-limit will cause eviction of older caches.
-
-Caches from base branches are available to PRs, but not across unrelated
-branches.
-
-The caches can be controlled using the [Cache API](https://docs.github.com/en/rest/actions/cache)
-which allows listing existing caches and manually removing entries.
+Caches are stored as `tar` + `zstd` archives in the configured S3 bucket, keyed by
+the cache key. AWS credentials are picked up from the environment or the instance
+role. The action never deletes caches, so use S3 lifecycle rules to expire old
+entries. Caches can be listed and removed directly in the bucket.
 
 ## Debugging
 

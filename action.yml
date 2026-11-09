@@ -49,11 +49,11 @@ inputs:
     required: false
     default: "true"
   cache-provider:
-    description: "Determines which provider to use for caching. Options are github, buildjet, warpbuild, or s3. Defaults to github."
+    description: "Determines which provider to use for caching. Only s3 is supported. Defaults to s3."
     required: false
-    default: "github"
+    default: "s3"
   s3-bucket:
-    description: "S3 bucket name for caching when cache-provider is s3."
+    description: "S3 bucket name for caching. Caching is skipped if it is not set."
     required: false
   s3-region:
     description: "AWS region for the S3 bucket. Falls back to AWS_REGION / AWS_DEFAULT_REGION env vars."
