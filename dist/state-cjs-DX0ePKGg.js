@@ -3,10 +3,10 @@ import require$$1 from 'tls';
 import assert from 'assert';
 import require$$2 from 'url';
 import require$$0 from 'tty';
-import require$$0__default from 'util';
-import require$$0__default$1 from 'events';
-import require$$2__default from 'http';
-import require$$1__default from 'https';
+import require$$1__default from 'util';
+import require$$0__default from 'events';
+import http__default from 'http';
+import require$$1__default$1 from 'https';
 
 var dist$2 = {};
 
@@ -780,7 +780,7 @@ function requireNode () {
 	hasRequiredNode = 1;
 	(function (module, exports) {
 		const tty = require$$0;
-		const util = require$$0__default;
+		const util = require$$1__default;
 
 		/**
 		 * This is the Node.js implementation of `debug()`.
@@ -1094,8 +1094,8 @@ function requireHelpers () {
 	};
 	Object.defineProperty(helpers, "__esModule", { value: true });
 	helpers.req = helpers.json = helpers.toBuffer = void 0;
-	const http = __importStar(require$$2__default);
-	const https = __importStar(require$$1__default);
+	const http = __importStar(http__default);
+	const https = __importStar(require$$1__default$1);
 	async function toBuffer(stream) {
 	    let length = 0;
 	    const chunks = [];
@@ -1172,8 +1172,8 @@ function requireDist$2 () {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.Agent = void 0;
 		const net = __importStar(require$$0$1);
-		const http = __importStar(require$$2__default);
-		const https_1 = require$$1__default;
+		const http = __importStar(http__default);
+		const https_1 = require$$1__default$1;
 		__exportStar(requireHelpers(), exports);
 		const INTERNAL = Symbol('AgentBaseInternalState');
 		class Agent extends http.Agent {
@@ -1659,7 +1659,7 @@ function requireDist () {
 	const net = __importStar(require$$0$1);
 	const tls = __importStar(require$$1);
 	const debug_1 = __importDefault(requireSrc());
-	const events_1 = require$$0__default$1;
+	const events_1 = require$$0__default;
 	const agent_base_1 = requireDist$2();
 	const url_1 = require$$2;
 	const debug = (0, debug_1.default)('http-proxy-agent');

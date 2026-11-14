@@ -6,36 +6,36 @@ import * as fs from 'fs';
 import fs__default, { promises, createReadStream } from 'fs';
 import * as path$1 from 'path';
 import path__default from 'path';
-import * as require$$2 from 'http';
-import require$$2__default from 'http';
+import * as http from 'http';
+import http__default from 'http';
 import * as require$$1 from 'https';
 import require$$1__default from 'https';
 import 'net';
 import require$$1$1 from 'tls';
 import * as require$$0 from 'events';
-import require$$0__default$1 from 'events';
+import require$$0__default from 'events';
 import assert, { ok } from 'assert';
-import require$$0__default from 'util';
+import require$$1__default$1 from 'util';
 import require$$0$3 from 'node:assert';
 import require$$0$5 from 'node:net';
-import http from 'node:http';
+import http$1 from 'node:http';
 import require$$0$4 from 'node:stream';
 import require$$0$1 from 'node:buffer';
-import require$$1$2 from 'node:util';
+import require$$0$6 from 'node:util';
 import require$$7 from 'node:querystring';
 import require$$0$2 from 'node:events';
-import require$$0$6 from 'node:diagnostics_channel';
+import require$$0$7 from 'node:diagnostics_channel';
 import require$$5 from 'node:tls';
 import zlib from 'node:zlib';
 import require$$5$1 from 'node:perf_hooks';
 import require$$8 from 'node:util/types';
-import require$$1$3 from 'node:worker_threads';
-import require$$1$4 from 'node:url';
+import require$$1$2 from 'node:worker_threads';
+import require$$1$3 from 'node:url';
 import require$$5$2 from 'node:async_hooks';
-import require$$1$5 from 'node:console';
-import require$$1$6 from 'node:dns';
-import require$$6 from 'string_decoder';
-import * as require$$2$1 from 'child_process';
+import require$$1$4 from 'node:console';
+import require$$1$5 from 'node:dns';
+import require$$5$3 from 'string_decoder';
+import * as require$$2 from 'child_process';
 import { setTimeout as setTimeout$1 } from 'timers';
 import 'stream';
 import fs$1 from 'fs/promises';
@@ -327,10 +327,10 @@ function requireTunnel$1 () {
 	if (hasRequiredTunnel$1) return tunnel$1;
 	hasRequiredTunnel$1 = 1;
 	var tls = require$$1$1;
-	var http = require$$2__default;
+	var http = http__default;
 	var https = require$$1__default;
-	var events = require$$0__default$1;
-	var util = require$$0__default;
+	var events = require$$0__default;
+	var util = require$$1__default$1;
 
 
 	tunnel$1.httpOverHttp = httpOverHttp;
@@ -1407,11 +1407,11 @@ function requireUtil$7 () {
 
 	const assert = require$$0$3;
 	const { kDestroyed, kBodyUsed, kListeners, kBody } = requireSymbols$4();
-	const { IncomingMessage } = http;
+	const { IncomingMessage } = http$1;
 	const stream = require$$0$4;
 	const net = require$$0$5;
 	const { Blob } = require$$0$1;
-	const nodeUtil = require$$1$2;
+	const nodeUtil = require$$0$6;
 	const { stringify } = require$$7;
 	const { EventEmitter: EE } = require$$0$2;
 	const { InvalidArgumentError } = requireErrors();
@@ -2131,8 +2131,8 @@ var hasRequiredDiagnostics;
 function requireDiagnostics () {
 	if (hasRequiredDiagnostics) return diagnostics;
 	hasRequiredDiagnostics = 1;
-	const diagnosticsChannel = require$$0$6;
-	const util = require$$1$2;
+	const diagnosticsChannel = require$$0$7;
+	const util = require$$0$6;
 
 	const undiciDebugLog = util.debuglog('undici');
 	const fetchDebuglog = util.debuglog('fetch');
@@ -5065,8 +5065,8 @@ function requireWebidl () {
 	if (hasRequiredWebidl) return webidl_1;
 	hasRequiredWebidl = 1;
 
-	const { types, inspect } = require$$1$2;
-	const { markAsUncloneable } = require$$1$3;
+	const { types, inspect } = require$$0$6;
+	const { markAsUncloneable } = require$$1$2;
 	const { toUSVString } = requireUtil$7();
 
 	/** @type {import('../../../types/webidl').Webidl} */
@@ -7564,7 +7564,7 @@ function requireFormdata () {
 	const { FileLike, isFileLike } = requireFile();
 	const { webidl } = requireWebidl();
 	const { File: NativeFile } = require$$0$1;
-	const nodeUtil = require$$1$2;
+	const nodeUtil = require$$0$6;
 
 	/** @type {globalThis['File']} */
 	const File = globalThis.File ?? NativeFile;
@@ -11409,7 +11409,7 @@ function requireClient () {
 
 	const assert = require$$0$3;
 	const net = require$$0$5;
-	const http$1 = http;
+	const http = http$1;
 	const util = requireUtil$7();
 	const { channels } = requireDiagnostics();
 	const Request = requireRequest$1();
@@ -11632,7 +11632,7 @@ function requireClient () {
 	    this[kUrl] = util.parseOrigin(url);
 	    this[kConnector] = connect;
 	    this[kPipelining] = pipelining != null ? pipelining : 1;
-	    this[kMaxHeadersSize] = maxHeaderSize || http$1.maxHeaderSize;
+	    this[kMaxHeadersSize] = maxHeaderSize || http.maxHeaderSize;
 	    this[kKeepAliveDefaultTimeout] = keepAliveTimeout == null ? 4e3 : keepAliveTimeout;
 	    this[kKeepAliveMaxTimeout] = keepAliveMaxTimeout == null ? 600e3 : keepAliveMaxTimeout;
 	    this[kKeepAliveTimeoutThreshold] = keepAliveTimeoutThreshold == null ? 2e3 : keepAliveTimeoutThreshold;
@@ -12879,7 +12879,7 @@ function requireProxyAgent () {
 	hasRequiredProxyAgent = 1;
 
 	const { kProxy, kClose, kDestroy, kDispatch, kInterceptors } = requireSymbols$4();
-	const { URL } = require$$1$4;
+	const { URL } = require$$1$3;
 	const Agent = requireAgent();
 	const Pool = requirePool();
 	const DispatcherBase = requireDispatcherBase();
@@ -15409,12 +15409,12 @@ function requireMockUtils () {
 	  kGetNetConnect
 	} = requireMockSymbols();
 	const { buildURL } = requireUtil$7();
-	const { STATUS_CODES } = http;
+	const { STATUS_CODES } = http$1;
 	const {
 	  types: {
 	    isPromise
 	  }
-	} = require$$1$2;
+	} = require$$0$6;
 
 	function matchValue (match, value) {
 	  if (typeof match === 'string') {
@@ -15991,7 +15991,7 @@ function requireMockClient () {
 	if (hasRequiredMockClient) return mockClient;
 	hasRequiredMockClient = 1;
 
-	const { promisify } = require$$1$2;
+	const { promisify } = require$$0$6;
 	const Client = requireClient();
 	const { buildMockDispatch } = requireMockUtils();
 	const {
@@ -16058,7 +16058,7 @@ function requireMockPool () {
 	if (hasRequiredMockPool) return mockPool;
 	hasRequiredMockPool = 1;
 
-	const { promisify } = require$$1$2;
+	const { promisify } = require$$0$6;
 	const Pool = requirePool();
 	const { buildMockDispatch } = requireMockUtils();
 	const {
@@ -16163,7 +16163,7 @@ function requirePendingInterceptorsFormatter () {
 	hasRequiredPendingInterceptorsFormatter = 1;
 
 	const { Transform } = require$$0$4;
-	const { Console } = require$$1$5;
+	const { Console } = require$$1$4;
 
 	const PERSISTENT = process.versions.icu ? '✅' : 'Y ';
 	const NOT_PERSISTENT = process.versions.icu ? '❌' : 'N ';
@@ -16663,7 +16663,7 @@ function requireDns () {
 	if (hasRequiredDns) return dns;
 	hasRequiredDns = 1;
 	const { isIP } = require$$0$5;
-	const { lookup } = require$$1$6;
+	const { lookup } = require$$1$5;
 	const DecoratorHandler = requireDecoratorHandler();
 	const { InvalidArgumentError, InformationalError } = requireErrors();
 	const maxInt = Math.pow(2, 31) - 1;
@@ -17055,7 +17055,7 @@ function requireHeaders () {
 	} = requireUtil$6();
 	const { webidl } = requireWebidl();
 	const assert = require$$0$3;
-	const util = require$$1$2;
+	const util = require$$0$6;
 
 	const kHeadersMap = Symbol('headers map');
 	const kHeadersSortedMap = Symbol('headers map sorted');
@@ -17742,7 +17742,7 @@ function requireResponse () {
 	const { Headers, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = requireHeaders();
 	const { extractBody, cloneBody, mixinBody, hasFinalizationRegistry, streamRegistry, bodyUnusable } = requireBody();
 	const util = requireUtil$7();
-	const nodeUtil = require$$1$2;
+	const nodeUtil = require$$0$6;
 	const { kEnumerableProperty } = util;
 	const {
 	  isValidReasonPhrase,
@@ -17764,7 +17764,7 @@ function requireResponse () {
 	const { URLSerializer } = requireDataUrl();
 	const { kConstruct } = requireSymbols$4();
 	const assert = require$$0$3;
-	const { types } = require$$1$2;
+	const { types } = require$$0$6;
 
 	const textEncoder = new TextEncoder('utf-8');
 
@@ -18417,7 +18417,7 @@ function requireRequest () {
 	const { Headers, fill: fillHeaders, HeadersList, setHeadersGuard, getHeadersGuard, setHeadersList, getHeadersList } = requireHeaders();
 	const { FinalizationRegistry } = requireDispatcherWeakref()();
 	const util = requireUtil$7();
-	const nodeUtil = require$$1$2;
+	const nodeUtil = require$$0$6;
 	const {
 	  isValidHTTPToken,
 	  sameOrigin,
@@ -19517,7 +19517,7 @@ function requireFetch () {
 	const { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = requireDataUrl();
 	const { getGlobalDispatcher } = requireGlobal();
 	const { webidl } = requireWebidl();
-	const { STATUS_CODES } = http;
+	const { STATUS_CODES } = http$1;
 	const GET_OR_HEAD = ['GET', 'HEAD'];
 
 	const defaultUserAgent = typeof __UNDICI_IS_NODE__ !== 'undefined' || typeof esbuildDetection !== 'undefined'
@@ -22070,8 +22070,8 @@ function requireUtil$4 () {
 	const { ProgressEvent } = requireProgressevent();
 	const { getEncoding } = requireEncoding();
 	const { serializeAMimeType, parseMIMEType } = requireDataUrl();
-	const { types } = require$$1$2;
-	const { StringDecoder } = require$$6;
+	const { types } = require$$0$6;
+	const { StringDecoder } = require$$5$3;
 	const { btoa } = require$$0$1;
 
 	/** @type {PropertyDescriptor} */
@@ -24797,7 +24797,7 @@ function requireEvents () {
 	const { webidl } = requireWebidl();
 	const { kEnumerableProperty } = requireUtil$7();
 	const { kConstruct } = requireSymbols$4();
-	const { MessagePort } = require$$1$3;
+	const { MessagePort } = require$$1$2;
 
 	/**
 	 * @see https://html.spec.whatwg.org/multipage/comms.html#messageevent
@@ -26819,7 +26819,7 @@ function requireWebsocket () {
 	const { ByteParser } = requireReceiver();
 	const { kEnumerableProperty, isBlobLike } = requireUtil$7();
 	const { getGlobalDispatcher } = requireGlobal();
-	const { types } = require$$1$2;
+	const { types } = require$$0$6;
 	const { ErrorEvent, CloseEvent } = requireEvents();
 	const { SendQueue } = requireSender();
 
@@ -29104,7 +29104,7 @@ class HttpClient {
         const info = {};
         info.parsedUrl = requestUrl;
         const usingSsl = info.parsedUrl.protocol === 'https:';
-        info.httpModule = usingSsl ? require$$1 : require$$2;
+        info.httpModule = usingSsl ? require$$1 : http;
         const defaultPort = usingSsl ? 443 : 80;
         info.options = {};
         info.options.host = info.parsedUrl.hostname;
@@ -29218,7 +29218,7 @@ class HttpClient {
         const usingSsl = parsedUrl.protocol === 'https:';
         let maxSockets = 100;
         if (this.requestOptions) {
-            maxSockets = this.requestOptions.maxSockets || require$$2.globalAgent.maxSockets;
+            maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
         }
         // This is `useProxy` again, but we need to check `proxyURl` directly for TypeScripts's flow analysis.
         if (proxyUrl && proxyUrl.hostname) {
@@ -29243,7 +29243,7 @@ class HttpClient {
         // if tunneling agent isn't assigned create a new agent
         if (!agent) {
             const options = { keepAlive: this._keepAlive, maxSockets };
-            agent = usingSsl ? new require$$1.Agent(options) : new require$$2.Agent(options);
+            agent = usingSsl ? new require$$1.Agent(options) : new http.Agent(options);
             this._agent = agent;
         }
         if (usingSsl && this._ignoreSslError) {
@@ -30078,7 +30078,7 @@ class ToolRunner extends require$$0.EventEmitter {
                     return reject(new Error(`The cwd: ${this.options.cwd} does not exist!`));
                 }
                 const fileName = this._getSpawnFileName();
-                const cp = require$$2$1.spawn(fileName, this._getSpawnArgs(optionsNonNull), this._getSpawnOptions(this.options, fileName));
+                const cp = require$$2.spawn(fileName, this._getSpawnArgs(optionsNonNull), this._getSpawnOptions(this.options, fileName));
                 let stdbuffer = '';
                 if (cp.stdout) {
                     cp.stdout.on('data', (data) => {
@@ -34972,10 +34972,10 @@ async function getCacheProvider() {
     let cache;
     switch (cacheProvider) {
         case "github":
-            cache = await import('./cache-DoD2J4WY.js');
+            cache = await import('./cache-BUxNaZo0.js');
             break;
         case "warpbuild":
-            cache = await import('./cache-BaeW9gVW.js').then(function (n) { return n.c; });
+            cache = await import('./cache-CZlBiByM.js').then(function (n) { return n.c; });
             break;
         default:
             throw new Error(`The \`cache-provider\` \`${cacheProvider}\` is not valid.`);
@@ -35714,4 +35714,4 @@ async function rmRF(dirName) {
     await rmRF$1(dirName);
 }
 
-export { getAugmentedNamespace as A, BearerCredentialHandler as B, CacheConfig as C, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, exec as l, mkdirP as m, create as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, rmRF$1 as v, which as w, commonjsGlobal as x, requireTunnel as y, getDefaultExportFromCjs as z };
+export { getDefaultExportFromCjs as A, BearerCredentialHandler as B, CacheConfig as C, commonjsGlobal as D, HttpCodes as H, getInput as a, exportVariable as b, cleanTargetDir as c, isCacheUpToDate as d, error as e, debug as f, getCacheProvider as g, cleanRegistry as h, info as i, cleanBin as j, cleanGit as k, exec as l, mkdirP as m, create as n, warning as o, HttpClientError as p, HttpClient as q, reportError as r, setOutput as s, isDebug as t, setSecret as u, rmRF$1 as v, which as w, requireTunnel as x, requireUndici as y, getAugmentedNamespace as z };

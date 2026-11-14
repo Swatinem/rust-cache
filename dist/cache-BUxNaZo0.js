@@ -1,24 +1,24 @@
-import { f as debug, m as mkdirP, n as create, l as exec, w as which, o as warning, i as info, H as HttpCodes, p as HttpClientError, q as HttpClient, t as isDebug, u as setSecret, B as BearerCredentialHandler, v as rmRF, e as error } from './cleanup-DYJDrBaf.js';
+import { f as debug, m as mkdirP, n as create, l as exec, w as which, o as warning, i as info, H as HttpCodes, p as HttpClientError, q as HttpClient, t as isDebug, u as setSecret, B as BearerCredentialHandler, v as rmRF, e as error } from './cleanup-ChPzVj2I.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { writeFileSync, existsSync } from 'fs';
-import * as require$$0$1 from 'util';
+import * as require$$1 from 'util';
 import { URL as URL$1 } from 'url';
 import { Transform, Readable as Readable$1 } from 'node:stream';
-import * as require$$0$3 from 'buffer';
+import * as require$$0$1 from 'buffer';
 import { Buffer as Buffer$1 } from 'buffer';
 import os, { EOL as EOL$1 } from 'node:os';
-import require$$1, { inspect } from 'node:util';
+import require$$0$2, { inspect } from 'node:util';
 import process$1 from 'node:process';
 import http from 'node:http';
 import https from 'node:https';
 import zlib from 'node:zlib';
 import { EventEmitter } from 'events';
-import require$$0$4 from 'node:buffer';
+import require$$0$3 from 'node:buffer';
 import { createHmac } from 'node:crypto';
-import { r as requireDist, a as requireDist$1, b as requireStateCjs, c as requireStateCjs$1 } from './state-cjs-CkvFUaNy.js';
-import * as require$$0$2 from 'stream';
+import { r as requireDist, a as requireDist$1, b as requireStateCjs, c as requireStateCjs$1 } from './state-cjs-DX0ePKGg.js';
+import * as Stream from 'stream';
 import { Readable } from 'stream';
 import fs$1 from 'node:fs';
 import 'os';
@@ -2984,7 +2984,7 @@ function resolvePaths(patterns) {
 }
 function unlinkFile(filePath) {
     return __awaiter$7(this, void 0, void 0, function* () {
-        return require$$0$1.promisify(fs.unlink)(filePath);
+        return require$$1.promisify(fs.unlink)(filePath);
     });
 }
 function getVersion(app_1) {
@@ -3109,7 +3109,7 @@ let AbortError$3 = class AbortError extends Error {
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 function log(message, ...args) {
-    process$1.stderr.write(`${require$$1.format(message, ...args)}${EOL$1}`);
+    process$1.stderr.write(`${require$$0$2.format(message, ...args)}${EOL$1}`);
 }
 
 // Copyright (c) Microsoft Corporation.
@@ -16341,7 +16341,7 @@ class BuffersStream extends Readable$1 {
 /**
  * maxBufferLength is max size of each buffer in the pooled buffers.
  */
-const maxBufferLength = require$$0$4.constants.MAX_LENGTH;
+const maxBufferLength = require$$0$3.constants.MAX_LENGTH;
 /**
  * This class provides a buffer container which conceptually has no hard size limit.
  * It accepts a capacity, an array of input buffers and the total length of input data.
@@ -39282,7 +39282,7 @@ async function readStreamToLocalFile(rs, file) {
  *
  * Promisified version of fs.stat().
  */
-const fsStat = require$$1.promisify(fs$1.stat);
+const fsStat = require$$0$2.promisify(fs$1.stat);
 const fsCreateReadStream = fs$1.createReadStream;
 
 // Copyright (c) Microsoft Corporation.
@@ -42385,7 +42385,7 @@ var __awaiter$4 = (undefined && undefined.__awaiter) || function (thisArg, _argu
  */
 function pipeResponseToStream(response, output) {
     return __awaiter$4(this, void 0, void 0, function* () {
-        const pipeline = require$$0$1.promisify(require$$0$2.pipeline);
+        const pipeline = require$$1.promisify(Stream.pipeline);
         yield pipeline(response.message, output);
     });
 }
@@ -42662,7 +42662,7 @@ function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
             // on 64-bit systems), split the download into multiple segments
             // ~2 GB = 2147483647, beyond this, we start getting out of range error. So, capping it accordingly.
             // Updated segment size to 128MB = 134217728 bytes, to complete a segment faster and fail fast
-            const maxSegmentSize = Math.min(134217728, require$$0$3.constants.MAX_LENGTH);
+            const maxSegmentSize = Math.min(134217728, require$$0$1.constants.MAX_LENGTH);
             const downloadProgress = new DownloadProgress(contentLength);
             const fd = fs.openSync(archivePath, 'w');
             try {
