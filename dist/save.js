@@ -1,4 +1,6 @@
-import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError, l as exec } from './cleanup-DYJDrBaf.js';
+import { e as error, g as getCacheProvider, a as getInput, d as isCacheUpToDate, i as info, C as CacheConfig, c as cleanTargetDir, f as debug, h as cleanRegistry, j as cleanBin, k as cleanGit, r as reportError } from './cleanup-ChjhZSHu.js';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import 'os';
 import 'crypto';
 import 'fs';
@@ -9,7 +11,6 @@ import 'net';
 import 'tls';
 import 'events';
 import 'assert';
-import 'util';
 import 'node:assert';
 import 'node:net';
 import 'node:http';
@@ -29,7 +30,6 @@ import 'node:async_hooks';
 import 'node:console';
 import 'node:dns';
 import 'string_decoder';
-import 'child_process';
 import 'timers';
 import 'stream';
 import 'fs/promises';
@@ -115,7 +115,7 @@ async function macOsWorkaround() {
     try {
         // Workaround for https://github.com/actions/cache/issues/403
         // Also see https://github.com/rust-lang/cargo/issues/8603
-        await exec("sudo", ["/usr/sbin/purge"], { silent: true });
+        await promisify(execFile)("sudo", ["/usr/sbin/purge"]);
     }
     catch { }
 }
